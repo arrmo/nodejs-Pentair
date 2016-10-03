@@ -7,16 +7,29 @@ console.log('\033[2J'); //clear the console
 
 var dateFormat = require('dateformat');
 
-const serialport = require("serialport");
-//var SerialPort = serialport.SerialPort;
-var sp = new serialport("/dev/ttyUSB0", {
-    baudrate: 9600,
-    databits: 8,
-    parity: 'none',
-    stopBits: 1,
-    flowControl: false,
-    parser: serialport.parsers.raw
-});
+// Setup for Network Connection (socat or nc)
+var netConnect = 1; //set this to 1 to use a remote (net) connection, 0 for direct serial connection;
+if (netConnect === 0) {
+    const serialport = require("serialport");
+    //var SerialPort = serialport.SerialPort;
+    var sp = new serialport("/dev/ttyUSB0", {
+        baudrate: 9600,
+        databits: 8,
+        parity: 'none',
+        stopBits: 1,
+        flowControl: false,
+        parser: serialport.parsers.raw
+    });    
+} else {
+    var network = require('net');
+    var netHost = 'raspberryPi';
+    var netPort = '9801';
+    var sp = new network.Socket();
+    sp.connect(netPort, netHost, function() {
+        console.log('Network connected to: ' + netHost + ':' + netPort);
+    });
+}
+   
 
 var intellicom = 0; //set this to 1 if you have the IntelliComII, othewise 0.
 var intellitouch = 1; //set this to 1 if you have the IntelliTouch, otherwise 0.
@@ -56,9 +69,7 @@ var searchSrc = '';
 var searchDest = '';
 var searchAction = '';
 
-
 var customNameArr = [];
-
 
 const state = {
     OFF: 0,
@@ -593,170 +604,167 @@ sp.on('error', function (err) {
 
 sp.on('open', function () {
     logger.verbose('Serial Port opened');
+});
+
+sp.on('data', function (data) {
+
+    var brokeBufferLoop = false; //flag to see if there was a message at the end of the buffer
+
+    if (typeof data2 === "undefined") {
+        data2 = data.slice(0);
+    } else {
+        data2 = Buffer.concat([data2, data]);
+    }
+    //put this in a static variable as the length might grow as we process more serial bus data!
+    var currBufferLen = data2.length;
 
 
-    sp.on('data', function (data) {
+    //start to parse message at 250 bytes.  Is there a better time or way to know when the buffer has a full message or to start processing?
+    if (currBufferLen > 10 && !processingBuffer) {
+
+        //do we still need this?
+        //processingBuffer = 1;
 
 
-        var brokeBufferLoop = false; //flag to see if there was a message at the end of the buffer
-
-        if (typeof data2 === "undefined") {
-            data2 = data.slice(0);
-        } else {
-            data2 = Buffer.concat([data2, data]);
-        }
-        //put this in a static variable as the length might grow as we process more serial bus data!
-        var currBufferLen = data2.length;
+        var chatter; //a {potential} message we have found on the bus
+        var b = data2.toJSON();
 
 
-        //start to parse message at 250 bytes.  Is there a better time or way to know when the buffer has a full message or to start processing?
-        if (currBufferLen > 10 && !processingBuffer) {
+        var i = 0;
+        //-9 because the 8th byte is the length byte and we check for a full message below.
+        loop1: {
+                for (i; i < currBufferLen - 9; i++) {
 
-            //do we still need this?
-            //processingBuffer = 1;
+                    if (b.data[i] == 0) {
+                        continue;
+                    } else {
+                        //look for Pentair preamble 255,0,255,165
+                        if (b.data[i] == 255 && b.data[i + 1] == 0 && b.data[i + 2] == 255 && b.data[i + 3] == 165) {
+                            //NEED MORE CHECKS FOR VARIOUS TYPES OF MESSAGES!  :-)
 
-
-            var chatter; //a {potential} message we have found on the bus
-            var b = data2.toJSON();
-
-
-            var i = 0;
-            //-9 because the 8th byte is the length byte and we check for a full message below.
-            loop1: {
-                    for (i; i < currBufferLen - 9; i++) {
-
-                        if (b.data[i] == 0) {
-                            continue;
-                        } else {
-                            //look for Pentair preamble 255,0,255,165
-                            if (b.data[i] == 255 && b.data[i + 1] == 0 && b.data[i + 2] == 255 && b.data[i + 3] == 165) {
-                                //NEED MORE CHECKS FOR VARIOUS TYPES OF MESSAGES!  :-)
-
-                                var chatterlen = b.data[i + 8] + 6 + 2; //chatterlen is length of following message not including checksum (need to add 6 for start of chatter (165,07,Dest,Src,02,chatterlen) and 2 for checksum)
+                            var chatterlen = b.data[i + 8] + 6 + 2; //chatterlen is length of following message not including checksum (need to add 6 for start of chatter (165,07,Dest,Src,02,chatterlen) and 2 for checksum)
 
 
-                                //if we don't have the length bit in the buffer or the length of the message is less than the remaining buffer bytes
-                                if (logMessageDecoding) logger.log('silly', 'Msg#  n/a   Start of message in incoming buffer detected:  data2.len %s, chatterlen %s, i %s: TOTAL: %s True? %s ', data2.length, chatterlen, i, data2.length - i - 1 - chatterlen, (data2.length - i - 2 - chatterlen) <= 0)
-
-
+                            //if we don't have the length bit in the buffer or the length of the message is less than the remaining buffer bytes
+                            if (logMessageDecoding) logger.log('silly', 'Msg#  n/a   Start of message in incoming buffer detected:  data2.len %s, chatterlen %s, i %s: TOTAL: %s True? %s ', data2.length, chatterlen, i, data2.length - i - 1 - chatterlen, (data2.length - i - 2 - chatterlen) <= 0)
 
 
 
-                                if (chatterlen == undefined || (data2.length - i - 2 - chatterlen) <= 0) {
-                                    //reset the buffer starting with the current partial message
-                                    if (logMessageDecoding) logger.silly('Msg#  n/a   Incomplete message at end of buffer.  Prepending message to empty buffer string.');
-                                    brokeBufferLoop = true;
-
-                                    data2 = data2.slice(i - 2)
-                                    break loop1;
-                                }
-
-                                msgCounter += 1;
-                                //logger.info('Msg# %s   Full buffer where message found: %s', msgCounter, b.data.toString())
-
-                                i += 3; //jump ahead to start of payload
 
 
-                                //logger.silly('Msg#  %s   Length should be: %s  at position: %s ', msgCounter, chatterlen, i)
+                            if (chatterlen == undefined || (data2.length - i - 2 - chatterlen) <= 0) {
+                                //reset the buffer starting with the current partial message
+                                if (logMessageDecoding) logger.silly('Msg#  n/a   Incomplete message at end of buffer.  Prepending message to empty buffer string.');
+                                brokeBufferLoop = true;
 
-
-                                //iterate through the JSON array to pull out a valid message
-                                loop2: {
-                                    for (j = 0; j < chatterlen; j++) {
-                                        if (j == 0) {
-                                            var output = "     Found chatter (text): " //for logging, remove later
-                                            chatter = new Array(chatterlen);
-                                        }
-
-                                        output += b.data[i + j];
-                                        output += " ";
-
-                                        chatter[j] = b.data[i + j];
-
-                                        if (j == chatterlen - 1) {
-                                            if (logMessageDecoding) logger.silly('Msg# %s   Extracting chatter from buffer: (length of chatter %s, position in buffer %s, start position of chatter in buffer %s) %s', msgCounter, chatterlen, i, j, output)
-
-                                            //This may be unnecessary; fixed code so we should get correct messages but will leave it for now
-                                            if (chatter[j] == undefined || chatter[j - 1] == undefined || chatter[j - 1] == undefined) {
-                                                if (logMessageDecoding) logger.warn('Msg# %s   Chatter length MISMATCH.  len %s, i %s currBufferLen %s', msgCounter, chatterlen, i, currBufferLen)
-                                            }
-
-                                            if (logMessageDecoding) logger.silly('Msg# %s Calling checksum: %s', msgCounter, chatter);
-                                            checksum(chatter, msgCounter);
-                                            //skip ahead in the buffer for loop to the end of this message. 
-                                            i += chatterlen;
-                                            break loop1;
-                                        }
-
-
-                                    }
-                                }
-
-
+                                data2 = data2.slice(i - 2)
+                                break loop1;
                             }
-                            /* //this isn't working <-- CHECK
-                             else if (b.data[i + 8] == 6) {
-                                 var str;
 
-                                 console.log('------->FOUND SOMETHING???')
-                                 console.log('data: ', JSON.stringify(b.data))
-                                 i += 3;
-                                 chatterlen = 8;
-                                 for (j = 0; j < chatterlen; j++) {
-                                     if (j == 0) {
-                                         var output = "     Found SOMETHING chatter (text): " //for logging, remove later
-                                         chatter = new Array(chatterlen);
-                                     }
+                            msgCounter += 1;
+                            //logger.info('Msg# %s   Full buffer where message found: %s', msgCounter, b.data.toString())
 
-                                     output += b.data[i + j];
-                                     output += " ";
-                                     console.log('SOMETHING in chatter: (len %s, i %s, j %s) %s', chatterlen, i, j, output)
-                                     chatter[j] = b.data[i + j];
-
-                                     if (j == chatterlen - 1) {
-
-                                         if (chatter[j] == undefined || chatter[j - 1] == undefined || chatter[j - 1] == undefined) {
-                                             console.log('Chatter SOMETHING length MISMATCH.  len %s, i %s currBufferLen %s', chatterlen, i, currBufferLen)
-                                         }
+                            i += 3; //jump ahead to start of payload
 
 
-                                         //console.log(output + '\n');
-                                         //console.log('processingBuffer:' + processingBuffer)
-                                         //console.log('OR HERE????:' + chatter.toString())
-                                         //logger.log('info', chatter.toString())
-                                         checksum(chatter);
-                                         //skip ahead in the buffer for loop to the end of this message. 
-                                         i += chatterlen;
-                                         console.log('<-----FOUND SOMETHING???')
-                                         break loop1;
-                                     }
+                            //logger.silly('Msg#  %s   Length should be: %s  at position: %s ', msgCounter, chatterlen, i)
 
 
-                                 }
+                            //iterate through the JSON array to pull out a valid message
+                            loop2: {
+                                for (j = 0; j < chatterlen; j++) {
+                                    if (j == 0) {
+                                        var output = "     Found chatter (text): " //for logging, remove later
+                                        chatter = new Array(chatterlen);
+                                    }
 
-                             }*/
+                                    output += b.data[i + j];
+                                    output += " ";
+
+                                    chatter[j] = b.data[i + j];
+
+                                    if (j == chatterlen - 1) {
+                                        if (logMessageDecoding) logger.silly('Msg# %s   Extracting chatter from buffer: (length of chatter %s, position in buffer %s, start position of chatter in buffer %s) %s', msgCounter, chatterlen, i, j, output)
+
+                                        //This may be unnecessary; fixed code so we should get correct messages but will leave it for now
+                                        if (chatter[j] == undefined || chatter[j - 1] == undefined || chatter[j - 1] == undefined) {
+                                            if (logMessageDecoding) logger.warn('Msg# %s   Chatter length MISMATCH.  len %s, i %s currBufferLen %s', msgCounter, chatterlen, i, currBufferLen)
+                                        }
+
+                                        if (logMessageDecoding) logger.silly('Msg# %s Calling checksum: %s', msgCounter, chatter);
+                                        checksum(chatter, msgCounter);
+                                        //skip ahead in the buffer for loop to the end of this message. 
+                                        i += chatterlen;
+                                        break loop1;
+                                    }
+
+
+                                }
+                            }
+
 
                         }
+                        /* //this isn't working <-- CHECK
+                         else if (b.data[i + 8] == 6) {
+                             var str;
 
+                             console.log('------->FOUND SOMETHING???')
+                             console.log('data: ', JSON.stringify(b.data))
+                             i += 3;
+                             chatterlen = 8;
+                             for (j = 0; j < chatterlen; j++) {
+                                 if (j == 0) {
+                                     var output = "     Found SOMETHING chatter (text): " //for logging, remove later
+                                     chatter = new Array(chatterlen);
+                                 }
+
+                                 output += b.data[i + j];
+                                 output += " ";
+                                 console.log('SOMETHING in chatter: (len %s, i %s, j %s) %s', chatterlen, i, j, output)
+                                 chatter[j] = b.data[i + j];
+
+                                 if (j == chatterlen - 1) {
+
+                                     if (chatter[j] == undefined || chatter[j - 1] == undefined || chatter[j - 1] == undefined) {
+                                         console.log('Chatter SOMETHING length MISMATCH.  len %s, i %s currBufferLen %s', chatterlen, i, currBufferLen)
+                                     }
+
+
+                                     //console.log(output + '\n');
+                                     //console.log('processingBuffer:' + processingBuffer)
+                                     //console.log('OR HERE????:' + chatter.toString())
+                                     //logger.log('info', chatter.toString())
+                                     checksum(chatter);
+                                     //skip ahead in the buffer for loop to the end of this message. 
+                                     i += chatterlen;
+                                     console.log('<-----FOUND SOMETHING???')
+                                     break loop1;
+                                 }
+
+
+                             }
+
+                         }*/
 
                     }
+
+
                 }
-                //slice the buffer from currBufferLen (what we have processed) to the end of the buffer
-            if (brokeBufferLoop) {
-                //we are here if we broke out of the buffer.  This means there is the start of a message in the last 9+/- bytes
-                //We do this above!  Don't need it here.  data2 = data2.slice(currBufferLen - 9);
-                if (logMessageDecoding) logger.silly('Incomplete message at end of buffer.  Sliced buffer so message is at beginning of buffer (sliced by %s) ', currBufferLen - 9);
-
-            } else {
-                //We should get here after every message.  Slice the buffer to a new message
-                data2 = data2.slice(i);
-                if (logMessageDecoding) logger.silly('At end of message.  Sliced off %s from remaining buffer.', currBufferLen);
             }
+            //slice the buffer from currBufferLen (what we have processed) to the end of the buffer
+        if (brokeBufferLoop) {
+            //we are here if we broke out of the buffer.  This means there is the start of a message in the last 9+/- bytes
+            //We do this above!  Don't need it here.  data2 = data2.slice(currBufferLen - 9);
+            if (logMessageDecoding) logger.silly('Incomplete message at end of buffer.  Sliced buffer so message is at beginning of buffer (sliced by %s) ', currBufferLen - 9);
 
-            processingBuffer = 0;
-        };
-    });
+        } else {
+            //We should get here after every message.  Slice the buffer to a new message
+            data2 = data2.slice(i);
+            if (logMessageDecoding) logger.silly('At end of message.  Sliced off %s from remaining buffer.', currBufferLen);
+        }
 
+        processingBuffer = 0;
+    };
 });
 
 
@@ -1980,35 +1988,36 @@ var packetWrittenAt; //var to hold the message counter variable when the message
 function writePacket() {
     logger.silly('Entering Write Queue')
 
-
     //logger.verbose('Sending packet: %s', queuePacketsArr[0])
-    sp.write(queuePacketsArr[0], function (err) {
-        sp.drain(function () {
-            if (err) {
-                logger.error('Error writing packet: ' + err.message)
-            }
-            if (queuePacketsArr[0].equals(msgWriteCounter.msgWrote)) //msgWriteCounter will store the message that is being written.  If it doesn't match the 1st msg in the queue, then we have received the ACK for the message and can move on.  If it is the same message, then we are retrying the same message again so increment the counter.
-            {
-                msgWriteCounter.counter++;
-            } else {
-                msgWriteCounter.msgWrote = queuePacketsArr[0].slice(0);
-                msgWriteCounter.counter = 1;
-            }
-            if (loglevel) logger.verbose('Sent Packet ' + queuePacketsArr[0] + ' Try: ' + msgWriteCounter.counter)
-            if (msgWriteCounter.counter >= 10) {
-                logger.error('Error writing packet to serial bus.  Tried %s times to write %s', msgWriteCounter.counter, msgWriteCounter.msgWrote)
-                if (logType == "info" || logType == "warn" || logType == "error") {
-                    logger.warn('Setting logging level to Debug')
-                    logType = 'debug'
-                    logger.transports.console.level = 'debug';
+    if (netConnect === 0) {
+        sp.write(queuePacketsArr[0], function (err) {
+            sp.drain(function () {
+                if (err) {
+                    logger.error('Error writing packet: ' + err.message)
                 }
-            }
-        });
+                if (queuePacketsArr[0].equals(msgWriteCounter.msgWrote)) //msgWriteCounter will store the message that is being written.  If it doesn't match the 1st msg in the queue, then we have received the ACK for the message and can move on.  If it is the same message, then we are retrying the same message again so increment the counter.
+                {
+                    msgWriteCounter.counter++;
+                } else {
+                    msgWriteCounter.msgWrote = queuePacketsArr[0].slice(0);
+                    msgWriteCounter.counter = 1;
+                }
+                if (loglevel) logger.verbose('Sent Packet ' + queuePacketsArr[0] + ' Try: ' + msgWriteCounter.counter)
+                if (msgWriteCounter.counter >= 10) {
+                    logger.error('Error writing packet to serial bus.  Tried %s times to write %s', msgWriteCounter.counter, msgWriteCounter.msgWrote)
+                    if (logType == "info" || logType == "warn" || logType == "error") {
+                        logger.warn('Setting logging level to Debug')
+                        logType = 'debug'
+                        logger.transports.console.level = 'debug';
+                    }
+                }
 
-    })
+            });
+        })        
+    } else {
+        sp.write(new Buffer(queuePacketsArr[0]), 'binary');
+    }
     packetWrittenAt = msgCounter;
-
-
 }
 
 
@@ -2161,7 +2170,9 @@ function getConfiguration(dest, src) {
     needConfiguration = 0; //we will no longer request the configuration.  Need this first in case multiple packets come through.
     if (intellitouch) // ONLY check the configuration if the controller is Intellitouch (address 16)
     {
-        sp.drain();
+        // Only drain serial port if directly connected - not for network connections.
+        if (netConnect ===0)
+            sp.drain();
 
         logger.info('Queueing messages to retrieve configuration from Intellitouch')
         logger.verbose('Queueing messages to retrieve Pool/Spa Heat Mode')
