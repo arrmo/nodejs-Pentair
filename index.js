@@ -18,9 +18,33 @@ var sp = new serialport("/dev/ttyUSB0", {
     parser: serialport.parsers.raw
 });
 
-var intellicom = 0; //set this to 1 if you have the IntelliComII, othewise 0.
-var intellitouch = 1; //set this to 1 if you have the IntelliTouch, otherwise 0.
-var pumpOnly = 0; //set this to 1 if you ONLY have pump(s), otherwise 0;
+var version = '0.1.1'
+//-------  EQUIPMENT SETUP -----------
+
+//ONE and only 1 of the following should be set to 1.
+var intellicom = 0; //set this to 1 if you have the IntelliComII, otherwise 0.
+var intellitouch = 0; //set this to 1 if you have the IntelliTouch, otherwise 0.
+var pumpOnly = 1; //set this to 1 if you ONLY have pump(s), otherwise 0.
+
+//1 or 0
+var chlorinator = 0; //set this to 1 if you have a chlorinator, otherwise 0.
+
+//only relevant if pumpOnly=1
+var numberOfPumps = 1; //this is only used with pumpOnly=1.  It will query 1 (or 2) pumps every 30 seconds for their status
+var safePumpOperation = true; //Set this to true if you want the app to run the pump for successive 1 minute operations; false if you want to set the timer on the pump directly.
+//-------  END EQUIPMENT SETUP -----------
+
+//-------  LOG SETUP -----------
+//Change the following log message levels as needed
+var loglevel = 1; //1=more, 0=less;  This will show more or less messages within the logType
+var logType = 'debug'; // one of { error: 0, warn: 1, info: 2, verbose: 3, debug: 4, silly: 5 }
+var logPumpMessages = 1; //variable if we want to output pump messages or not
+var logDuplicateMessages = 0; //variable if we want to output duplicate broadcast messages
+var logConsoleNotDecoded = 0; //variable to hide any unknown messages
+var logConfigMessages = 0; //variable to show/hide configuration messages
+var logMessageDecoding = 1; //variable to show messages regarding the buffer, checksum calculation, etc.
+var logChlorinator = 1; //variable to show messages from the chlorinator
+//-------  END EQUIPMENT SETUP -----------
 
 var data2; //variable to hold all serialport.open data; incomind data is appended to this with each read
 var currentStatus; // persistent object to hold pool equipment status.
@@ -30,6 +54,7 @@ var currentCircuitArrObj; //persistent variable to hold circuit info
 var currentPumpStatus; //persistent variable to hold pump information
 var currentHeat; //persistent variable to heald heat set points
 var currentSchedule = ["blank", {}]; //schedules
+var queuePacketsArr = []; //array to hold messages to send
 
 //var instruction = ''; //var to hold potential chatter instructions
 var processingBuffer = 0; //flag to tell us if we are processing the buffer currently
@@ -41,15 +66,6 @@ var msgWriteCounter = {
 var needConfiguration = 1; //variable to let the program know we need the configuration from the Intellitouch
 var preambleByte; //variable to hold the 2nd preamble byte... it used to by 10 for me.  Now it is 16.  Very strange.  So here is a variable to find it.
 
-//Change the following log message levels as needed
-var loglevel = 0; //1=more, 0=less;  This will show more or less messages within the logType
-var logType = 'info'; // one of { error: 0, warn: 1, info: 2, verbose: 3, debug: 4, silly: 5 }
-var logPumpMessages = 0; //variable if we want to output pump messages or not
-var logDuplicateMessages = 0; //variable if we want to output duplicate broadcast messages
-var logConsoleNotDecoded = 0; //variable to hide any unknown messages
-var logConfigMessages = 0; //variable to show/hide configuration messages
-var logMessageDecoding = 0; //variable to show messages regarding the buffer, checksum calculation, etc.
-
 //search placeholders for sockets.io Search
 var searchMode = 'stop'
 var searchSrc = '';
@@ -58,6 +74,8 @@ var searchAction = '';
 
 
 var customNameArr = [];
+
+
 
 
 const state = {
@@ -373,6 +391,7 @@ const heatMode = {
 }
 
 const ctrl = {
+    CHLORINATOR: 2,
     BROADCAST: 15,
     INTELLITOUCH: 16,
     REMOTE: 32,
@@ -382,6 +401,7 @@ const ctrl = {
 }
 
 const ctrlString = {
+    2: 'Chlorinator',
     15: 'Broadcast',
     16: 'Main',
     32: 'Remote',
@@ -491,6 +511,20 @@ function heatObj(poolSetPoint, poolHeatMode, spaSetPoint, spaHeatMode) {
 var currentHeat = new heatObj;
 
 
+function chlorinatorObj(saltPPM, outputPercent, outputSpaPercent, outputLevel, superChlorinate, version, name, status) {
+
+    this.saltPPM = saltPPM;
+    this.outputPercent = outputPercent; //for intellitouch this is the pool setpoint, for standalone it is the default
+    this.outputSpaPercent = outputSpaPercent; //intellitouch has both pool and spa set points
+    this.outputLevel = outputLevel;
+    this.superChlorinate = superChlorinate;
+    this.version = version;
+    this.name = name;
+    this.status = status;
+}
+
+var currentChlorinatorStatus = new chlorinatorObj(0, 0, 0, 0, 0, 0, '', '');
+
 // This one should be removed once all instances are cleaned up and moved the the object directly above this.
 //-----array format
 var j = 0;
@@ -518,7 +552,7 @@ for (var key in poolConfig.Pentair) {
 */
 
 
-function pump(number, time, run, mode, drivestate, watts, rpm, ppc, err, timer, packet) {
+function pump(number, time, run, mode, drivestate, watts, rpm, ppc, err, timer, currentprogram, program1rpm, program2rpm, program3rpm, program4rpm, remotecontrol, power) {
     this.pump = number; //1 or 2
     this.time = time;
     this.run = run;
@@ -529,26 +563,64 @@ function pump(number, time, run, mode, drivestate, watts, rpm, ppc, err, timer, 
     this.ppc = ppc;
     this.err = err;
     this.timer = timer;
+    this.currentprogram = currentprogram;
+    this.program1rpm = program1rpm;
+    this.program2rpm = program2rpm;
+    this.program3rpm = program3rpm;
+    this.program4rpm = program4rpm;
+    this.remotecontrol = remotecontrol;
+    this.power = power;
 }
-var pump1 = new pump();
-var pump2 = new pump();
+var pump1 = new pump(1, 'timenotset', 'runnotset', 'modenotset', 'drivestatenotset', 'wattsnotset', 'rpmnotset', 'ppcnotset', 'errnotset', 'timernotset', 'currentprognotset', 'prg1notset', 'prg2notset', 'prg3notset', 'prg4notset', 'remotecontrolnotset', 'powernotset');
+var pump2 = new pump(2, 'timenotset', 'runnotset', 'modenotset', 'drivestatenotset', 'wattsnotset', 'rpmnotset', 'ppcnotset', 'errnotset', 'timernotset', 'currentprognotset', 'prg1notset', 'prg2notset', 'prg3notset', 'prg4notset', 'remotecontrolnotset', 'powernotset');
 //object to hold pump information.  Pentair uses 1 and 2 as the pumps so we will set array[0] to a placeholder.
 var currentPumpStatus = ['blank', pump1, pump2]
 var currentPumpStatusPacket = ['blank', [], []]; // variable to hold the status packets of the pumps
+
+var NanoTimer = require('nanotimer');  //If you get an error here, re-run 'npm install` because this is a new dependency.
+var writePacketTimer = new NanoTimer();
+
 
 
 var introMsg = '\n*******************************';
 introMsg += '\n Important:';
 introMsg += '\n Configuration is now read from your pool.  The application will send the commands to retrieve the custom names and circuit names.';
 introMsg += '\n It will dynamically load as the information is parsed.  If there is a write error 10 times, the logging will change to debug mode.';
+introMsg += '\n If the message fails to be written 20 times, it will abort the packet and go to the next one.';
 introMsg += '\n If you have an IntelliComII, or pumps only, set the appropriate flags in lines 21-23 of this app.';
-introMsg += '\n To change the amount of output to the console, change the "logx" flags in lines 45-51 of this app.'; 
+introMsg += '\n In general, if you specify the Intellitouch controller, the app will get the status  (pumps, chlorinator, heater, etc)from the controller directly.  If you specify pumps only or IntellicomII, the app will retrieve the status information from the peripherals themselves.'
+introMsg += '\n To change the amount of output to the console, change the "logx" flags in lines 45-51 of this app.';
 introMsg += '\n Visit http://_your_machine_name_:3000 to see a basic UI';
 introMsg += '\n Visit http://_your_machine_name_:3000/debug.html for a way to listen for specific messages\n\n';
 introMsg += '*******************************'
 logger.info(introMsg)
 
-var queuePacketsArr = []; //array to hold messages to send
+var settingsStr = ''// \n*******************************';
+settingsStr += '\n Version: ' + version;
+
+settingsStr += '\n ';
+settingsStr += '\n //-------  EQUIPMENT SETUP -----------';
+settingsStr += '\n var intellicom = ' + intellicom;
+settingsStr += '\n var intellitouch = ' + intellitouch ;
+settingsStr += '\n var chlorinator = ' + chlorinator;
+settingsStr += '\n var pumpOnly = ' + pumpOnly;
+settingsStr += '\n var numberOfPumps = ' + numberOfPumps;
+settingsStr += '\n var safePumpOperation = ' + safePumpOperation;
+settingsStr += '\n //-------  END EQUIPMENT SETUP -----------';
+settingsStr += '\n ';
+settingsStr += '\n //-------  LOG SETUP -----------';
+settingsStr += '\n var loglevel = ' + loglevel;
+settingsStr += '\n var logType = ' + logType;
+settingsStr += '\n var logPumpMessages = ' + logPumpMessages;
+settingsStr += '\n var logDuplicateMessages = ' + logDuplicateMessages;
+settingsStr += '\n var logConsoleNotDecoded = ' + logConsoleNotDecoded;
+settingsStr += '\n var logConfigMessages = ' + logConfigMessages;
+settingsStr += '\n var logMessageDecoding = ' + logMessageDecoding;
+settingsStr += '\n var logChlorinator = ' + logChlorinator;
+settingsStr += '\n //-------  END EQUIPMENT SETUP -----------\n\n';
+//settingsStr += '\n*******************************';
+
+logger.debug(settingsStr);
 
 
 
@@ -612,31 +684,44 @@ sp.on('open', function () {
         //start to parse message at 250 bytes.  Is there a better time or way to know when the buffer has a full message or to start processing?
         if (currBufferLen > 10 && !processingBuffer) {
 
-            //do we still need this?
-            //processingBuffer = 1;
-
-
             var chatter; //a {potential} message we have found on the bus
             var b = data2.toJSON();
 
-
+            //console.warn('Incoming packet: ', JSON.stringify(b));
             var i = 0;
             //-9 because the 8th byte is the length byte and we check for a full message below.
             loop1: {
-                    for (i; i < currBufferLen - 9; i++) {
+                    for (i; i < currBufferLen - 8; i++) {
 
                         if (b.data[i] == 0) {
                             continue;
                         } else {
                             //look for Pentair preamble 255,0,255,165
-                            if (b.data[i] == 255 && b.data[i + 1] == 0 && b.data[i + 2] == 255 && b.data[i + 3] == 165) {
+                            /*I've VERY rarely seen this:  data: 
+                           [ 255,
+                             255,
+                             255,
+                             255,
+                             165,
+                             16,
+                             15,
+                             16,
+                             2,
+                             29,
+                             ...]
+
+                             So wondering if we can just look for 255,165.  But for now we will also check 255,255,255,165.
+                             */
+                            if ((b.data[i] == 255 && b.data[i + 1] == 0 && b.data[i + 2] == 255 && b.data[i + 3] == 165) ||
+                                (b.data[i] == 255 && b.data[i + 1] == 255 && b.data[i + 2] == 255 && b.data[i + 3] == 165)
+                            ) {
                                 //NEED MORE CHECKS FOR VARIOUS TYPES OF MESSAGES!  :-)
 
                                 var chatterlen = b.data[i + 8] + 6 + 2; //chatterlen is length of following message not including checksum (need to add 6 for start of chatter (165,07,Dest,Src,02,chatterlen) and 2 for checksum)
 
 
                                 //if we don't have the length bit in the buffer or the length of the message is less than the remaining buffer bytes
-                                if (logMessageDecoding) logger.log('silly', 'Msg#  n/a   Start of message in incoming buffer detected:  data2.len %s, chatterlen %s, i %s: TOTAL: %s True? %s ', data2.length, chatterlen, i, data2.length - i - 1 - chatterlen, (data2.length - i - 2 - chatterlen) <= 0)
+                                if (logMessageDecoding) logger.silly('Msg#  n/a   Start of message in incoming buffer detected:  data2.len %s, chatterlen %s, i %s: TOTAL: %s True? %s ', data2.length, chatterlen, i, data2.length - i - 1 - chatterlen, (data2.length - i - 2 - chatterlen) <= 0)
 
 
 
@@ -676,13 +761,21 @@ sp.on('open', function () {
                                         if (j == chatterlen - 1) {
                                             if (logMessageDecoding) logger.silly('Msg# %s   Extracting chatter from buffer: (length of chatter %s, position in buffer %s, start position of chatter in buffer %s) %s', msgCounter, chatterlen, i, j, output)
 
-                                            //This may be unnecessary; fixed code so we should get correct messages but will leave it for now
-                                            if (chatter[j] == undefined || chatter[j - 1] == undefined || chatter[j - 1] == undefined) {
-                                                if (logMessageDecoding) logger.warn('Msg# %s   Chatter length MISMATCH.  len %s, i %s currBufferLen %s', msgCounter, chatterlen, i, currBufferLen)
-                                            }
+                                            /* //This may be unnecessary; fixed code so we should get correct messages but will leave it for now
+                                             if (chatter[j] == undefined || chatter[j - 1] == undefined || chatter[j - 1] == undefined) {
+                                                 if (logMessageDecoding) logger.warn('Msg# %s   Chatter length MISMATCH.  len %s, i %s currBufferLen %s', msgCounter, chatterlen, i, currBufferLen)
+                                             }*/
 
                                             if (logMessageDecoding) logger.silly('Msg# %s Calling checksum: %s', msgCounter, chatter);
-                                            checksum(chatter, msgCounter);
+
+                                            var packetType;
+                                            if (((chatter[2] == ctrl.PUMP1 || chatter[2] == ctrl.PUMP2)) || chatter[3] == ctrl.PUMP1 || chatter[3] == ctrl.PUMP2) {
+                                                packetType = 'pump'
+                                            } else {
+                                                packetType = 'controller'
+                                            }
+
+                                            checksum(chatter, msgCounter, packetType);
                                             //skip ahead in the buffer for loop to the end of this message. 
                                             i += chatterlen;
                                             break loop1;
@@ -693,48 +786,49 @@ sp.on('open', function () {
                                 }
 
 
+                            } else if (b.data[i] == 16 && b.data[i + 1] == 02) {
+                                //Looking for the Chlorinator preamble 10,2
+                                msgCounter += 1;
+
+                                //logger.error('/n STARTING CHLOR PACKET.')
+                                chatter = [];
+
+                                while (!(b.data[i] == 16 && b.data[i + 1] == 3)) {
+                                    chatter.push(b.data[i]);
+                                    i++;
+                                    //logger.error('chlor ', i, chatter)
+                                    if (b.data[i] == 16 && b.data[i + 1] == 3) {
+                                        chatter.push(b.data[i]);
+                                        chatter.push(b.data[i + 1]);
+                                        i += 2;
+                                        //logger.error('chlor BREAKING LOOP', i, chatter)
+                                        checksum(chatter, msgCounter, 'chlorinator');
+                                        break loop1;
+                                    }
+
+                                    if ((i + 1) == currBufferLen)
+                                    //if (i+1) == currBufferLen means that we reached the end of the buffer.  
+                                    {
+                                        i -= chatter.length;
+                                        brokeBufferLoop = true;
+                                        //logger.error('chlor MESSAGE NOT IN BUFFER', i, currBufferLen, chatter)
+                                        break loop1;
+                                    } else if (chatter.length > 35) {
+
+
+                                        //should work on this (if we ever get here).  This means the message is 25 bytes long (not what we should see) and likely there is a 16,2 somewhere in the middle of the message we are picking up...
+                                        logger.error('Msg# %s   Aborting buffer.  Likely picking up 16,2 in the middle of another message. \n %s \n %s', msgCounter, chatter, JSON.stringify(data2))
+                                        data2 = data2.slice(i);
+                                        break loop1;
+                                    }
+                                }
+
+
+                                //logger.warn('Chlorinator Packet: ', JSON.stringify(b), chatter)
+                                checksum(chatter, msgCounter, 'chlorinator')
+
                             }
-                            /* //this isn't working <-- CHECK
-                             else if (b.data[i + 8] == 6) {
-                                 var str;
 
-                                 console.log('------->FOUND SOMETHING???')
-                                 console.log('data: ', JSON.stringify(b.data))
-                                 i += 3;
-                                 chatterlen = 8;
-                                 for (j = 0; j < chatterlen; j++) {
-                                     if (j == 0) {
-                                         var output = "     Found SOMETHING chatter (text): " //for logging, remove later
-                                         chatter = new Array(chatterlen);
-                                     }
-
-                                     output += b.data[i + j];
-                                     output += " ";
-                                     console.log('SOMETHING in chatter: (len %s, i %s, j %s) %s', chatterlen, i, j, output)
-                                     chatter[j] = b.data[i + j];
-
-                                     if (j == chatterlen - 1) {
-
-                                         if (chatter[j] == undefined || chatter[j - 1] == undefined || chatter[j - 1] == undefined) {
-                                             console.log('Chatter SOMETHING length MISMATCH.  len %s, i %s currBufferLen %s', chatterlen, i, currBufferLen)
-                                         }
-
-
-                                         //console.log(output + '\n');
-                                         //console.log('processingBuffer:' + processingBuffer)
-                                         //console.log('OR HERE????:' + chatter.toString())
-                                         //logger.log('info', chatter.toString())
-                                         checksum(chatter);
-                                         //skip ahead in the buffer for loop to the end of this message. 
-                                         i += chatterlen;
-                                         console.log('<-----FOUND SOMETHING???')
-                                         break loop1;
-                                     }
-
-
-                                 }
-
-                             }*/
 
                         }
 
@@ -750,10 +844,10 @@ sp.on('open', function () {
             } else {
                 //We should get here after every message.  Slice the buffer to a new message
                 data2 = data2.slice(i);
+                //logger.error(data2)
                 if (logMessageDecoding) logger.silly('At end of message.  Sliced off %s from remaining buffer.', currBufferLen);
             }
 
-            processingBuffer = 0;
         };
     });
 
@@ -761,44 +855,58 @@ sp.on('open', function () {
 
 
 //Validate the checksum on the chatter
-function checksum(chatterdata, counter) {
+function checksum(chatterdata, counter, packetType) {
 
     //make a copy so when we callback the decode method it isn't changing our log output in Winston
     if (logMessageDecoding) logger.silly("Msg# %s   Making sure we have a valid packet (matching checksum to actual packet): %s", counter, JSON.stringify(chatterdata));
     var chatterCopy = chatterdata.slice(0);
     var len = chatterCopy.length;
 
-    //checksum is calculated by 256*2nd to last bit + last bit 
-    var chatterdatachecksum = (chatterCopy[len - 2] * 256) + chatterCopy[len - 1];
+
+    var chatterdatachecksum;
     var databytes = 0;
 
-    // add up the data in the payload
-    for (var i = 0; i < len - 2; i++) {
-        databytes += chatterCopy[i];
+    if (packetType == 'chlorinator') {
+
+        chatterdatachecksum = chatterCopy[len - 3];
+        for (var i = 0; i < len - 3; i++) {
+            databytes += chatterCopy[i];
+        }
+        databytes %= 256; //Mod 256 because there is only the lower checksum byte.  No higher (256*x) byte.
+    } else {
+        //checksum is calculated by 256*2nd to last bit + last bit 
+        chatterdatachecksum = (chatterCopy[len - 2] * 256) + chatterCopy[len - 1];
+
+
+        // add up the data in the payload
+        for (var i = 0; i < len - 2; i++) {
+            databytes += chatterCopy[i];
+        }
     }
 
     var validChatter = (chatterdatachecksum == databytes);
     if (!validChatter) {
         if (logMessageDecoding) {
 
-            logger.debug('Msg# %s   Packet collision on bus detected.')
+            logger.debug('Msg# %s   Packet collision on bus detected.', counter)
             logger.silly('Msg# %s   Mismatch on checksum:   %s!=%s   %s', counter, chatterdatachecksum, databytes, chatterCopy);
         }
         //console.log('Msg# %s   Mismatch on checksum:    %s!=%s   %s', counter, chatterdatachecksum, databytes, chatterCopy)
 
         //if a mismatch, rewrite the packet in case it was from us.
-        if (queuePacketsArr.length > 0) {
-            writePacket();
-        }
+        /***if (queuePacketsArr.length > 0) {
+          //  writePacket();
+        }*/
     } else {
         if (logMessageDecoding) logger.silly('Msg# %s   Match on Checksum:    %s==%s   %s', counter, chatterdatachecksum, databytes, chatterCopy)
     }
 
     //Go back to working on the original, not the copy
-    //now that we calculated checksum, strip leading 165 and 10 as it is extraneous
+    //now that we calculated checksum, strip leading 165 and 10 as it is extraneous  (or for chlorinator, strip 10,2)
     var preamble;
     preamble = chatterCopy.slice(0, 2)
     chatterCopy = chatterCopy.splice(2);
+
 
 
     //logger.silly("Msg# %s   Chatterdata splice: %s --> %s ", counter, chatterdata, chatterCopy)
@@ -806,9 +914,9 @@ function checksum(chatterdata, counter) {
     //call new function to process message; if it isn't valid, we noted above so just don't continue
     if (validChatter) {
         if (queuePacketsArr.length > 0) {
-            isResponse(chatterCopy, counter, preamble)
+            isResponse(chatterCopy, counter, preamble, packetType)
         } else {
-            decode(chatterCopy, counter, preamble)
+            decode(chatterCopy, counter, preamble, packetType)
         }
     }
 };
@@ -875,7 +983,7 @@ function pad(num, size) {
 
 
 //function decode(data, counter, responseBool) {
-function decode(data, counter, preamble) {
+function decode(data, counter, preamble, packetType) {
     var decoded = false;
 
     //when searchMode (from socket.io) is in 'start' status, any matching packets will be set to the browser at http://machine.ip:3000/debug.html
@@ -889,21 +997,42 @@ function decode(data, counter, preamble) {
         }
     }
 
-    if (needConfiguration && preambleByte != undefined) {
-        getConfiguration(data[packetFields.DEST], data[packetFields.FROM])
-    };
+    if (needConfiguration) {
+
+        if (intellitouch) // ONLY check the configuration if the controller is Intellitouch (address 16)
+        {
+            if (preambleByte != undefined) {
+                getControllerConfiguration(data[packetFields.DEST], data[packetFields.FROM])
+                needConfiguration = 0; //we will no longer request the configuration.  Need this first in case multiple packets come through.
+            }
+
+        } else {
+
+            if (intellicom) {
+                logger.info('IntellicomII Controller Detected.  No configuration request messages sent.')
+            } else {
+                logger.info('No pool controller (Intellitouch or IntelliComII) detected.  No configuration request messages sent.')
+            }
+            needConfiguration = 0; //we will no longer request the configuration.  Need this first in case multiple packets come through.
+        }
+    }
 
     //uncomment the below line if you think the 'parser' is missing any messages.  It will output every message sent here.
     //console.log('Msg# %s is %s', counter, JSON.stringify(data));  
 
-    logger.silly('Msg# %s  PREAMBLE %s, packet %s', counter, preamble, data)
+    logger.silly('Msg# %s  PREAMBLE %s, TYPE %s,  packet %s', counter, preamble, packetType, data)
+
+
+
+    if (logMessageDecoding) logger.silly('Msg# %s  Packet Type: %s', counter, packetType)
+
+    //Start Controller Decode
 
     //I believe this should be any packet with 165,10.  Need to verify. --Nope, 165,16 as well.  
-    //if ((data[packetFields.DEST] == ctrl.BROADCAST) || (data[packetFields.DEST] == ctrl.INTELLITOUCH) || (data[packetFields.DEST] == ctrl.WIRELESS) || (data[packetFields.DEST] == ctrl.REMOTE)) {
-    if (!
-        ((data[packetFields.DEST] == ctrl.PUMP1) || (data[packetFields.DEST] == ctrl.PUMP2) || (data[packetFields.FROM] == ctrl.PUMP1) || (data[packetFields.FROM] == ctrl.PUMP2))) {
 
-        preambleByte = preamble[1];
+    if (packetType == 'controller') {
+
+        preambleByte = preamble[1]; //not sure why we need this, but the 165,XX packet seems to change.  On my system it used to be 165,10 and then switched to 165,16.  Not sure why!  But we dynamically adjust it so it works for any value.  It is also different for the pumps (should always be 0 for pump messages)
 
 
         //logger.silly('Msg# %s  Packet info: dest %s   from %s', counter, data[packetFields.DEST], data[packetFields.FROM]);
@@ -1022,9 +1151,9 @@ function decode(data, counter, preamble) {
                         //THE LOOP IS BECAUSE THERE IS A BUG IN THE RECURSIVE LOOP.  It won't display the output.  Need to fix for objects embedded inside an array.
                         var results;
                         for (var i = 1; i <= 20; i++) {
-                            if (circuitArrObj[i].name != undefined) {
+                            if (currentCircuitArrObj[i].status != undefined) {
                                 results = currentCircuitArrObj[i].whatsDifferent(circuitArrObj[i]);
-                                if (results != "Nothing!") {
+                                if (!(results == "Nothing!" || currentCircuitArrObj[i].name == undefined)) {
                                     logger.info('Msg# %s   Circuit %s change:  %s', counter, circuitArrObj[i].name, results)
                                 }
                             }
@@ -1059,6 +1188,26 @@ function decode(data, counter, preamble) {
 
             //Send request/response for pump status
             {
+                var pumpNum;
+                if (data[packetFields.FROM] == 96 || data[packetFields.DEST] == 96) {
+                    pumpNum = 1
+                } else {
+                    pumpNum = 2
+                };
+                //var pumpname = (data[packetFields.FROM]).toString(); //returns 96 (pump1) or 97 (pump2)
+                //time returned in HH:MM (24 hour)  <-- need to clean this up so we don't get times like 5:3
+
+
+                var pumpStatus;
+                //pump status has not been copied to currentPumpStatus yet 
+                //if (currentPumpStatus[pumpNum].name == undefined) {
+                //    pumpStatus = new pump();
+                //} else {
+                pumpStatus = JSON.parse(JSON.stringify(currentPumpStatus[pumpNum]));
+                pumpStatus.name = ctrlString[pumpNum + 95];
+                //}
+
+
                 if (data[packetFields.FROM] == 16) //Request of status from Main
                 {
                     if (logPumpMessages) {
@@ -1067,68 +1216,64 @@ function decode(data, counter, preamble) {
                     }
                 } else //Response to request for status 
                 {
-                    var status = new pump();
 
 
-                    if (data[packetFields.FROM] == 96) {
-                        status.pump = 1;
 
-                    } else if (data[packetFields.FROM] == 97) {
-                        status.pump = 2
-                    } else {
-                        logger.warn('Msg# %s   Asking for status of unknown pump: ', counter, data)
-                    }
+
+                    pumpStatus.pump = pumpNum;
+
+
                     var pumpname = (data[packetFields.FROM]).toString(); //returns 96 (pump1) or 97 (pump2)
                     //time returned in HH:MM (24 hour)  <-- need to clean this up so we don't get times like 5:3
 
-                    status.time = data[pumpPacketFields.HOUR] + ':' + data[pumpPacketFields.MIN];
-                    status.run = data[pumpPacketFields.CMD]
-                    status.name = ctrlString[pumpname];
-                    status.mode = data[pumpPacketFields.MODE]
-                    status.drivestate = data[pumpPacketFields.DRIVESTATE]
-                    status.watts = (data[pumpPacketFields.WATTSH] * 256) + data[pumpPacketFields.WATTSL]
-                    status.rpm = (data[pumpPacketFields.RPMH] * 256) + data[pumpPacketFields.RPML]
-                    status.ppc = data[pumpPacketFields.PPC]
-                    status.err = data[pumpPacketFields.ERR]
-                    status.timer = data[pumpPacketFields.TIMER]
-                        //status.packet = data;
+                    pumpStatus.time = data[pumpPacketFields.HOUR] + ':' + data[pumpPacketFields.MIN];
+                    pumpStatus.run = data[pumpPacketFields.CMD]
+                    pumpStatus.name = ctrlString[pumpname];
+                    pumpStatus.mode = data[pumpPacketFields.MODE]
+                    pumpStatus.drivestate = data[pumpPacketFields.DRIVESTATE]
+                    pumpStatus.watts = (data[pumpPacketFields.WATTSH] * 256) + data[pumpPacketFields.WATTSL]
+                    pumpStatus.rpm = (data[pumpPacketFields.RPMH] * 256) + data[pumpPacketFields.RPML]
+                    pumpStatus.ppc = data[pumpPacketFields.PPC]
+                    pumpStatus.err = data[pumpPacketFields.ERR]
+                    pumpStatus.timer = data[pumpPacketFields.TIMER]
+                        //pumpStatus.packet = data;
 
-                    if (logPumpMessages) logger.debug('Msg# %s  %s Status: ', counter, status.name, JSON.stringify(status), data);
+                    if (logPumpMessages) logger.debug('Msg# %s  %s Status: ', counter, pumpStatus.name, JSON.stringify(pumpStatus), data);
 
 
 
-                    if (logPumpMessages) logger.silly('currentPumpStatusPacket', currentPumpStatusPacket)
+                    //if (logPumpMessages) logger.silly('currentPumpStatusPacket', currentPumpStatusPacket)
 
-                    if (status.pump == 1 || status.pump == 2) {
+                    if (pumpNum == 1 || pumpNum == 2) {
 
                         //pump status has not been copied to currentPumpStatus yet 
-                        if (currentPumpStatus[status.pump].name == undefined) {
-                            currentPumpStatus[status.pump] = status;
-                            currentPumpStatusPacket[status.pump] = data;
-                        } else
+                        // if (currentPumpStatus[pumpStatus.pump].name == undefined) {
+                        //currentPumpStatus[pumpStatus.pump] = status;
+                        //currentPumpStatusPacket[status.pump] = data;
+                        //} else
                         //if the packets are different
-                        {
+                        //{
 
-                            if (logPumpMessages) logger.silly('currentPumpPacket:  %s  \n Data:  %s', currentPumpStatusPacket[status.pump], data)
-                                //if (logPumpMessages) logger.silly('currentPumpStatusPacket[status.pump] == data', currentPumpStatusPacket[status.pump] == data)
-                                //if (logPumpMessages) logger.silly('JSON.stringify(currentPumpStatusPacket[status.pump]) == JSON.stringify(data)', JSON.stringify(currentPumpStatusPacket[status.pump]) == JSON.stringify(data))
+                        //if (logPumpMessages) logger.silly('currentPumpPacket:  %s  \n Data:  %s', currentPumpStatusPacket[status.pump], data)
+                        //if (logPumpMessages) logger.silly('currentPumpStatusPacket[status.pump] == data', currentPumpStatusPacket[status.pump] == data)
+                        //if (logPumpMessages) logger.silly('JSON.stringify(currentPumpStatusPacket[status.pump]) == JSON.stringify(data)', JSON.stringify(currentPumpStatusPacket[status.pump]) == JSON.stringify(data))
 
-                            //TODO - I don't think the following works...
-                            if (JSON.stringify(currentPumpStatusPacket[status.pump]).equals(JSON.stringify(data))) {
+                        //TODO - I don't think the following works...
+                        if (JSON.stringify(currentPumpStatus[status.pump]).equals(JSON.stringify(status))) {
 
-                                logger.debug('Msg# %s   Pump %s status has not changed: ', counter, status.pump, data)
-                            } else {
+                            if (logPumpMessages) logger.debug('Msg# %s   Pump %s status has not changed: ', counter, status.pump, data)
+                        } else {
 
-                                if (logPumpMessages) logger.silly('currentPumpStatus: ', currentPumpStatus[status.pump], 'status: ', status)
+                            if (logPumpMessages) logger.silly('currentPumpStatus: ', currentPumpStatus[status.pump], 'status: ', status)
 
 
-                                if (logPumpMessages) logger.verbose('Msg# %s   Pump %s status changed: ', counter, status.pump, currentPumpStatus[status.pump].whatsDifferent(status));
+                            if (logPumpMessages) logger.verbose('Msg# %s   Pump %s status changed: ', counter, status.pump, currentPumpStatus[pumpNum].whatsDifferent(status));
 
-                                currentPumpStatus[status.pump] = status;
-                                currentPumpStatusPacket[status.pump] = data;
-                                emit();
-                            }
+                            currentPumpStatus[pumpNum] = pumpStatus;
+                            //currentPumpStatusPacket[status.pump] = data;
+                            emit();
                         }
+                        //}
                     }
 
 
@@ -1339,6 +1484,78 @@ function decode(data, counter, preamble) {
                 break;
             }
             //Set Circuit Function On/Off
+
+        case 25: //Intellichlor status
+            {
+                if (intellitouch) { //this is to test configs without a chlorinator.  can get rid of it.
+                    if (logChlorinator) logger.info('Msg# %s   Chlorinator status packet: %s', counter, data)
+
+                    //copy the currentChlorinatorStatus to temp object
+                    //var chlorinatorStatus = JSON.parse(JSON.stringify(currentChlorinatorStatus));;
+                    var chlorinatorStatus = new chlorinatorObj;
+
+
+                    chlorinatorStatus.outputSpaPercent = (data[4] - 1) / 2; //41 would equal 20%, for example
+                    chlorinatorStatus.outputPercent = data[5];
+                    chlorinatorStatus.saltPPM = data[7] * 50;
+                    switch (data[8]) {
+                    case 0: //ok
+                        {
+                            chlorinatorStatus.status = "Ok";
+                            break;
+                        }
+                    case 1:
+                        {
+                            chlorinatorStatus.status = "No flow";
+                            break;
+                        }
+                    case 2:
+                        {
+                            chlorinatorStatus.status = "Low Salt";
+                            break;
+
+                        }
+                    case 4:
+                        {
+                            chlorinatorStatus.status = "High Salt";
+                            break;
+                        }
+
+                    case 144:
+                        {
+                            chlorinatorStatus.status = "Clean Salt Cell"
+                            break;
+                        }
+                    case 145:
+                        {
+                            chlorinatorStatus.status = "???"
+                            break;
+                        }
+                    default:
+                        {
+                            chlorinatorStatus.status = "Unknown - Status code: " + data[3];
+                        }
+                    }
+                    chlorinatorStatus.name = '';
+                    for (var i = 10; i <= 25; i++) {
+                        chlorinatorStatus.name += String.fromCharCode(data[i]);
+                    }
+                    if (currentChlorinatorStatus.name == '') {
+                        currentChlorinatorStatus = chlorinatorStatus;
+                        if (logChlorinator) logger.info('Msg# %s   Initial chlorinator settings discovered: ', counter, JSON.stringify(currentChlorinatorStatus))
+                        emit();
+                    } else
+                    if (currentChlorinatorStatus.equals(chlorinatorStatus)) {
+                        if (logChlorinator) logger.verbose('Msg# %s   Chlorinator status has not changed: ', counter, JSON.stringify(data))
+                    } else {
+                        if (logChlorinator) logger.verbose('Msg# %s   Chlorinator status changed: ', counter, currentChlorinatorStatus.whatsDifferent(chlorinatorStatus));
+                        currentChlorinatorStatus = chlorinatorStatus;
+                        emit();
+                    }
+                    decoded = true;
+                    break;
+                }
+            }
         case 134:
             {
 
@@ -1407,6 +1624,22 @@ function decode(data, counter, preamble) {
                 break;
 
             }
+        case 153: //Intellichlor status
+            {
+
+                if (logChlorinator) logger.info('Msg# %s   Set Chlorinator packet: %s', counter, data)
+                decoded = true;
+                break;
+
+            }
+        case 217: //Intellichlor status
+            {
+
+                if (logChlorinator) logger.info('Msg# %s   Get Chlorinator packet: %s', counter, data)
+                decoded = true;
+                break;
+
+            }
         default:
             {
 
@@ -1424,19 +1657,43 @@ function decode(data, counter, preamble) {
         }
 
     }
+    //End Controller Decode
 
+    //Start Pump Decode
     //I believe this should be any packet with 165,0.  Need to verify.
-    if (((data[packetFields.FROM] == ctrl.PUMP1 || data[packetFields.FROM] == ctrl.PUMP2)) || data[packetFields.DEST] == ctrl.PUMP1 || data[packetFields.DEST] == ctrl.PUMP2)
+    else if (packetType == 'pump')
 
     {
         if (logPumpMessages) logger.silly('Msg# %s  Decoding pump packet %s', counter, data)
-            /*if (instruction == null || instruction == undefined || instruction == '') {
-                instruction = data;
-                if (logPumpMessages) logger.debug('Msg# %s   Setting initial pump message: %s', counter, instruction)
-            }*/
 
-        //var isResponse = data.isResponse(instruction);
+        var updatePumpStatus = false; //true if it is a response from the pump (we are getting something back that can be updated), false if it is a request to the pump (nothing to update). 
+        if (data[packetFields.FROM] == 96 || data[packetFields.FROM] == 97) {
+            updatePumpStatus = true;
+        }
+
         var ctrlType = data2;
+        var pumpNum;
+        if (data[packetFields.FROM] == 96 || data[packetFields.DEST] == 96) {
+            pumpNum = 1
+        } else {
+            pumpNum = 2
+        };
+        //var pumpname = (data[packetFields.FROM]).toString(); //returns 96 (pump1) or 97 (pump2)
+        //time returned in HH:MM (24 hour)  <-- need to clean this up so we don't get times like 5:3
+
+        //logger.error('BEFORE    currentPumpStatus: %s', JSON.stringify(currentPumpStatus))
+        var pumpStatus;
+        //pump status has not been copied to currentPumpStatus yet 
+        //if (currentPumpStatus[pumpNum].name == undefined) {
+        //    pumpStatus = new pump();
+        //} else {
+        pumpStatus = JSON.parse(JSON.stringify(currentPumpStatus[pumpNum]));
+        pumpStatus.name = ctrlString[pumpNum + 95];
+        pumpStatus.pump =  pumpNum;
+
+        //}
+
+        //logger.error('pumpStatus: %s    currentPumpStatus: %s', JSON.stringify(pumpStatus), JSON.stringify(currentPumpStatus))
 
 
         switch (data[packetFields.ACTION]) {
@@ -1447,119 +1704,155 @@ function decode(data, counter, preamble) {
             {
                 var str1;
                 var str2;
-                var setAmount = data[6] * 256 + data[7]; //will only be used if there is a speed amount
+                var setAmount = data[6] * 256 + data[7];
 
 
-                if (data[packetFields.DEST] == 96 || data[packetFields.DEST] == 97) //Command to the pump
+                //if (data[packetFields.DEST] == 96 || data[packetFields.DEST] == 97) //Command to the pump.  Also think we know that if length = 4 than it is to the pump and length=2 is a response.
+                //{
+
+                if (data[3] == 2) // Length==2 is a response.
                 {
-                    if (data[4] == 3 && data[5] == 33) // 0x21
-                    {
-                        if (data[7] == 0) //off
+
+                    var str1;
+                    var setAmount = data[4] * 256 + data[5];
+
+                    //This section was removed because the response is *solely* the last two bytes of the request packet (before the checksum).  This means that a response of 8/16/24/32 could either be a) Program 1/2/3/4 now running or b) Timer set for 8/16/24/32 minutes.  Pump RPM would be 450-3450 but theoretically a timer could also be set for that range.
+
+                    /*switch (setAmount) {
+                    case 0:
                         {
-
-                            if (logPumpMessages && loglevel) logger.verbose('Msg# %s   %s: Turn pump off \n', counter, ctrlString[data[packetFields.FROM]]);
-                            decoded = true;
-                        } else {
-
-                            switch (data[7]) {
-
-                            case 8: //0x08                                case 8: //0x08
-
-                                {
-                                    str2 = 'Run Program 1'
-                                    setAmount = ''
-                                    break;
-                                }
-                            case 16: //0x10
-                                {
-                                    str2 = 'Run Program 2'
-                                    setAmount = ''
-                                    break;
-                                }
-                            case 24: //0x18
-                                {
-                                    str2 = 'Run Program 3'
-                                    setAmount = ''
-                                    break;
-                                }
-                            case 32: //0x20
-                                {
-                                    str2 = 'Run Program 4'
-                                    setAmount = ''
-                                    break;
-                                }
-                            default:
-                                {
-                                    str2 = 'Unknown(?)'
-                                    setAmount = ''
-                                    break;
-                                }
-                            }
-                            if (logPumpMessages && loglevel) logger.verbose('Msg# %s   %s: %s  \n', counter, ctrlString[data[packetFields.FROM]], str2, JSON.stringify(data));
-                            decoded = true;
+                            str1 = 'Power is now off';
+                            break;
+                        }
+                    case 1:
+                        {
+                            str1 = 'Timer is now set';
+                            break;
+                        }
+                    case 8:
+                        {
+                            str1 = 'Program 1 now running';
+                            break;
+                        }
+                    case 16:
+                        {
+                            str1 = 'Program 2 now running';
+                            break;
+                        }
+                    case 24:
+                        {
+                            str1 = 'Program 3 now running';
+                            break;
+                        }
+                    case 32:
+                        {
+                            str1 = 'Program 4 now running'
+                            break;
+                        }
+                    default:
+                        {
+                            str1 = 'Speed saved as ' + setAmount + ' RPM'
+                            break;
                         }
 
-                    } else if (data[4] == 3) { //Intellicom?
-                        switch (data[5]) {
-                        case 39: //0x27
-                            {
-                                str1 = 'Save Program 1 as '
-                                str2 = 'rpm';
-                                break;
-                            }
-                        case 40: //0x28
-                            {
-                                str1 = 'Save Program 2 as '
-                                str2 = 'rpm';
-                                break;
-                            }
-                        case 41: //0x29
-                            {
-                                str1 = 'Save Program 3 as '
-                                str2 = 'rpm';
-                                break;
-                            }
-                        case 42: //0x2a
-                            {
-                                str1 = 'Program 4 as ';
-                                str2 = 'rpm';
-                                break;
+                    } */
+                    decoded = true;
+                    if (logPumpMessages && loglevel) logger.verbose('Msg# %s   %s responded with acknowledgement: %s', counter, ctrlString[data[packetFields.FROM]], JSON.stringify(data));
+                } else if (data[4] == 3) // data[4]: 1== Response; 2==IntelliTouch; 3==Intellicom2(?)/manual
+                {
+                    switch (data[5]) {
 
-                            }
-                        case 43: //0x2B
-                            {
-                                str1 = 'Pump Timer';
-                                str2 = ' minutes'
-                                break;
-                            }
-                        default:
-                            {
-                                speedProgram = 'unknown(?)'
-                            }
+                    case 33: //0x21
+                        {
+                            setAmount = setAmount / 8
+                            str1 = 'Set Current Program to ' + setAmount.toString();
+                            pumpStatus.currentProgram = setAmount;
+                            break;
                         }
+                    case 39: //0x27
+                        {
+                            str1 = 'Save Program 1 as '
+                            str2 = setAmount.toString() + 'rpm';
+                            pumpStatus.program1rpm = setAmount;
+                            break;
+                        }
+                    case 40: //0x28
+                        {
+                            str1 = 'Save Program 2 as '
+                            str2 = setAmount.toString() + 'rpm';
+                            pumpStatus.program2rpm = setAmount;
+                            break;
+                        }
+                    case 41: //0x29
+                        {
+                            str1 = 'Save Program 3 as '
+                            str2 = setAmount.toString() + 'rpm';
+                            pumpStatus.program3rpm = setAmount;
+                            break;
+                        }
+                    case 42: //0x2a
+                        {
+                            str1 = 'Save Program 4 as ';
+                            pumpStatus.program4rpm = setAmount;
+                            str2 = setAmount.toString() + 'rpm';
+                            break;
 
-                    } else if (data[4] == 2) //Intellitouch?
-                    {
-
-                        str1 = 'Manual speed'
-                        str2 = 'rpm'
-
-
-                    } else {
-                        str1 = '[' + data[4] + ',' + data[5] + ']';
-                        str2 = ' rpm(?)'
-                        console.warn('pump data ?', counter, data)
+                        }
+                    case 43: //0x2B
+                        {
+                            str1 = 'Set Pump Timer for ';
+                            pumpStatus.timer = setAmount;
+                            str2 = setAmount.toString() + ' minutes'
+                            break;
+                        }
+                    default:
+                        {
+                            str1 = 'unknown(?)'
+                        }
+                        //if (logPumpMessages && loglevel) logger.verbose('Msg# %s   %s: %s  \n', counter, ctrlString[data[packetFields.FROM]], str2, JSON.stringify(data));
+                        decoded = true;
                     }
 
-
+                    if (logPumpMessages && loglevel) logger.verbose('Msg# %s   %s: %s %s %s', counter, ctrlString[data[packetFields.FROM]], str1, str2, JSON.stringify(data));
                     decoded = true;
+                } else if (data[4] == 2) // data[4]: 1== Response; 2==IntelliTouch; 3==Intellicom2(?)/manual
+                {
+
+                    var str1;
+                    var setAmount = data[6] * 256 + data[7];
+                    if (logPumpMessages & loglevel) logger.verbose('Msg# %s   %s --> %s: Set Speed (Intellitouch) to %s rpm: %s', counter, ctrlString[data[packetFields.FROM]], ctrlString[data[packetFields.DEST]], setAmount, JSON.stringify(data));
+
+
+                } else {
+                    str1 = '[' + data[4] + ',' + data[5] + ']';
+                    str2 = ' rpm(?)'
+                    logger.warn('Msg# %s  Pump data ?', str1, str2, counter, data)
+                }
+                decoded = true;
+
+                /*
+
                 } else //response from the pump
                 {
                     //var pumpResponse = ''
                     //pumpResponse += data[pumpPacketFields.LENGTH + 1] + ', ' + data[pumpPacketFields.LENGTH + 2]
-                    if (logPumpMessages && loglevel) logger.verbose('Msg# %s   %s: Speed Set to %s rpm: %s \n', counter, ctrlString[data[packetFields.FROM]], data[4] * 256 + data[5], JSON.stringify(data));
-                    decoded = true;
+                    if (data[2] == 1 && data[3] == 2 && data[4] == 0) //response to run program
+                    {
+                        if (data[5] == 1) {
+                            if (logPumpMessages && loglevel) logger.verbose('Msg# %s   %s: Not sure what this response is!: %s \n', counter, ctrlString[data[packetFields.FROM]], JSON.stringify(data));
+                            decoded = true;
+                        } else {
+                            if (logPumpMessages && loglevel) logger.verbose('Msg# %s   %s: Speed Program %s to current program: %s \n', counter, ctrlString[data[packetFields.FROM]], data[5] / 8, JSON.stringify(data));
+                            decoded = true;
+                        }
+                    } else //response to speed 
+                    {
+
+                        if (logPumpMessages && loglevel) logger.verbose('Msg# %s   %s: Speed Set to %s rpm: %s \n', counter, ctrlString[data[packetFields.FROM]], data[4] * 256 + data[5], JSON.stringify(data));
+                        decoded = true;
+                    }
                 }
+                */
                 break;
             }
         case 2: //??
@@ -1572,30 +1865,22 @@ function decode(data, counter, preamble) {
             {
 
                 if (data[pumpPacketFields.CMD] == 255) //Set pump control panel off (Main panel control only)
-
                 {
-                    //if (!responseBool) {
-                    if (data[packetFields.DEST] == 96 || data[packetFields.DEST] == 97) //Command to the pump
-                    {
-                        if (logPumpMessages & loglevel) logger.verbose('Msg# %s   %s --> %s: Remote control (turn off pump control panel): %s', counter, ctrlString[data[packetFields.FROM]], ctrlString[data[packetFields.DEST]], JSON.stringify(data));
-                        decoded = true;
-                    } else {
-                        if (logPumpMessages && loglevel) logger.verbose('Msg# %s   %s: In remote control: %s \n', counter, ctrlString[data[packetFields.FROM]], JSON.stringify(data))
-                        decoded = true;
-                    }
-                } else
-                if (data[pumpPacketFields.CMD] == 0) //Set pump control panel on 
+                    pumpStatus.remotecontol = 'on';
+                } else //0 = Set pump control panel on 
                 {
-                    //if (!responseBool) {
-                    if (data[packetFields.DEST] == 96 || data[packetFields.DEST] == 97) //Command to the pump
-                    {
-                        if (logPumpMessages && loglevel) logger.verbose('Msg# %s   %s --> %s: Local control (turn on pump control panel): %s', counter, ctrlString[data[packetFields.FROM]], ctrlString[data[packetFields.DEST]], JSON.stringify(data))
-                        decoded = true;
-                    } else {
-                        if (logPumpMessages && loglevel) logger.verbose('Msg# %s   %s: In local control: %s \n', counter, ctrlString[data[packetFields.FROM]], JSON.stringify(data))
-                        decoded = true;
-                    }
+                    pumpStatus.remotecontol = 'off';
                 }
+
+
+
+                if (data[packetFields.DEST] == 96 || data[packetFields.DEST] == 97) //Command to the pump
+                {
+                    if (logPumpMessages & loglevel) logger.verbose('Msg# %s   %s --> %s: Remote control (turn %s pump control panel): %s', counter, ctrlString[data[packetFields.FROM]], ctrlString[data[packetFields.DEST]], pumpStatus.remotecontol, JSON.stringify(data));
+                } else {
+                    if (logPumpMessages && loglevel) logger.verbose('Msg# %s   %s: Remote control %s: %s', counter, ctrlString[data[packetFields.FROM]], pumpStatus.remotecontol, JSON.stringify(data));
+                }
+                decoded = true;
                 break;
             }
 
@@ -1683,22 +1968,24 @@ function decode(data, counter, preamble) {
 
                     }
                     logger.verbose('Pump mode: %s  %s', pumpMode, JSON.stringify(data))
-
+                    pumpStatus.mode = pumpMode;
 
                     decoded = true;
                 } else {
-                    if (logPumpMessages && loglevel) logger.verbose('Msg# %s   %s confirming it is in mode %s: %s \n', counter, ctrlString[data[packetFields.FROM]], data[packetFields.CMD], JSON.stringify(data));
+                    if (logPumpMessages && loglevel) logger.verbose('Msg# %s   %s confirming it is in mode %s: %s', counter, ctrlString[data[packetFields.FROM]], data[packetFields.CMD], JSON.stringify(data));
                     decoded = true;
                 }
                 break;
             }
         case 6: //Turn pump on/off
             {
+
                 var power;
                 if (data[4] == 10)
                     power = "on"
                 else if (data[4] == 4)
                     power = "off";
+                pumpStatus.power = power;
 
                 //if (!responseBool) {
                 if (data[packetFields.DEST] == 96 || data[packetFields.DEST] == 97) //Command to the pump
@@ -1706,7 +1993,7 @@ function decode(data, counter, preamble) {
                     if (logPumpMessages && loglevel) logger.verbose('Msg# %s   %s --> %s: Pump power to %s: %s', counter, ctrlString[data[packetFields.FROM]], ctrlString[data[packetFields.DEST]], power, JSON.stringify(data));
                     decoded = true;
                 } else {
-                    if (logPumpMessages && loglevel) logger.verbose('Msg# %s   %s: Pump power %s: %s \n', counter, ctrlString[data[packetFields.FROM]], power, JSON.stringify(data));
+                    if (logPumpMessages && loglevel) logger.verbose('Msg# %s   %s: Pump power %s: %s', counter, ctrlString[data[packetFields.FROM]], power, JSON.stringify(data));
                     decoded = true;
                 }
                 break;
@@ -1720,83 +2007,40 @@ function decode(data, counter, preamble) {
                     decoded = true;
                 } else //response
                 {
-                    var status = new pump();
 
 
-                    if (data[packetFields.FROM] == 96) {
-                        status.pump = 1;
+                    pumpStatus.time = data[pumpPacketFields.HOUR] + ':' + data[pumpPacketFields.MIN];
+                    pumpStatus.run = data[pumpPacketFields.CMD] == 10 ? "On" : "Off" //10=On, 4=Off
 
-                    } else if (data[packetFields.FROM] == 97) {
-                        status.pump = 2
-                    } else {
-                        logger.warn('Msg# %s   Asking for status of unknown pump: ', counter, data)
-                    }
-                    var pumpname = (data[packetFields.FROM]).toString(); //returns 96 (pump1) or 97 (pump2)
-                    //time returned in HH:MM (24 hour)  <-- need to clean this up so we don't get times like 5:3
-
-                    status.time = data[pumpPacketFields.HOUR] + ':' + data[pumpPacketFields.MIN];
-                    status.run = data[pumpPacketFields.CMD] == 10 ? "On" : "Off" //10=On, 4=Off
-                    status.name = ctrlString[pumpname];
-                    status.mode = data[pumpPacketFields.MODE]
-                    status.drivestate = data[pumpPacketFields.DRIVESTATE]
-                    status.watts = (data[pumpPacketFields.WATTSH] * 256) + data[pumpPacketFields.WATTSL]
-                    status.rpm = (data[pumpPacketFields.RPMH] * 256) + data[pumpPacketFields.RPML]
-                    status.ppc = data[pumpPacketFields.PPC]
-                    status.err = data[pumpPacketFields.ERR]
-                    status.timer = data[pumpPacketFields.TIMER]
+                    pumpStatus.mode = data[pumpPacketFields.MODE]
+                    pumpStatus.drivestate = data[pumpPacketFields.DRIVESTATE]
+                    pumpStatus.watts = (data[pumpPacketFields.WATTSH] * 256) + data[pumpPacketFields.WATTSL]
+                    pumpStatus.rpm = (data[pumpPacketFields.RPMH] * 256) + data[pumpPacketFields.RPML]
+                    pumpStatus.ppc = data[pumpPacketFields.PPC]
+                    pumpStatus.err = data[pumpPacketFields.ERR]
+                    pumpStatus.timer = data[pumpPacketFields.TIMER]
                         //status.packet = data;
 
-                    if (logPumpMessages) logger.verbose('Msg# %s  %s Pump Status (from pump): ', counter, status.name, JSON.stringify(status), data, '\n');
+                    if (logPumpMessages) logger.verbose('\n Msg# %s  %s Pump Status (from pump): ', counter, pumpStatus.name, JSON.stringify(pumpStatus), data, '\n');
 
 
-                    if (intellicom || pumpOnly) //Intellicom -- if the controller is Intellitouch, we grab this information from the Controller broadcast packet
-                    {
-                        if (logPumpMessages) logger.silly('currentPumpStatusPacket', currentPumpStatusPacket)
-                        if (status.pump == 1 || status.pump == 2) {
 
-                            //pump status has not been copied to currentPumpStatus yet 
-                            if (currentPumpStatus[status.pump].name == undefined) {
-                                currentPumpStatus[status.pump] = status;
-                                currentPumpStatusPacket[status.pump] = data;
-                            } else
-                            //if the packets are different
-                            {
+                    //logger.error('1. what\'s different:', JSON.stringify(pumpStatus), JSON.stringify(currentPumpStatus))
 
-                                if (logPumpMessages) logger.silly('currentPumpPacket:  %s  \n Data:  %s', currentPumpStatusPacket[status.pump], data)
-
-
-                                if (JSON.stringify(currentPumpStatusPacket[status.pump]).equals(JSON.stringify(data))) {
-
-                                    logger.debug('Msg# %s   Pump %s status has not changed: ', counter, status.pump, data)
-                                } else {
-
-                                    if (logPumpMessages) logger.silly('currentPumpStatus: ', currentPumpStatus[status.pump], 'status: ', status)
-
-
-                                    //  If the difference is less then (absolute) 5% and the watts is not the same as it previously was, then notify the user.
-                                    /*if (logPumpMessages & (Math.abs((status.watts-currentPumpStatus[status.pump].watts)/status.watts))<.05 & status.watts!=currentPumpStatus[status.pump].watts)
-                                        {
-                                            logger.info('Msg# %s   Pump %s WATTS CHANGED >5% changed: ', counter, status.pump, currentPumpStatus[status.pump].whatsDifferent(status));
-                                        }*/
-                                    if ((Math.abs((status.watts - currentPumpStatus[status.pump].watts) / status.watts)) > .05) {
-                                        logger.info('Msg# %s   Pump %s watts changed >5%: %s --> %s', counter, status.pump, status.watts, currentPumpStatus[status.pump].watts)
-                                    }
-                                    if (logPumpMessages) logger.info('Msg# %s   Pump %s status changed: ', counter, status.pump, currentPumpStatus[status.pump].whatsDifferent(status));
-
-                                    currentPumpStatus[status.pump] = status;
-                                    currentPumpStatusPacket[status.pump] = data;
-                                    emit();
-                                }
-                            }
-                        }
-                    }
-
-
+                    currentPumpStatusPacket[pumpStatus.pump] = data;
 
                 }
                 decoded = true;
                 break;
             }
+
+        case 256: //03:17:39.122 INFO Msg# 5 is UNKNOWN: [16,96,255,1,8,2,29]  Possibly priming?
+            {
+                logger.warn('Msg# %s  Pump message?  Possibly priming?  %s', JSON.stringify(pumpStatus))
+                decoded = true;
+                break;
+            }
+
         default:
             {
                 if (logPumpMessages && loglevel) logger.info('Msg# %s is UNKNOWN: %s', counter, JSON.stringify(data));
@@ -1804,86 +2048,306 @@ function decode(data, counter, preamble) {
             }
         }
 
+        if (updatePumpStatus) {
+            if (logPumpMessages) logger.silly('\n Analyzing pump packets for pump ', pumpNum, ': \n currentPumpStatus: ', currentPumpStatus[pumpStatus.pump], '\n pumpStatus: ', JSON.stringify(pumpStatus), '\n equal?: ', JSON.stringify(currentPumpStatus[pumpNum]).equals(JSON.stringify(pumpStatus)))
 
-        //in case we get here and the first message has not already been set as the instruction command
-        /*if (instruction == null || instruction == undefined) {
-            instruction = data;
-        }*/
-        if (!decoded) {
-            if (logConsoleNotDecoded) {
+            if ((currentPumpStatus[pumpNum].time != 'timenotset')) {
 
-                logger.info('Msg# %s is NOT DECODED %s', counter, JSON.stringify(data));
+                if (JSON.stringify(currentPumpStatus[pumpNum]).equals(JSON.stringify(pumpStatus))) {
 
-            };
-        } else {
-            decoded = false
+                    if (logPumpMessages) logger.debug('Msg# %s   Pump %s status has not changed: %s  \n', counter, pumpStatus.pump, data)
+                } else {
+
+
+
+                    //  If the difference is less then (absolute) 5% and the watts is not the same as it previously was, then notify the user.
+                    /*if (logPumpMessages & (Math.abs((status.watts-currentPumpStatus[status.pump].watts)/status.watts))<.05 & status.watts!=currentPumpStatus[status.pump].watts)
+                        {
+                            logger.info('Msg# %s   Pump %s WATTS CHANGED >5% changed: ', counter, status.pump, currentPumpStatus[status.pump].whatsDifferent(status));
+                        }*/
+
+                    if (logPumpMessages) {
+                        if ((Math.abs((pumpStatus.watts - currentPumpStatus[pumpNum].watts) / pumpStatus.watts)) > .05) {
+                            //logger.error('pumpnum.watts:', JSON.stringify(currentPumpStatus), currentPumpStatus[pumpNum].watts)
+                            logger.info('Msg# %s   Pump %s watts changed >5%: %s --> %s \n', counter, pumpStatus.pump, currentPumpStatus[pumpNum].watts, pumpStatus.watts)
+                        }
+                        //logger.error('2 what\'s different: \n %s \n %s', JSON.stringify(pumpStatus), JSON.stringify(currentPumpStatus))
+                        if (logPumpMessages) logger.info('Msg# %s   Pump %s status changed: %s \n', counter, pumpStatus.pump, currentPumpStatus[pumpNum].whatsDifferent(pumpStatus));
+                    }
+
+                    currentPumpStatus[pumpStatus.pump] = JSON.parse(JSON.stringify(pumpStatus));
+
+                    emit();
+                }
+
+
+            } else //Not all pump packet info present yet
+            {
+                currentPumpStatus[pumpStatus.pump] = JSON.parse(JSON.stringify(pumpStatus));
+            }
         }
-        return true; //fix this; turn into callback(?)  What do we want to do with it?
     }
+    //End Pump Decode
+    //Start Chlorinator Decode
+    else if (packetType == 'chlorinator') {
+
+        //put in logic (or logging here) for chlorinator discovered (upon 1st message?)
+
+        if (!intellitouch) //If we have an intellitouch, we will get it from decoding the controller packets (25, 153 or 217)
+        {
+            var destination;
+            if (data[0] == 80) {
+                destination = 'Salt cell';
+                from = 'Controller'
+            } else {
+                destination = 'Controller'
+                from = 'Salt cell'
+            }
+
+            //logger.error('currentChlorStatus  ', currentChlorinatorStatus)
+            //var chlorinatorStatus = clone(currentChlorinatorStatus);
+            //not sure why the above line failed...?  Implementing the following instead.
+            var chlorinatorStatus = JSON.parse(JSON.stringify(currentChlorinatorStatus));
+
+
+            if (currentChlorinatorStatus.name == '' && chlorinator)
+            //If we see a chlorinator status packet, then request the name.  Not sure when the name would be automatically sent over otherwise.
+            {
+                logger.verbose('Queueing messages to retrieve Salt Cell Name (AquaRite or OEM)')
+                    //get salt cell name
+                queuePacket([16, 2, 80, 20, 0]);
+            }
+
+
+
+            switch (data[1]) {
+            case 0: //Get status of Chlorinator
+                {
+                    if (logChlorinator) logger.verbose('Msg# %s   %s --> %s: Please provide status: %s', counter, from, destination, data)
+                    decoded = true;
+                    break;
+                }
+            case 1: //Response to get status 
+                {
+                    if (logChlorinator) logger.verbose('Msg# %s   %s --> %s: I am here: %s', counter, from, destination, data)
+                    decoded = true;
+                    break;
+                }
+            case 3: //Response to version
+                {
+                    chlorinatorStatus.name = '';
+                    chlorinatorStatus.version = data[2];
+                    for (var i = 3; i <= 18; i++) {
+                        chlorinatorStatus.name += String.fromCharCode(data[i]);
+                    }
+                    if (logChlorinator) logger.verbose('Msg# %s   %s --> %s: Chlorinator version (%s) and name (%s): %s', counter, from, destination, chlorinatorStatus.version, chlorinatorStatus.name, data);
+                    decoded = true;
+                    break;
+                }
+            case 17: //Set Generate %
+                {
+                    chlorinatorStatus.outputPercent = data[2];
+                    if (data[2] == 101) {
+                        chlorinatorStatus.superChlorinate = 'On'
+                    } else {
+                        chlorinatorStatus.superChlorinate = 'On'
+                    }
+                    if (logChlorinator) logger.verbose('Msg# %s   %s --> %s: Set current output to %s %: %s', counter, from, destination, chlorinatorStatus.superChlorinate == 'On' ? 'Super Chlorinate' : chlorinatorStatus.outputPercent, data);
+                    decoded = true;
+                    break;
+                }
+            case 18: //Response to 17 (set generate %)
+                {
+                    chlorinatorStatus.saltPPM = data[2] * 50;
+
+
+                    switch (data[3]) {
+                    case 0: //ok
+                        {
+                            chlorinatorStatus.status = "Ok";
+                            break;
+                        }
+                    case 1:
+                        {
+                            chlorinatorStatus.status = "No flow";
+                            break;
+                        }
+                    case 2:
+                        {
+                            chlorinatorStatus.status = "Low Salt";
+                            break;
+
+                        }
+                    case 4:
+                        {
+                            chlorinatorStatus.status = "High Salt";
+                            break;
+                        }
+
+                    case 144:
+                        {
+                            chlorinatorStatus.status = "Clean Salt Cell"
+                            break;
+                        }
+                    default:
+                        {
+                            chlorinatorStatus.status = "Unknown - Status code: " + data[3];
+                        }
+                    }
+                    if (logChlorinator) logger.verbose('Msg# %s   %s --> %s: Current Salt level is %s PPM: %s', counter, from, destination, chlorinatorStatus.saltPPM, data);
+
+                    decoded = true;
+                    break;
+                }
+            case 20: //Get version 
+                {
+                    if (logChlorinator) logger.verbose('Msg# %s   %s --> %s: What is your version?: %s', counter, from, destination, data)
+                    decoded = true;
+                    break;
+                }
+            case 21: //Set Generate %, but value / 10??
+                {
+                    chlorinatorStatus.outputPercent = data[2] / 10;
+                    if (logChlorinator) logger.verbose('Msg# %s   %s --> %s: Set current output to %s %: %s', counter, from, destination, chlorinatorStatus.outputPercent, data);
+                    decoded = true;
+                    break;
+                }
+            default:
+                {
+                    if (logChlorinator) logger.verbose('Msg# %s   %s --> %s: Other chlorinator packet?: %s', counter, from, destination, data)
+                    decoded = true;
+                    break;
+                }
+            }
+
+            if (currentChlorinatorStatus.equals(chlorinatorStatus)) {
+                if (logChlorinator) logger.verbose('Msg# %s   Chlorinator status has not changed: ', counter, JSON.stringify(data))
+            } else {
+                if (logChlorinator) logger.verbose('Msg# %s   Chlorinator status changed: ', counter, currentChlorinatorStatus.whatsDifferent(chlorinatorStatus));
+                currentChlorinatorStatus = chlorinatorStatus;
+                emit();
+            }
+        } else //need to set decoded to true or it will show up as NOT DECODED in the log.  Essentially, we are dropping it if we have an intellitouch.
+        {
+            decoded = true;
+        }
+
+    }
+    //End Chlorinator Decode
+
+
+    //in case we get here and the first message has not already been set as the instruction command
+    /*if (instruction == null || instruction == undefined) {
+        instruction = data;
+    }*/
+    if (!decoded) {
+        if (logConsoleNotDecoded) {
+
+            logger.info('Msg# %s is NOT DECODED %s', counter, JSON.stringify(data));
+
+        };
+    } else {
+        decoded = false
+    }
+    return true; //fix this; turn into callback(?)  What do we want to do with it?
+
 }
 
 
 
 //this function is the "broker" between the receiving workflow and the sending workflow
-function isResponse(chatter, counter, preamble) {
+function isResponse(chatter, counter, preamble, packetType) {
 
-    logger.silly('Msg# %s  Checking to see if inbound message matches previously sent outbound message (isResponse function): %s ', counter, chatter)
-
-    //make copies of the object so we assign the variables by value and not change the originals (by reference)
-    //need to use the clone function because slice doesn't work on objects for by value copy
-    tempObj = clone(chatter);
-
-    objSrc = this[packetFields.FROM];
-    objDest = this[packetFields.DEST];
-    tempObj[packetFields.DEST] = objSrc;
-    tempObj[packetFields.FROM] = objDest;
-
-
-    if (loglevel) {
-        logger.silly('  isResponse: Msg# %s  queuePacketsArr.length: %s   tempObj.equals(chatter): %s ', counter, queuePacketsArr.length, tempObj.equals(chatter))
-    }
+    logger.silly('Msg# %s  Checking to see if inbound message matches previously sent outbound message (isResponse function): %s ', counter, chatter, preamble, packetType)
 
 
     //For Broadcast Packets
-    //Ex set circuit name[255,0,255,165, 10, 16, 32, 139, 5, 7, 0, 7, 0, 0, 1, 125]
-    //Ex ACK circuit name[165,10,15,16,10,12,0,85,83,69,82,78,65,77,69,45,48,49]  
-
-    //console.log('Msg#: %s chatter: %s chatterreceived.action: %s (1??)  chatterreceieved.4: %s == queue[0].action: %s ALL TRUE?  %s ', counter, chatter, chatter[packetFields.ACTION], chatter[4], queuePacketsArr[0][7], ((chatter[packetFields.ACTION] == 1) && (chatter[4] == queuePacketsArr[0][7])))
-
-    //...OR.... check for bitwise isResponse
+    //Ex set circuit name[255,0,255,165, 10, 16, 32, 139, 5, 7, 0, 7, 0, 0, 1,125]
+    //Ex ACK circuit name[255,0,255,165, 10, 15, 16,  10,12, 0,85,83,69,82,78, 65,77,69,45,48,49]  
 
     if (loglevel) logger.silly('   isResponse:  Msg#: %s  chatterreceived.action: %s (10?) == queue[0].action&63: %s ALL TRUE?  %s \n\n', counter, chatter[packetFields.ACTION], queuePacketsArr[0][7] & 63, ((chatter[packetFields.ACTION] == (queuePacketsArr[0][7] & 63))))
 
+    if (packetType == 'pump') {
 
+        var tempObj = queuePacketsArr[0].slice(5);
+        var tempDest = tempObj[0];
+        tempObj[0] = tempObj[1];
+        tempObj[1] = tempDest;
+        //logger.error('comparing pump chatter: %s   tempObj: %s', chatter, tempObj)
 
-    if (queuePacketsArr.length > 0) {
-        //If an ACK
-        if (chatter[packetFields.ACTION] == 1 && chatter[4] == queuePacketsArr[0][7]) {
+        if (tempObj.equals(chatter)) //Scenario 1, pump messages are mimics of each other but the dest/src are swapped
+        {
+            //if (queuePacketsArr.length > 0) {      ///  <-- Why is this here?
+            //successfulAck(chatter, counter, false)
+            //}
+            successfulAck(chatter, counter, true) //<--Added 9/30/16 to replace the above 3 lines.
+            decode(chatter, counter, preamble, packetType)
+        } else
+        if (queuePacketsArr[0][7] == 1 && chatter[2] == 1) //Any commands with <01> are 4 bytes.  The responses are 2 bytes (after the length).  The 3rd/4th byte of the request seem to match the 1st/2nd bytes of the response.
+        {
+            if (queuePacketsArr[0][11] == chatter[4] && queuePacketsArr[0][12] == chatter[5]) {
+                successfulAck(chatter, counter, true);
+                decode(chatter, counter, preamble, packetType);
+            } else {
+                successfulAck(chatter, counter, false);
+                decode(chatter, counter, preamble, packetType);
+            }
+        } else if ((queuePacketsArr[0][7] == 7 && chatter[2] == 7)) //Scenario 3.  Request for pump status.
+        {
             successfulAck(chatter, counter, true);
-            //decode(chatter, counter, true);
-            decode(chatter, counter, preamble);
+            decode(chatter, counter, preamble, packetType);
+        } else //no match
+        {
+            successfulAck(chatter, counter, false)
+            decode(chatter, counter, preamble, packetType);
+            //console.log('Msg#: %s In isResponse -- Not a. %s', counter, chatter)
+        }
+    } else
+
+    if (packetType == 'chlorinator') {
+        /* CHECK FOR RESPONSES
+         0=>1
+         17=>18
+         21=>18
+         20=>3*/
+        if (chatter[chatter.length - 2] == 16 && chatter[chatter.length - 1] == 3)
+        //quick double check here to make sure last two bytes of packet we are matching is 16,3
+        {
+            if ((queuePacketsArr[0][3] == 0 && chatter[1] == 1) ||
+                (queuePacketsArr[0][3] == 17 && chatter[1] == 18) ||
+                (queuePacketsArr[0][3] == 21 && chatter[1] == 18) ||
+                (queuePacketsArr[0][3] == 20 && chatter[1] == 3)) {
+                successfulAck(chatter, counter, true);
+            }
+        } else {
+            successfulAck(chatter, counter, false);
+        }
+
+        decode(chatter, counter, preamble, packetType);
+    } else
+
+    if (packetType == 'controller') {
+        if (chatter[packetFields.ACTION] == 1 && chatter[4] == queuePacketsArr[0][7])
+        //if an ACK
+        {
+            successfulAck(chatter, counter, true);
+            decode(chatter, counter, preamble, packetType);
         }
         //If a broadcast response to request 202 --> 10
         else if ((chatter[packetFields.ACTION] == (queuePacketsArr[0][7] & 63))) {
-
+            /*this works because:
+            There appears to be a relationship between the various Status, Get, and Set messages. It may be that the low order bits designate the type of message and the high order bits control whether or not you are requesting the current status or setting the current values. For example the Date/Time message is type 5(00000101). To request the Date/Time you would set the top two bits resulting in a type of 197(11000101). To set the Date/Time you would set only the topmost bit resulting in a type of 133(10000101). The same seems to apply to many of the other message types.
+                
+            see https://github.com/tagyoureit/nodejs-Pentair/wiki/Broadcast
+            */
             successfulAck(chatter, counter, true);
-            //decode(chatter, counter, true);
-            decode(chatter, counter, preamble);
+            decode(chatter, counter, preamble, packetType);
         }
-    }
-    //This is for pump messages.  Messages will be exactly the same exact dest/src will be swapped.
-    if (tempObj.equals(chatter)) {
-        if (queuePacketsArr.length > 0) {
-            successfulAck(chatter, counter, false)
-        }
-        decode(chatter, counter, true)
-    } else
-    if (queuePacketsArr.length > 0) {
-        successfulAck(chatter, counter, false)
-    } else {
-        //decode(chatter, counter, false)
-        decode(chatter, counter, preamble);
-        //console.log('Msg#: %s In isResponse -- Not a. %s', counter, chatter)
+    } else //if we get here, no match
+    {
+        successfulAck(chatter, counter, false);
+        decode(chatter, counter, preamble, packetType);
+        logger.error('Msg# %s  No match on response.  How did we get here? %s', counter, chatter)
     }
 
 };
@@ -1893,61 +2357,94 @@ function isResponse(chatter, counter, preamble) {
 //------------------START WRITE SECTION
 
 
+
 function successfulAck(chatter, counter, messageAck) {
     if (logMessageDecoding) logger.silly('Msg#: %s in successfulAck  messageAck: %s counter: %s  packetWrittenAt: %s  queuePacketsArr.length: %s', counter, messageAck, counter, packetWrittenAt, queuePacketsArr.length)
-    if (loglevel) logger.debug('Msg# %s  Comparing Message received: %s \n                                     to message written: %s', counter, chatter, queuePacketsArr[0])
+    if (loglevel) logger.debug('Msg# %s  Msg received: %s \n                           Msg written: %s \n                           Match?: %s', counter, chatter, queuePacketsArr[0], messageAck)
+
     if (messageAck == true) {
         queuePacketsArr.shift();
+    }
+    /*
+            //Only call writePacket if there are more instructions to write to the serial bus
+            if (queuePacketsArr.length > 0) {
+                writePacket()
+            };
+        } else {
 
-        //Only call writePacket if there are more instructions to write to the serial bus
-        if (queuePacketsArr.length > 0) {
-            writePacket()
-        };
-    } else {
+            if (queuePacketsArr.length > 0) {
+                //console.log('****HOW MANY RETRIES:  counter: %s   packetwrittenAt: %s  diff: %s', counter, packetWrittenAt, counter-                packetWrittenAt)
+                //what is the best way to send messages again?
+                if (counter - packetWrittenAt > 5) {
 
-        if (queuePacketsArr.length > 0) {
-            //console.log('****HOW MANY RETRIES:  counter: %s   packetwrittenAt: %s  diff: %s', counter, packetWrittenAt, counter-                packetWrittenAt)
-            //what is the best way to send messages again?
-            if (counter - packetWrittenAt > 5) {
-
-                //retry same packet
-                writePacket();
+                    //retry same packet
+                    writePacket();
+                }
             }
         }
-    }
+        */
 }
 
 function queuePacket(message) {
 
-
-
-    //var pumpPacket = [165, 10, 16, 34, 136, 4, 88, 0, 3, 0, ]
     var checksum = 0;
     for (var j = 0; j < message.length; j++) {
         checksum += message[j]
     }
-    message.push(checksum >> 8)
-    message.push(checksum & 0xFF)
 
 
-    //Process the packet to include the preamble and checksum
-    var packet = [255, 0, 255];
-    Array.prototype.push.apply(packet, message);
+    var packet;
+
+    if (message[0] == 16 && message[1] == ctrl.CHLORINATOR) {
+        message.push(checksum)
+        message.push(16)
+        message.push(3)
+        packet = message.slice();
+        logger.silly('chrlorinator packet configured as: ', packet)
+    } else {
+        //Process the packet to include the preamble and checksum
+
+        message.push(checksum >> 8)
+        message.push(checksum & 0xFF)
+        packet = [255, 0, 255];
+        Array.prototype.push.apply(packet, message);
+    }
+
+
+
+
 
 
     //-------Internally validate checksum
 
-    //example packet: 255,0,255,165,10,16,34,2,1,0,0,228
-    var len = packet.length;
+    if (message[0] == 16 && message[1] == ctrl.CHLORINATOR) //16,2 packet
+    {
+        //example packet: 16,2,80,0,98,16,3
+        var len = packet.length;
 
-    //checksum is calculated by 256*2nd to last bit + last bit 
-    var packetchecksum = (packet[len - 2] * 256) + packet[len - 1];
-    var databytes = 0;
+        //checksum is calculated by 256*2nd to last bit + last bit 
+        var packetchecksum = packet[len - 3];
+        var databytes = 0;
 
-    // add up the data in the payload
-    for (var i = 3; i < len - 2; i++) {
-        databytes += packet[i];
+        // add up the data in the payload
+        for (var i = 0; i < len - 3; i++) {
+            databytes += packet[i];
+        }
+    } else //255,0,255,165 packet
+    {
+        //example packet: 255,0,255,165,10,16,34,2,1,0,0,228
+        var len = packet.length;
+
+        //checksum is calculated by 256*2nd to last bit + last bit 
+        var packetchecksum = (packet[len - 2] * 256) + packet[len - 1];
+        var databytes = 0;
+
+        // add up the data in the payload
+        for (var i = 3; i < len - 2; i++) {
+            databytes += packet[i];
+        }
     }
+
     var validPacket = (packetchecksum == databytes);
     if (!validPacket) {
         logger.error('Asking to queue malformed packet: %s', packet)
@@ -1969,48 +2466,83 @@ function queuePacket(message) {
     //if length > 0 then we will loop through from isResponse
     if (queuePacketsArr.length == 1)
         writePacket();
-
-
-
-
 }
 
 var packetWrittenAt; //var to hold the message counter variable when the message was sent.  Used to keep track of how many messages passed without a successful counter.
 
 function writePacket() {
-    logger.silly('Entering Write Queue')
+    if (queuePacketsArr.length == 0) // need this because the correct packet might come back during the writePacketTimer.timeout.
+    {
+        logger.silly('Exiting write queue because last message was successfully received.')
+    } else {
+        logger.silly('Entering Write Queue')
+        logger.silly('Queue = %s', JSON.stringify(queuePacketsArr))
 
-
-    //logger.verbose('Sending packet: %s', queuePacketsArr[0])
-    sp.write(queuePacketsArr[0], function (err) {
-        sp.drain(function () {
-            if (err) {
-                logger.error('Error writing packet: ' + err.message)
-            }
-            if (queuePacketsArr[0].equals(msgWriteCounter.msgWrote)) //msgWriteCounter will store the message that is being written.  If it doesn't match the 1st msg in the queue, then we have received the ACK for the message and can move on.  If it is the same message, then we are retrying the same message again so increment the counter.
-            {
-                msgWriteCounter.counter++;
-            } else {
-                msgWriteCounter.msgWrote = queuePacketsArr[0].slice(0);
-                msgWriteCounter.counter = 1;
-            }
-            if (loglevel) logger.verbose('Sent Packet ' + queuePacketsArr[0] + ' Try: ' + msgWriteCounter.counter)
-            if (msgWriteCounter.counter >= 10) {
-                logger.error('Error writing packet to serial bus.  Tried %s times to write %s', msgWriteCounter.counter, msgWriteCounter.msgWrote)
-                if (logType == "info" || logType == "warn" || logType == "error") {
-                    logger.warn('Setting logging level to Debug')
-                    logType = 'debug'
-                    logger.transports.console.level = 'debug';
+        //logger.verbose('Sending packet: %s', queuePacketsArr[0])
+        sp.write(queuePacketsArr[0], function (err) {
+            sp.drain(function () {
+                if (err) {
+                    logger.error('Error writing packet: ' + err.message)
                 }
-            }
-        });
+                if (queuePacketsArr[0].equals(msgWriteCounter.msgWrote)) //msgWriteCounter will store the message that is being written.  If it doesn't match the 1st msg in the queue, then we have received the ACK for the message and can move on.  If it is the same message, then we are retrying the same message again so increment the counter.
+                {
+                    msgWriteCounter.counter++;
+                } else {
+                    msgWriteCounter.msgWrote = queuePacketsArr[0].slice(0);
+                    msgWriteCounter.counter = 1;
+                }
+                if (loglevel) logger.verbose('Sent Packet ' + queuePacketsArr[0] + ' Try: ' + msgWriteCounter.counter)
+                if (msgWriteCounter.counter >= 10) //if we get to 10 retries, then throw an Error.
+                {
+                    logger.error('Error writing packet to serial bus.  Tried %s times to write %s', msgWriteCounter.counter, msgWriteCounter.msgWrote)
+                    if (logType == "info" || logType == "warn" || logType == "error") {
+                        logger.warn('Setting logging level to Debug')
+                        logType = 'debug'
+                        logger.transports.console.level = 'debug';
+                    }
+                    if (msgWriteCounter.counter >= 20) //if we get to 20 retries, then abort this packet.
+                    {
+                        msgWriteCounter.msgWrote = queuePacketsArr[0].slice(0);
+                        msgWriteCounter.counter = 1;
+                    }
 
-    })
-    packetWrittenAt = msgCounter;
+
+                }
+            });
+
+        })
+        packetWrittenAt = msgCounter;
+        if (queuePacketsArr.length > 0) {
+            writePacketTimer.setTimeout(writePacket, '', '200m')
+        }
+    }
 
 
 }
 
+
+if (pumpOnly) {
+
+    var pump1Timer = new NanoTimer();
+    var pump1TimerDelay = new NanoTimer();
+    var pump1Countdown = 0;
+    var pumpInitialRequestConfigDelay = new NanoTimer();
+
+
+    var pumpStatusTimer = new NanoTimer();
+
+    if (numberOfPumps == 1) {
+        pumpStatusTimer.setInterval(pumpStatusCheck, [1], '30s');
+        pumpInitialRequestConfigDelay.setTimeout(pumpStatusCheck, [1], '2500m'); //must give a short delay to allow the port to open
+    } else {
+        var pump2Timer = new NanoTimer();
+        var pump2TimerDelay = new NanoTimer();
+        var pump2Countdown = 0;
+        pumpStatusTimer.setInterval(pumpStatusCheck, [1, 2], '30s');
+        pumpInitialRequestConfigDelay.setTimeout(pumpStatusCheck, [1, 2], '2500m'); //must give a short delay to allow the port to open
+    }
+
+}
 
 //Credit to this function belongs somewhere on Stackoverflow.  Need to find it to give credit.
 Object.defineProperty(Object.prototype, "equals", {
@@ -2157,52 +2689,132 @@ function clone(obj) {
 
 
 
-function getConfiguration(dest, src) {
-    needConfiguration = 0; //we will no longer request the configuration.  Need this first in case multiple packets come through.
-    if (intellitouch) // ONLY check the configuration if the controller is Intellitouch (address 16)
-    {
-        sp.drain();
-
-        logger.info('Queueing messages to retrieve configuration from Intellitouch')
-        logger.verbose('Queueing messages to retrieve Pool/Spa Heat Mode')
-
-        //get Heat Mode
-        queuePacket([165, preambleByte, 16, 34, 200, 1, 0]);
-
-        logger.verbose('Queueing messages to retrieve Custom Names')
-
-        var i = 0;
-        //get custom names
-        for (i; i < 10; i++) {
-            queuePacket([165, preambleByte, 16, 34, 202, 1, i]);
-        }
+function getControllerConfiguration(dest, src) {
 
 
-        logger.verbose('Queueing messages to retrieve Circuit Names')
-            //get circuit names
-        for (i = 1; i < 21; i++) {
-            queuePacket([165, preambleByte, 16, 34, 203, 1, i]);
-        }
+    sp.drain();
 
+    logger.info('Queueing messages to retrieve configuration from Intellitouch')
+    logger.verbose('Queueing messages to retrieve Pool/Spa Heat Mode')
 
-        logger.verbose('Queueing messages to retrieve Schedules')
-            //get schedules
-        for (i = 1; i < 13; i++) {
+    //get Heat Mode
+    queuePacket([165, preambleByte, 16, 34, 200, 1, 0]);
 
-            queuePacket([165, preambleByte, 16, 34, 209, 1, i]);
+    logger.verbose('Queueing messages to retrieve Custom Names')
 
-        }
-
-    } else {
-        if (intellicom) {
-            logger.info('IntellicomII Controller Detected.  No configuration request messages sent.')
-        } else {
-            logger.info('No pool controller (Intellitouch or IntelliComII) detected.  No configuration request messages sent.')
-        }
+    var i = 0;
+    //get custom names
+    for (i; i < 10; i++) {
+        queuePacket([165, preambleByte, 16, 34, 202, 1, i]);
     }
 
+
+    logger.verbose('Queueing messages to retrieve Circuit Names')
+        //get circuit names
+    for (i = 1; i < 21; i++) {
+        queuePacket([165, preambleByte, 16, 34, 203, 1, i]);
+    }
+
+
+    logger.verbose('Queueing messages to retrieve Schedules')
+        //get schedules
+    for (i = 1; i < 13; i++) {
+
+        queuePacket([165, preambleByte, 16, 34, 209, 1, i]);
+
+    }
 }
 
+
+
+function pumpStatusCheck(pump1, pump2) {
+    //request pump status
+    var statusPacket = [165, 0, 96, 16, 7, 0];
+    logger.verbose('Sending Request Pump 1 Status: %s', statusPacket)
+    queuePacket([165, 0, 96, 16, 4, 1, 255]);
+    queuePacket(statusPacket);
+    //queuePacket([165, 0, 96, 16, 4, 1, 0]);
+
+    if (pump2 == 2) {
+        setTimeout(function () {
+            //request pump status
+            var statusPacket = [165, 0, 97, 16, 7, 0];
+            logger.verbose('Sending Request Pump 2 Status: %s', statusPacket)
+            queuePacket([165, 0, 97, 16, 4, 1, 255]);
+            queuePacket(statusPacket);
+            //queuePacket([165, 0, 97, 16, 4, 1, 0]);
+        }, 500)
+    }
+}
+
+
+function pump1SafePumpMode() {
+    pump1Countdown--;
+    if (pump1Countdown > 0) {
+        //set pump to remote control
+        var remoteControlPacket = [165, 0, 96, 16, 4, 1, 255];
+        logger.verbose('Sending Set pump to remote control: %s', remoteControlPacket)
+        queuePacket(remoteControlPacket);
+
+        //Initially this was resending the 'timer' packet, but that was found to be ineffective.  
+        //Instead, sending the Program packet again resets the timer.
+        logger.error('currentPumpStatus: program: %s  (Prog*8): %s  (Prog)*8: %s ---- %s',currentPumpStatus[1].currentprogram, currentPumpStatus[1].currentprogram*8, (currentPumpStatus[1].currentprogram)*8, JSON.stringify(currentPumpStatus[1]));
+        var setProgramPacket = [165, 0, 96, 16, 1, 4, 3, 33, 0, currentPumpStatus[1].currentprogram*8];
+        logger.verbose('App -> Pump 1: Sending Run Program %s: %s (%s total minutes left)', currentPumpStatus[1].currentprogram, setProgramPacket, pump1Countdown);
+        queuePacket(setProgramPacket);
+
+
+        //set pump to local control
+        var localControlPacket = [165, 0, 96, 16, 4, 1, 0];
+        logger.verbose('Sending Set pump to local control: %s', localControlPacket)
+        queuePacket(localControlPacket);
+
+
+        pump1TimerDelay.setTimeout(pump1SafePumpModeDelay, '', '10s')
+    } else {
+        logger.info('Pump 1 Program Finished.   Pump will shut down in ~10 seconds.')
+            //Timer = 0, we are done.  Pump should turn off automatically
+        pump1Timer.clearTimeout();
+    }
+}
+
+function pump2SafePumpMode() {
+    pump2Countdown--;
+    if (pump2Countdown > 0) {
+        //set pump to remote control
+        var remoteControlPacket = [165, 0, 97, 16, 4, 1, 255];
+        logger.verbose('Sending Set pump to remote control: %s', remoteControlPacket)
+        queuePacket(remoteControlPacket);
+
+        //Initially this was resending the 'timer' packet, but that was found to be ineffective.  
+        //Instead, sending the Program packet again resets the timer.
+        var setProgramPacket = [165, 0, 97, 34, 1, 4, 3, 33, 0, currentPumpStatus[2].currentProgram*8];
+        logger.verbose('App -> Pump 2: Sending Run Program %s: %s (%s total minutes left)', currentPumpStatus[2].currentProgram, setProgramPacket, pump2Countdown);
+        queuePacket(setProgramPacket);
+
+
+        //set pump to local control
+        var localControlPacket = [165, 0, 97, 16, 4, 1, 0];
+        logger.verbose('Sending Set pump to local control: %s', localControlPacket)
+        queuePacket(localControlPacket);
+
+
+        //pad the timer with 10 seconds so we have a full minute per cycle
+        pump2TimerDelay.setTimeout(pump2SafePumpModeDelay, '', '10s')
+    } else {
+        logger.info('Pump 2 Program Finished.  Pump will shut down in ~10 seconds.')
+            //Timer = 0, we are done.  Pump should turn off automatically
+        pump2Timer.clearTimeout();
+    }
+}
+
+function pump1SafePumpModeDelay() {
+    pump1Timer.setTimeout(pump2SafePumpMode, '', '50s')
+}
+
+function pump2SafePumpModeDelay() {
+    pump2Timer.setTimeout(pump2SafePumpMode, '', '50s')
+}
 
 function emit() {
     io.sockets.emit('circuit',
@@ -2224,6 +2836,9 @@ function emit() {
         io.sockets.emit('schedule',
             currentSchedule)
     }
+
+    if (currentChlorinatorStatus.saltPPM != 'undefined')
+        io.sockets.emit('chlorinator', currentChlorinatorStatus)
 
 }
 
@@ -2259,6 +2874,7 @@ app.get('/schedule', function (req, res) {
 app.get('/pump', function (req, res) {
     res.send(currentPumpStatus)
 })
+
 
 app.get('/circuit/:circuit', function (req, res) {
     if (req.params.circuit > 0 && req.params.circuit <= 20) {
@@ -2344,10 +2960,33 @@ app.get('/poolheat/mode/:poolheatmode', function (req, res) {
 })
 
 app.get('/sendthispacket/:packet', function (req, res) {
-    var packet = req.params.packet.split('-');
 
+
+    logger.info('User request (REST API) to send packet: %s', req.params.packet);
+
+    var packet;
+    packet = req.params.packet.split('-');
+    for (i = 0; i < packet.length; i++) {
+        packet[i] = parseInt(packet[i])
+    }
+    if (packet[0] == 16 && packet[1] == ctrl.CHLORINATOR) {
+        logger.silly('packet (chlorinator) detected: ', packet)
+    } else {
+        if (packet[0] == 96 || packet[0] == 97 || packet[1] == 96 || packet[1] == 97)
+        //If a message to the controller, use the preamble that we have recorded
+        {
+            var preamblePacket = [165, preambleByte]; //255,0,255 will be added later
+        } else
+        //if a message to the pumps, use 165,0
+        {
+            preamble = [165, 0]
+        }
+        Array.prototype.push.apply(preamblePacket, packet);
+        packet = preamblePacket.slice(0);
+        logger.silly('packet (pool) detected: ', packet)
+    }
     queuePacket(packet);
-    logger.info('User request to send packet: ', packet)
+
     var response = 'Request to send packet ' + packet + ' sent.'
     res.send(response)
 })
@@ -2380,6 +3019,35 @@ io.on('connection', function (socket, error) {
         searchSrc = src;
         searchDest = dest;
         searchAction = action;
+    })
+
+    socket.on('sendPacket', function (incomingPacket) {
+
+
+        logger.info('User request (send_request.html) to send packet: %s', incomingPacket);
+        var packet;
+        packet = incomingPacket.split(',');
+        for (i = 0; i < packet.length; i++) {
+            packet[i] = parseInt(packet[i])
+        }
+        if (packet[0] == 16 && packet[1] == ctrl.CHLORINATOR) {
+            //logger.debug('packet (chlorinator) now: ', packet)
+        } else {
+            if (packet[0] == 96 || packet[0] == 97 || packet[1] == 96 || packet[1] == 97)
+            //If a message to the controller, use the preamble that we have recorded
+            {
+                var preamblePacket = [165, preambleByte]; //255,0,255 will be added later
+            } else
+            //if a message to the pumps, use 165,0
+            {
+                preamble = [165, 0]
+            }
+            Array.prototype.push.apply(preamblePacket, packet);
+            packet = preamblePacket.slice(0);
+            //logger.debug('packet (pool) now: ', packet)
+        }
+        queuePacket(packet);
+        io.sockets.emit('sendPacketResults', 'Sent packet: ' + JSON.stringify(packet))
     })
 
     socket.on('spasetpoint', function (spasetpoint) {
@@ -2441,6 +3109,146 @@ io.on('connection', function (socket, error) {
         queuePacket(updateHeat);
         logger.info('User request to update %s heat mode to %s', equip, heatModeStr[change])
     })
+
+
+    socket.on('pumpCommand', function (equip, program, value, duration) {
+
+        logger.silly('Socket.IO pumpCommand variables - equip %s, program %s, value %s, duration %s', equip, program, value, duration)
+        equip = parseInt(equip);
+        value = parseInt(value);
+        var pump;
+        if (equip == 1) {
+            pump = 96
+        } else {
+            pump = 97
+        }
+
+        var setPrg;
+        var runPrg;
+        var speed;
+        console.log('\n\n')
+        logger.verbose('Sending the following pump commands to pump %s:', equip)
+        if (program == 'off' || program == 'on') {
+            logger.info('User request to set pump %s to %s', equip, program);
+            if (program == 'off') {
+                setPrg = [6, 1, 4];
+                if (equip == 1) {
+                    pump1Countdown = 0;
+                    pump1Timer.clearTimeout();
+                    pump1TimerDelay.clearTimeout();
+                } else {
+                    pump2Countdown = 0;
+                    pump2Timer.clearTimeout();
+                    pump2TimerDelay.clearTimeout();
+                }
+            } else // pump set to on
+            {
+                setPrg = [6, 1, 10];
+            }
+            currentPumpStatus[equip].power = program;
+
+        } else {
+            program = parseInt(program);
+            logger.verbose('User request to set pump %s to Ext. Program %s @ %s RPM', equip, program, value);
+            //set speed
+            setPrg = [1, 4, 3]
+            setPrg.push(38 + program);
+            setPrg.push(Math.floor(value / 256))
+            setPrg.push(value % 256);
+            //run program
+            runPrg = [1, 4, 3, 33, 0]
+            runPrg.push(8 * program)
+            var str = 'program' + program + 'rpm';
+
+
+            currentPumpStatus[equip][str] = value;
+            currentPumpStatus[equip].currentprogram = program;
+        }
+
+
+        //set pump to remote control
+        var remoteControlPacket = [165, 0, pump, 16, 4, 1, 255];
+        logger.verbose('Sending Set pump to remote control: %s', remoteControlPacket)
+        queuePacket(remoteControlPacket);
+
+        //set program packet
+        if (value < 450 || value > 3450) {
+            logger.warn('Speed provided (%s) is outside of tolerances.  Program being run with speed that is stored in pump.', value)
+        } else
+        if (isNaN(value) || value == null) {
+            logger.warn('Skipping Set Program Speed because it was not included.')
+        } else {
+            var setProgramPacket = [165, 0, pump, 16];
+            Array.prototype.push.apply(setProgramPacket, setPrg);
+            //logger.info(setProgramPacket, setPrg)
+            logger.verbose('Sending Set Program %s to %s RPM: %s', program, value, setProgramPacket);
+            queuePacket(setProgramPacket);
+        }
+
+        if (program != 'off' && program != 'on') {
+            //run program packet
+            var runProgramPacket = [165, 0, pump, 16];
+            Array.prototype.push.apply(runProgramPacket, runPrg);
+            logger.verbose('Sending Run Program %s: %s', program, runProgramPacket)
+            queuePacket(runProgramPacket);
+
+            //turn on pump
+            var turnPumpOnPacket = [165, 0, pump, 16, 6, 1, 10];
+            logger.verbose('Sending Turn pump on: %s', turnPumpOnPacket)
+            queuePacket(turnPumpOnPacket);
+
+            if (safePumpOperation) {
+                //set a timer for 1 minute
+                var setTimerPacket = [165, 0, pump, 16, 1, 4, 3, 43, 0, 1];
+                logger.info('Sending Set a 1 minute timer (safe mode enabled, timer will reset every minute for a total of %s minutes): %s', duration, setTimerPacket);
+                queuePacket(setTimerPacket);
+                //fix until the default duration actually is set to 1
+                if (duration < 1 || duration == null) {
+                    duration = 1;
+                }
+                if (equip == 1) {
+                    pump1Countdown = duration;
+                    //run the timer update 50s into the 1st minute
+                    pump1Timer.setTimeout(pump1SafePumpMode, '', '50s')
+                } else {
+                    pump2Countdown = duration;
+                    //run the timer update 50s into the 1st minute
+                    pump2Timer.setTimeout(pump2SafePumpMode, '', '50s')
+                }
+            } else {
+                //set a timer for [duration] variable
+                var setTimerPacket = [165, 0, pump, 16, 1, 4, 3, 43, 0, duration];
+                logger.verbose('Sending Set a %s minute (safe mode disabled) timer: %s', duration, setTimerPacket);
+                queuePacket(setTimerPacket);
+            }
+
+
+        } else {
+            //turn pump on/off
+            var pumpPowerPacket = [165, 0, pump, 16];
+            Array.prototype.push.apply(pumpPowerPacket, setPrg)
+            logger.verbose('Sending Turn pump %s: %s', program, pumpPowerPacket);
+            queuePacket(pumpPowerPacket);
+        }
+        //set pump to local control
+        var localControlPacket = [165, 0, pump, 16, 4, 1, 0];
+        logger.verbose('Sending Set pump to local control: %s', localControlPacket)
+        queuePacket(localControlPacket);
+
+        //request pump status
+        var statusPacket = [165, 0, pump, 16, 7, 0];
+        logger.verbose('Sending Request Pump Status: %s', statusPacket)
+        queuePacket(statusPacket);
+
+
+        logger.info('End of Sending Pump Packet \n \n')
+
+    })
+
+
+
+
+
 
     io.sockets.emit('circuit',
         currentCircuitArrObj

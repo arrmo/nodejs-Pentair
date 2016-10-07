@@ -18,6 +18,7 @@ $(function () {
     var $config = $('#config')
     var $circuit = $('#circuit')
     var $schedule = $('#schedule')
+    var $chlorinator = $('#chlorinator')
 
 
     //var $statusPage = $('.status.page') // The status page
@@ -28,6 +29,7 @@ $(function () {
     $pump.hide();
     $schedule.hide();
     $circuit.show();
+    $chlorinator.hide();
 
     $('body').on('click', 'input', function () {
         //alert("event.target.id: " + event.target.id + " event.target.attr: " + JSON.stringify(event.target.attributes))
@@ -57,6 +59,7 @@ $(function () {
         $circuit.hide();
         $schedule.hide();
         $config.show();
+        $chlorinator.hide();
 
     })
 
@@ -66,6 +69,7 @@ $(function () {
         $pump.hide();
         $schedule.hide();
         $circuit.show();
+        $chlorinator.hide();
     })
 
     $('#switchToPump').click(function () {
@@ -73,6 +77,7 @@ $(function () {
         $circuit.hide();
         $schedule.hide();
         $pump.show();
+        $chlorinator.hide();
 
     })
 
@@ -81,6 +86,17 @@ $(function () {
         $circuit.hide();
         $schedule.show();
         $pump.hide();
+        $chlorinator.hide();
+    })
+
+    $('#switchToChlorinator').click(function () {
+        //alert('#status ' + $('#status') + '   and #config ' + $('#config'))
+        $pump.hide()
+        $circuit.hide();
+        $schedule.hide();
+        $config.hide();
+        $chlorinator.show();
+
     })
 
     function addPump(data) {
@@ -88,7 +104,7 @@ $(function () {
         //$pump.append(JSON.stringify(data[2]))
 
         $('#pump1').html(data[1].name + '<br>Watts: ' + data[1].watts + '<br>RPM: ' + data[1].rpm + '<br>Error: ' + data[1].err + '<br>Mode: ' + data[1].mode + '<br>Drive state: ' + data[1].drivestate + '<br>Run Mode: ' + data[1].run)
-        $('#pump2').html(data[1].name + '<br>Watts: ' + data[2].watts + '<br>RPM: ' + data[2].rpm + '<br>Error: ' + data[2].err + '<br>Mode: ' + data[2].mode + '<br>Drive state: ' + data[2].drivestate + '<br>Run Mode: ' + data[2].run)
+        $('#pump2').html(data[2].name + '<br>Watts: ' + data[2].watts + '<br>RPM: ' + data[2].rpm + '<br>Error: ' + data[2].err + '<br>Mode: ' + data[2].mode + '<br>Drive state: ' + data[2].drivestate + '<br>Run Mode: ' + data[2].run)
 
 
     }
@@ -99,7 +115,7 @@ $(function () {
         if (data != null) {
             $('#config').html('Time #: ' + data.TIME +
                 '<br>Water Temp: ' + data.poolTemp +
-                '<br>Temp 2(?): ' + data.spaTemp +
+                '<br>Spa Temp: ' + data.spaTemp +
                 '<br>Air Temp: ' + data.airTemp +
                 '<br>Solar Temp: ' + data.solarTemp +
                 '<br>Unknown?: ' + data.poolHeatMode2 +
@@ -119,6 +135,26 @@ $(function () {
 
     }
 
+
+    function addChlorinator(data) {
+
+
+        if (data != null) {
+            $('#chlorinator').html('Salt: ' + data.saltPPM + ' PPM' +
+                '<br>[Pool/Default] Output (%): ' + data.outputPercent + '%' +
+                '<br>Spa Output (%): ' + data.outputSpaPercent + '%' +
+                '<br>Output Level: ' + data.outputLevel +
+                '<br>superChlorinate: ' + data.superChlorinate +
+                '<br>version: ' + data.version +
+                '<br>name: ' + data.name +          
+                '<br>Status: ' + data.status +
+                '<p>');
+
+        }
+
+        //$config.append(JSON.stringify(data))
+
+    }
 
     function addSchedule(data) {
 
@@ -311,7 +347,7 @@ $(function () {
         socket.emit('setHeatMode', equip, change)
     }
 
-    
+
     function setEquipmentStatus(equipment) {
         socket.emit('toggleCircuit', equipment)
     };
@@ -339,6 +375,10 @@ $(function () {
 
     socket.on('schedule', function (data) {
         addSchedule(data);
+    })
+
+    socket.on('chlorinator', function (data) {
+        addChlorinator(data);
     })
 
 

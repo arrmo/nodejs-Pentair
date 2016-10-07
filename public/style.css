@@ -48,6 +48,60 @@
     margin: auto;
 }
 
+.circuitOneQuarter.parent {
+
+  width: 20%;
+  height: 270px;
+  margin: 200px 0 0 0;
+  left: 30%;
+  top: 0px;
+  padding: 0px 0 0 0;
+  position: absolute;
+
+}
+.circuitOneQuarter.child {
+
+  width: 20%;
+  height: 100px;
+  margin: 270px 0 0 0;
+  left: 30%;
+  top: 200px;
+  padding: 20px 0 0 0;
+  position: absolute;
+
+}
+
+.circuitThreeQuarter {
+    float: left;
+    width: 20%;
+    /*background: slategray;*/
+    margin: auto;
+}
+
+.circuitThreeQuarter.parent {
+
+  width: 20%;
+  height: 270px;
+  margin: 200px 0 0 0;
+  left: 50%;
+  top: 0px;
+  padding: 0px 0 0 0;
+  position: absolute;
+
+}
+.circuitThreeQuarter.child {
+
+  width: 20%;
+  height: 100px;
+  margin: 270px 0 0 0;
+  left: 50%;
+  top: 200px;
+  padding: 20px 0 0 0;
+  position: absolute;
+
+}
+
+
 
 .left10 {
     float: left;

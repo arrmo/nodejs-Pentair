@@ -1,21 +1,44 @@
-# Version 0.1.0
+# Version 0.1.1
 
 [![Join the chat at https://gitter.im/pentair_pool/Lobby](https://badges.gitter.im/pentair_pool/Lobby.svg)](https://gitter.im/pentair_pool/Lobby?utm_source=badge&utm_medium=badge&utm_campaign=pr-badge&utm_content=badge)
 tl;dr
 
- Important changes:
- 
- If you get a SerialPort error, I updated this module to 4.0.1.  Please 'npm uninstall serialport' and then 'npm install'.  
+NEW:
+1. If you are upgrading from a previous version:
+* Re-run `npm install` because there is a new dependency in the file. ***
+* Make sure you set the variables properly as multiple configurations are now supported. ***
+2. Stand alone pump mode!  New pump.html for the pump(s) only configuration
+3. Write packets now controlled via a timer (MUCH faster!)
+4. Chlorinators are now understood in all modes.
+5. Many more changes!
 
- Configuration is now read from your pool.  The app will send the commands to read the custom name strings, circuit names and schedules.  If any commands are written to the bus 10 times, but we do not get a reply, an error will be thrown and the logging level will be changed. 
+ Intellitouch?  We have you covered!
+ Configuration is read from your pool.  The app will send the commands to read the custom name strings, circuit names and schedules.  If any commands are written to the bus 10 times, but we do not get a reply, an error will be thrown and the logging level will be changed. 
  
- The web UI will dynamically load as the information is received.
+ Pumps Only?  We have you covered!
+ See what your pumps are doing!  (We are very close to being able to fully control them.)
+
+ Chlorinator? We understand that, too!
+ Get the status out from your Chlorinator.
+
+ Intermatic, EasyTouch, SunTouch, IntellicomII?  We're getting there!
+ Most of this code works exactly the same on these systems.
+
+ Home Automation?  SO CLOSE! 
+ This is our goal, too.  Whether you want to use a webpage, Apple Siri, Amazon Echo, Vera, ISY, build your own standalone controller, or any other 3rd party HA solution, come get involved and help us reach the ultimate goal.
+
+
+Technical notes:
+ The web UI will dynamically load as the information is received from the app.  Yes, Socket.io, we love you!
  
  Visit http://_your_machine_name_:3000 to see a basic UI
  
  Visit http://_your_machine_name_:3000/debug.html for a way to listen for specific messages
  
- Logging has been significantly revised.  See the log variables in index.js to adjust.
+ Visit http://_your_machine_name_:3000/pump.html for controlling stand alone pumps
+ 
+ 
+ The type of equipment you have, and your preference on the logging level, should be set in the Equipment Setup and Log Setup sections of index.js.
 
  REST/API:  You can use Sockets.IO to subscribe to updates (see the "basic UI" example).  
  You can also call REST URI's like:  
@@ -28,8 +51,9 @@ tl;dr
  * Set spa heat mode: /spaheat/mode/#  (0=off, 1=heater, 2=solar pref, 3=solar only)
  * Set pool heat setpoint: /poolheat/setpoint/#
  * Set pool heat mode: /poolheat/mode/# (0=off, 1=heater, 2=solar pref, 3=solar only)
-
-    
+ * Run pumps in stand-alone mode 
+ 
+  
 =======
 
     
@@ -75,6 +99,13 @@ UPDATE - I had trouble with the EZSync in that it won't write back to the bus.  
 0001540 dfe1 c5fb f3d3 7fff ffff ffff ffff fff9
 ```
 
+4. How to use this program
+
+* Install Nodejs. (https://nodejs.org/en/download/)
+* Update NPM (https://docs.npmjs.com/getting-started/installing-node).
+* In the root folder of nodejs-Pentair (where package.json exists), run 'npm install' This will automatically install all the dependencies (serial-port, express, sockets.io, etc).
+* Run the app by calling 'node index.js' (again, in the root directory). It should now run properly.
+
 # Versions
 Initial - This version was the first cut at the code
 
@@ -119,6 +150,14 @@ Initial - This version was the first cut at the code
 * Much more information debugged for my friends over at CocoonTech.  
 * Bug fixes galore.  More clear logging messages.  
 
+0.1.1 -
+* For those of you with stand-alone pumps you can now control them!
+* Chlorinators are now understood
+* Lot of rework on understanding and decoding packets and their responses in general
+* Make sure you set the variables properly as multiple configurations are now supported. 
+*. Stand alone pump mode!  New pump.html for the pump(s) only configuration
+*. Write packets now controlled via a timer (MUCH faster!)
+*. Many more changes!
 
 # Methodology
 
