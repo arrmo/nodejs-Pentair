@@ -7,19 +7,12 @@ console.log('\033[2J'); //clear the console
 
 var dateFormat = require('dateformat');
 
-const serialport = require("serialport");
-//var SerialPort = serialport.SerialPort;
-var sp = new serialport("/dev/ttyUSB0", {
-    baudrate: 9600,
-    databits: 8,
-    parity: 'none',
-    stopBits: 1,
-    flowControl: false,
-    parser: serialport.parsers.raw
-});
 
-var version = '0.1.1'
-//-------  EQUIPMENT SETUP -----------
+
+
+
+var version = '0.1.11'
+    //-------  EQUIPMENT SETUP -----------
 
 //ONE and only 1 of the following should be set to 1.
 var intellicom = 0; //set this to 1 if you have the IntelliComII, otherwise 0.
@@ -33,6 +26,11 @@ var chlorinator = 0; //set this to 1 if you have a chlorinator, otherwise 0.
 var numberOfPumps = 1; //this is only used with pumpOnly=1.  It will query 1 (or 2) pumps every 30 seconds for their status
 var safePumpOperation = true; //Set this to true if you want the app to run the pump for successive 1 minute operations; false if you want to set the timer on the pump directly.
 //-------  END EQUIPMENT SETUP -----------
+
+//-------  MISC NETWORK SETUP -----------
+// Setup for Network Connection (socat or nc)
+var netConnect = 0; //set this to 1 to use a remote (net) connection, 0 for direct serial connection;
+//-------  END MISC NETWORK SETUP -----------
 
 //-------  LOG SETUP -----------
 //Change the following log message levels as needed
@@ -73,11 +71,29 @@ var searchDest = '';
 var searchAction = '';
 
 
+if (netConnect === 0) {
+    const serialport = require("serialport");
+    //var SerialPort = serialport.SerialPort;
+    var sp = new serialport("/dev/ttyUSB0", {
+        baudrate: 9600,
+        databits: 8,
+        parity: 'none',
+        stopBits: 1,
+        flowControl: false,
+        parser: serialport.parsers.raw
+    });
+} else {
+    var network = require('net');
+    var netHost = 'raspberryPi';
+    var netPort = '9801';
+    var sp = new network.Socket();
+    sp.connect(netPort, netHost, function () {
+        logger.info('Network connected to: ' + netHost + ':' + netPort);
+    });
+}
+
+
 var customNameArr = [];
-
-
-
-
 const state = {
     OFF: 0,
     ON: 1,
@@ -577,7 +593,7 @@ var pump2 = new pump(2, 'timenotset', 'runnotset', 'modenotset', 'drivestatenots
 var currentPumpStatus = ['blank', pump1, pump2]
 var currentPumpStatusPacket = ['blank', [], []]; // variable to hold the status packets of the pumps
 
-var NanoTimer = require('nanotimer');  //If you get an error here, re-run 'npm install` because this is a new dependency.
+var NanoTimer = require('nanotimer'); //If you get an error here, re-run 'npm install` because this is a new dependency.
 var writePacketTimer = new NanoTimer();
 
 
@@ -595,18 +611,23 @@ introMsg += '\n Visit http://_your_machine_name_:3000/debug.html for a way to li
 introMsg += '*******************************'
 logger.info(introMsg)
 
-var settingsStr = ''// \n*******************************';
+var settingsStr = '' // \n*******************************';
 settingsStr += '\n Version: ' + version;
 
 settingsStr += '\n ';
 settingsStr += '\n //-------  EQUIPMENT SETUP -----------';
 settingsStr += '\n var intellicom = ' + intellicom;
-settingsStr += '\n var intellitouch = ' + intellitouch ;
+settingsStr += '\n var intellitouch = ' + intellitouch;
 settingsStr += '\n var chlorinator = ' + chlorinator;
 settingsStr += '\n var pumpOnly = ' + pumpOnly;
 settingsStr += '\n var numberOfPumps = ' + numberOfPumps;
 settingsStr += '\n var safePumpOperation = ' + safePumpOperation;
 settingsStr += '\n //-------  END EQUIPMENT SETUP -----------';
+settingsStr += '\n ';
+settingsStr += '\n //-------  MISC NETWORK SETUP -----------';
+settingsStr += '\n // Setup for Network Connection (socat or nc)';
+settingsStr += '\n var netConnect = ' + netConnect;
+settingsStr += '\n //-------  END MISC NETWORK SETUP -----------';
 settingsStr += '\n ';
 settingsStr += '\n //-------  LOG SETUP -----------';
 settingsStr += '\n var loglevel = ' + loglevel;
@@ -669,7 +690,6 @@ sp.on('open', function () {
 
     sp.on('data', function (data) {
 
-
         var brokeBufferLoop = false; //flag to see if there was a message at the end of the buffer
 
         if (typeof data2 === "undefined") {
@@ -679,7 +699,6 @@ sp.on('open', function () {
         }
         //put this in a static variable as the length might grow as we process more serial bus data!
         var currBufferLen = data2.length;
-
 
         //start to parse message at 250 bytes.  Is there a better time or way to know when the buffer has a full message or to start processing?
         if (currBufferLen > 10 && !processingBuffer) {
@@ -691,160 +710,161 @@ sp.on('open', function () {
             var i = 0;
             //-9 because the 8th byte is the length byte and we check for a full message below.
             loop1: {
-                    for (i; i < currBufferLen - 8; i++) {
+                for (i; i < currBufferLen - 8; i++) {
 
-                        if (b.data[i] == 0) {
-                            continue;
-                        } else {
-                            //look for Pentair preamble 255,0,255,165
-                            /*I've VERY rarely seen this:  data: 
-                           [ 255,
-                             255,
-                             255,
-                             255,
-                             165,
-                             16,
-                             15,
-                             16,
-                             2,
-                             29,
-                             ...]
+                    if (b.data[i] == 0) {
+                        continue;
+                    } else {
+                        //look for Pentair preamble 255,0,255,165
+                        /*I've VERY rarely seen this:  data: 
+                                       [ 255,
+                                         255,
+                                         255,
+                                         255,
+                                         165,
+                                         16,
+                                         15,
+                                         16,
+                                         2,
+                                         29,
+                                         ...]
 
-                             So wondering if we can just look for 255,165.  But for now we will also check 255,255,255,165.
-                             */
-                            if ((b.data[i] == 255 && b.data[i + 1] == 0 && b.data[i + 2] == 255 && b.data[i + 3] == 165) ||
-                                (b.data[i] == 255 && b.data[i + 1] == 255 && b.data[i + 2] == 255 && b.data[i + 3] == 165)
-                            ) {
-                                //NEED MORE CHECKS FOR VARIOUS TYPES OF MESSAGES!  :-)
-
-                                var chatterlen = b.data[i + 8] + 6 + 2; //chatterlen is length of following message not including checksum (need to add 6 for start of chatter (165,07,Dest,Src,02,chatterlen) and 2 for checksum)
+                                         So wondering if we can just look for 255,165.  But for now we will also check 255,255,255,165.
+                                         */
+                        if ((b.data[i] == 255 && b.data[i + 1] == 0 && b.data[i + 2] == 255 && b.data[i + 3] == 165) ||
+                            (b.data[i] == 255 && b.data[i + 1] == 255 && b.data[i + 2] == 255 && b.data[i + 3] == 165)
+                        ) {
+                            //NEED MORE CHECKS FOR VARIOUS TYPES OF MESSAGES!  :-)
 
 
-                                //if we don't have the length bit in the buffer or the length of the message is less than the remaining buffer bytes
-                                if (logMessageDecoding) logger.silly('Msg#  n/a   Start of message in incoming buffer detected:  data2.len %s, chatterlen %s, i %s: TOTAL: %s True? %s ', data2.length, chatterlen, i, data2.length - i - 1 - chatterlen, (data2.length - i - 2 - chatterlen) <= 0)
+                            var chatterlen = b.data[i + 8] + 6 + 2; //chatterlen is length of following message not including checksum (need to add 6 for start of chatter (165,07,Dest,Src,02,chatterlen) and 2 for checksum)
 
 
+                            //if we don't have the length bit in the buffer or the length of the message is less than the remaining buffer bytes
+                            if (logMessageDecoding) logger.silly('Msg#  n/a   Start of message in incoming buffer detected:  data2.len %s, chatterlen %s, i %s: TOTAL: %s True? %s ', data2.length, chatterlen, i, data2.length - i - 1 - chatterlen, (data2.length - i - 2 - chatterlen) <= 0)
 
 
+                            if (chatterlen == undefined || (data2.length - i - 2 - chatterlen) <= 0) {
+                                //reset the buffer starting with the current partial message
+                                if (logMessageDecoding) logger.silly('Msg#  n/a   Incomplete message at end of buffer.  Prepending message to empty buffer string.');
+                                brokeBufferLoop = true;
 
-                                if (chatterlen == undefined || (data2.length - i - 2 - chatterlen) <= 0) {
-                                    //reset the buffer starting with the current partial message
-                                    if (logMessageDecoding) logger.silly('Msg#  n/a   Incomplete message at end of buffer.  Prepending message to empty buffer string.');
-                                    brokeBufferLoop = true;
+                                data2 = data2.slice(i - 2)
+                                break loop1;
+                            }
 
-                                    data2 = data2.slice(i - 2)
+                            msgCounter += 1;
+                            //logger.info('Msg# %s   Full buffer where message found: %s', msgCounter, b.data.toString())
+
+                            i += 3; //jump ahead to start of payload
+
+
+                            //logger.silly('Msg#  %s   Length should be: %s  at position: %s ', msgCounter, chatterlen, i)
+
+
+                            //iterate through the JSON array to pull out a valid message
+                            loop2: {
+                                for (j = 0; j < chatterlen; j++) {
+                                    if (j == 0) {
+                                        var output = "     Found chatter (text): " //for logging, remove later
+                                        chatter = new Array(chatterlen);
+                                    }
+
+                                    output += b.data[i + j];
+                                    output += " ";
+
+                                    chatter[j] = b.data[i + j];
+
+                                    if (j == chatterlen - 1) {
+                                        if (logMessageDecoding) logger.silly('Msg# %s   Extracting chatter from buffer: (length of chatter %s, position in buffer %s, start position of chatter in buffer %s) %s', msgCounter, chatterlen, i, j, output)
+
+                                        /* //This may be unnecessary; fixed code so we should get correct messages but will leave it for now
+                                         if (chatter[j] == undefined || chatter[j - 1] == undefined || chatter[j - 1] == undefined) {
+                                             if (logMessageDecoding) logger.warn('Msg# %s   Chatter length MISMATCH.  len %s, i %s currBufferLen %s', msgCounter, chatterlen, i, currBufferLen)
+                                         }*/
+
+                                        if (logMessageDecoding) logger.silly('Msg# %s Calling checksum: %s', msgCounter, chatter);
+
+                                        var packetType;
+                                        if (((chatter[2] == ctrl.PUMP1 || chatter[2] == ctrl.PUMP2)) || chatter[3] == ctrl.PUMP1 || chatter[3] == ctrl.PUMP2) {
+                                            packetType = 'pump'
+                                        } else {
+                                            packetType = 'controller'
+                                        }
+
+                                        checksum(chatter, msgCounter, packetType);
+                                        //skip ahead in the buffer for loop to the end of this message. 
+                                        i += chatterlen;
+                                        break loop1;
+
+                                    }
+
+
+                                }
+                            }
+
+
+                        } else if (b.data[i] == 16 && b.data[i + 1] == 02) {
+                            //Looking for the Chlorinator preamble 10,2
+                            msgCounter += 1;
+
+                            //logger.error('/n STARTING CHLOR PACKET.')
+                            chatter = [];
+
+                            while (!(b.data[i] == 16 && b.data[i + 1] == 3)) {
+                                chatter.push(b.data[i]);
+                                i++;
+                                //logger.error('chlor ', i, chatter)
+                                if (b.data[i] == 16 && b.data[i + 1] == 3) {
+                                    chatter.push(b.data[i]);
+                                    chatter.push(b.data[i + 1]);
+                                    i += 2;
+                                    //logger.error('chlor BREAKING LOOP', i, chatter)
+                                    checksum(chatter, msgCounter, 'chlorinator');
                                     break loop1;
                                 }
 
-                                msgCounter += 1;
-                                //logger.info('Msg# %s   Full buffer where message found: %s', msgCounter, b.data.toString())
-
-                                i += 3; //jump ahead to start of payload
-
-
-                                //logger.silly('Msg#  %s   Length should be: %s  at position: %s ', msgCounter, chatterlen, i)
-
-
-                                //iterate through the JSON array to pull out a valid message
-                                loop2: {
-                                    for (j = 0; j < chatterlen; j++) {
-                                        if (j == 0) {
-                                            var output = "     Found chatter (text): " //for logging, remove later
-                                            chatter = new Array(chatterlen);
-                                        }
-
-                                        output += b.data[i + j];
-                                        output += " ";
-
-                                        chatter[j] = b.data[i + j];
-
-                                        if (j == chatterlen - 1) {
-                                            if (logMessageDecoding) logger.silly('Msg# %s   Extracting chatter from buffer: (length of chatter %s, position in buffer %s, start position of chatter in buffer %s) %s', msgCounter, chatterlen, i, j, output)
-
-                                            /* //This may be unnecessary; fixed code so we should get correct messages but will leave it for now
-                                             if (chatter[j] == undefined || chatter[j - 1] == undefined || chatter[j - 1] == undefined) {
-                                                 if (logMessageDecoding) logger.warn('Msg# %s   Chatter length MISMATCH.  len %s, i %s currBufferLen %s', msgCounter, chatterlen, i, currBufferLen)
-                                             }*/
-
-                                            if (logMessageDecoding) logger.silly('Msg# %s Calling checksum: %s', msgCounter, chatter);
-
-                                            var packetType;
-                                            if (((chatter[2] == ctrl.PUMP1 || chatter[2] == ctrl.PUMP2)) || chatter[3] == ctrl.PUMP1 || chatter[3] == ctrl.PUMP2) {
-                                                packetType = 'pump'
-                                            } else {
-                                                packetType = 'controller'
-                                            }
-
-                                            checksum(chatter, msgCounter, packetType);
-                                            //skip ahead in the buffer for loop to the end of this message. 
-                                            i += chatterlen;
-                                            break loop1;
-                                        }
+                                if ((i + 1) == currBufferLen)
+                                //if (i+1) == currBufferLen means that we reached the end of the buffer.  
+                                {
+                                    i -= chatter.length;
+                                    brokeBufferLoop = true;
+                                    //logger.error('chlor MESSAGE NOT IN BUFFER', i, currBufferLen, chatter)
+                                    break loop1;
+                                } else if (chatter.length > 35) {
 
 
-                                    }
+                                    //should work on this (if we ever get here).  This means the message is 25 bytes long (not what we should see) and likely there is a 16,2 somewhere in the middle of the message we are picking up...
+                                    logger.error('Msg# %s   Aborting buffer.  Likely picking up 16,2 in the middle of another message. \n %s \n %s', msgCounter, chatter, JSON.stringify(data2))
+                                    data2 = data2.slice(i);
+                                    break loop1;
                                 }
-
-
-                            } else if (b.data[i] == 16 && b.data[i + 1] == 02) {
-                                //Looking for the Chlorinator preamble 10,2
-                                msgCounter += 1;
-
-                                //logger.error('/n STARTING CHLOR PACKET.')
-                                chatter = [];
-
-                                while (!(b.data[i] == 16 && b.data[i + 1] == 3)) {
-                                    chatter.push(b.data[i]);
-                                    i++;
-                                    //logger.error('chlor ', i, chatter)
-                                    if (b.data[i] == 16 && b.data[i + 1] == 3) {
-                                        chatter.push(b.data[i]);
-                                        chatter.push(b.data[i + 1]);
-                                        i += 2;
-                                        //logger.error('chlor BREAKING LOOP', i, chatter)
-                                        checksum(chatter, msgCounter, 'chlorinator');
-                                        break loop1;
-                                    }
-
-                                    if ((i + 1) == currBufferLen)
-                                    //if (i+1) == currBufferLen means that we reached the end of the buffer.  
-                                    {
-                                        i -= chatter.length;
-                                        brokeBufferLoop = true;
-                                        //logger.error('chlor MESSAGE NOT IN BUFFER', i, currBufferLen, chatter)
-                                        break loop1;
-                                    } else if (chatter.length > 35) {
-
-
-                                        //should work on this (if we ever get here).  This means the message is 25 bytes long (not what we should see) and likely there is a 16,2 somewhere in the middle of the message we are picking up...
-                                        logger.error('Msg# %s   Aborting buffer.  Likely picking up 16,2 in the middle of another message. \n %s \n %s', msgCounter, chatter, JSON.stringify(data2))
-                                        data2 = data2.slice(i);
-                                        break loop1;
-                                    }
-                                }
-
-
-                                //logger.warn('Chlorinator Packet: ', JSON.stringify(b), chatter)
-                                checksum(chatter, msgCounter, 'chlorinator')
-
                             }
 
+
+
+                            //logger.warn('Chlorinator Packet: ', JSON.stringify(b), chatter)
+                            checksum(chatter, msgCounter, 'chlorinator')
 
                         }
 
 
                     }
+
+
                 }
-                //slice the buffer from currBufferLen (what we have processed) to the end of the buffer
+            }
+
+            //slice the buffer from currBufferLen (what we have processed) to the end of the buffer
             if (brokeBufferLoop) {
                 //we are here if we broke out of the buffer.  This means there is the start of a message in the last 9+/- bytes
                 //We do this above!  Don't need it here.  data2 = data2.slice(currBufferLen - 9);
                 if (logMessageDecoding) logger.silly('Incomplete message at end of buffer.  Sliced buffer so message is at beginning of buffer (sliced by %s) ', currBufferLen - 9);
 
+
             } else {
                 //We should get here after every message.  Slice the buffer to a new message
                 data2 = data2.slice(i);
-                //logger.error(data2)
                 if (logMessageDecoding) logger.silly('At end of message.  Sliced off %s from remaining buffer.', currBufferLen);
             }
 
@@ -2507,6 +2527,7 @@ function writePacket() {
                     }
 
 
+
                 }
             });
 
@@ -2516,6 +2537,7 @@ function writePacket() {
             writePacketTimer.setTimeout(writePacket, '', '200m')
         }
     }
+
 
 
 }
@@ -2689,10 +2711,12 @@ function clone(obj) {
 
 
 
+
 function getControllerConfiguration(dest, src) {
 
-
-    sp.drain();
+    // Only drain serial port if directly connected - not for network connections.
+    if (netConnect === 0)
+        sp.drain();
 
     logger.info('Queueing messages to retrieve configuration from Intellitouch')
     logger.verbose('Queueing messages to retrieve Pool/Spa Heat Mode')
@@ -2758,8 +2782,7 @@ function pump1SafePumpMode() {
 
         //Initially this was resending the 'timer' packet, but that was found to be ineffective.  
         //Instead, sending the Program packet again resets the timer.
-        logger.error('currentPumpStatus: program: %s  (Prog*8): %s  (Prog)*8: %s ---- %s',currentPumpStatus[1].currentprogram, currentPumpStatus[1].currentprogram*8, (currentPumpStatus[1].currentprogram)*8, JSON.stringify(currentPumpStatus[1]));
-        var setProgramPacket = [165, 0, 96, 16, 1, 4, 3, 33, 0, currentPumpStatus[1].currentprogram*8];
+        var setProgramPacket = [165, 0, 96, 16, 1, 4, 3, 33, 0, currentPumpStatus[1].currentprogram * 8];
         logger.verbose('App -> Pump 1: Sending Run Program %s: %s (%s total minutes left)', currentPumpStatus[1].currentprogram, setProgramPacket, pump1Countdown);
         queuePacket(setProgramPacket);
 
@@ -2788,8 +2811,8 @@ function pump2SafePumpMode() {
 
         //Initially this was resending the 'timer' packet, but that was found to be ineffective.  
         //Instead, sending the Program packet again resets the timer.
-        var setProgramPacket = [165, 0, 97, 34, 1, 4, 3, 33, 0, currentPumpStatus[2].currentProgram*8];
-        logger.verbose('App -> Pump 2: Sending Run Program %s: %s (%s total minutes left)', currentPumpStatus[2].currentProgram, setProgramPacket, pump2Countdown);
+        var setProgramPacket = [165, 0, 97, 34, 1, 4, 3, 33, 0, currentPumpStatus[2].currentprogram * 8];
+        logger.verbose('App -> Pump 2: Sending Run Program %s: %s (%s total minutes left)', currentPumpStatus[2].currentprogram, setProgramPacket, pump2Countdown);
         queuePacket(setProgramPacket);
 
 
@@ -2809,7 +2832,7 @@ function pump2SafePumpMode() {
 }
 
 function pump1SafePumpModeDelay() {
-    pump1Timer.setTimeout(pump2SafePumpMode, '', '50s')
+    pump1Timer.setTimeout(pump1SafePumpMode, '', '50s')
 }
 
 function pump2SafePumpModeDelay() {
