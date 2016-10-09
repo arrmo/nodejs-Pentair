@@ -1,23 +1,44 @@
 {
-    "Pentair": {
-        "NO_LONGER_NEEDED": "See Readme, will remove soon",
-        "circuit1": "Spa",
-        "circuit2": "Jets",
-        "circuit3": "Air Blower",
-        "circuit4": "Cleaner",
-        "circuit5": "WaterFall 1.5",
-        "circuit6": "Pool",
-        "circuit7": "Spa Lights",
-        "circuit8": "Pool Lights",
-        "circuit9": "Path Lights",
-        "circuit10": "SKIP ME",
-        "circuit11": "Spillway",
-        "circuit12": "Waterfall 1",
-        "circuit13": "Waterfall 2",
-        "circuit14": "Waterfall 3",
-        "circuit15": "Pool Low",
-        "circuit16": "Feature6",
-        "circuit17": "Feature7",
-        "circuit18": "Feature8"
+    "Equipment": {
+        "intellicom": 0,
+        "intellitouch": 0,
+        "pumpOnly": 0,
+        "ISYController": 0,
+
+        "chlorinator": 1,
+
+        "numberOfPumps": 2,
+        "safePumpOperation": 1
+    },
+    "Network": {
+        "netConnect": 1
+    },
+    "Log": {
+        "loglevel": 1,
+        "logType": "silly",
+        "logPumpMessages": 1,
+        "logDuplicateMessages": 1,
+        "logConsoleNotDecoded": 1,
+        "logConfigMessages": 1,
+        "logMessageDecoding": 1,
+        "logChlorinator": 1
+    },
+    "ISY": {
+        "username": "blank",
+        "password": "blank",
+        "ipaddr": "127.0.0.1",
+        "port":12345,
+        "Variables": {
+            "currentPumpStatus[1].watts": 25,
+            "currentPumpStatus[1].rpm": 24,
+            "currentPumpStatus[1].currentprogram": 13,
+            "currentPumpStatus[1].program1rpm": 10,
+            "currentPumpStatus[1].program2rpm": 11,
+            "currentPumpStatus[1].program3rpm": 12,
+            "currentPumpStatus[1].program4rpm": 13,
+            "currentPumpStatus[1].power": 14,
+            "currentPumpStatus[1].timer": 15,
+            "currentChlorinatorStatus.saltPPM": 16
+        }
     }
 }
