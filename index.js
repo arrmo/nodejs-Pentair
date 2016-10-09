@@ -6,20 +6,20 @@
 console.log('\033[2J'); //clear the console
 
 var dateFormat = require('dateformat');
+var decodeHelper = require('./lib/decode.js');
 
 
 
-
-
-var version = '0.1.11'
+var version = '0.1.11 alpha 1'
     //-------  EQUIPMENT SETUP -----------
 
 //ONE and only 1 of the following should be set to 1.
 var intellicom = 0; //set this to 1 if you have the IntelliComII, otherwise 0.
-var intellitouch = 0; //set this to 1 if you have the IntelliTouch, otherwise 0.
-var pumpOnly = 1; //set this to 1 if you ONLY have pump(s), otherwise 0.
+var intellitouch = 1; //set this to 1 if you have the IntelliTouch, otherwise 0.
+var pumpOnly = 0; //set this to 1 if you ONLY have pump(s), otherwise 0.
 
 //1 or 0
+var ISYController = 0; //1 if you have an ISY, otherwise 0
 var chlorinator = 0; //set this to 1 if you have a chlorinator, otherwise 0.
 
 //only relevant if pumpOnly=1
@@ -37,9 +37,9 @@ var netConnect = 0; //set this to 1 to use a remote (net) connection, 0 for dire
 var loglevel = 1; //1=more, 0=less;  This will show more or less messages within the logType
 var logType = 'debug'; // one of { error: 0, warn: 1, info: 2, verbose: 3, debug: 4, silly: 5 }
 var logPumpMessages = 1; //variable if we want to output pump messages or not
-var logDuplicateMessages = 0; //variable if we want to output duplicate broadcast messages
-var logConsoleNotDecoded = 0; //variable to hide any unknown messages
-var logConfigMessages = 0; //variable to show/hide configuration messages
+var logDuplicateMessages = 1; //variable if we want to output duplicate broadcast messages
+var logConsoleNotDecoded = 1; //variable to hide any unknown messages
+var logConfigMessages = 1; //variable to show/hide configuration messages
 var logMessageDecoding = 1; //variable to show messages regarding the buffer, checksum calculation, etc.
 var logChlorinator = 1; //variable to show messages from the chlorinator
 //-------  END EQUIPMENT SETUP -----------
@@ -70,6 +70,7 @@ var searchSrc = '';
 var searchDest = '';
 var searchAction = '';
 
+netConnect = 1;
 
 if (netConnect === 0) {
     const serialport = require("serialport");
@@ -84,7 +85,7 @@ if (netConnect === 0) {
     });
 } else {
     var network = require('net');
-    var netHost = 'raspberryPi';
+    var netHost = 'raspberrypi.local';
     var netPort = '9801';
     var sp = new network.Socket();
     sp.connect(netPort, netHost, function () {
@@ -112,56 +113,60 @@ const strState = {
 
 // this first four bytes of ANY packet are the same
 const packetFields = {
-    DEST: 0,
-    FROM: 1,
-    ACTION: 2,
-    LENGTH: 3,
+    DEST: 2,
+    FROM: 3,
+    ACTION: 4,
+    LENGTH: 5,
 
 }
 
 const controllerStatusPacketFields = {
-    HOUR: 4,
-    MIN: 5,
-    EQUIP1: 6,
-    EQUIP2: 7,
-    EQUIP3: 8,
-    UOM: 13, //Celsius (4) or Farenheit (0); Also Service/Timeout.  See strRunMode below.
-    VALVES: 14,
-    UNKNOWN: 17, //Something to do with heat.
-    POOL_TEMP: 18,
-    SPA_TEMP: 19,
-    HEATER_ACTIVE: 20, //0=off.  32=on.  More here?
-    AIR_TEMP: 22,
-    SOLAR_TEMP: 23,
-    HEATER_MODE: 26
+    HOUR: 6,
+    MIN: 7,
+    EQUIP1: 8,
+    EQUIP2: 9,
+    EQUIP3: 10,
+    UOM: 15, //Celsius (4) or Farenheit (0); Also Service/Timeout.  See strRunMode below.
+    VALVES: 16,
+    UNKNOWN: 19, //Something to do with heat.
+    POOL_TEMP: 20,
+    SPA_TEMP: 21,
+    HEATER_ACTIVE: 22, //0=off.  32=on.  More here?
+    AIR_TEMP: 24,
+    SOLAR_TEMP: 25,
+    HEATER_MODE: 28
+}
+
+const chlorinatorPacketFields = {
+    DEST: 2,
+    ACTION: 3
 }
 
 const pumpPacketFields = {
-    DEST: 0,
-    FROM: 1,
-    ACTION: 2,
-    LENGTH: 3,
-    CMD: 4, //
-    MODE: 5, //?? Mode in pump status. Means something else in pump write/response
-    DRIVESTATE: 6, //?? Drivestate in pump status.  Means something else in pump write/response
-    WATTSH: 7,
-    WATTSL: 8,
-    RPMH: 9,
-    RPML: 10,
-    PPC: 11, //??
-    //12 Unknown
-    ERR: 13,
+    DEST: 2,
+    FROM: 3,
+    ACTION: 4,
+    LENGTH: 5,
+    CMD: 6, //
+    MODE: 7, //?? Mode in pump status. Means something else in pump write/response
+    DRIVESTATE: 8, //?? Drivestate in pump status.  Means something else in pump write/response
+    WATTSH: 9,
+    WATTSL: 10,
+    RPMH: 11,
+    RPML: 12,
+    PPC: 13, //??
     //14 Unknown
-    TIMER: 14, //Have to explore
-    //15, 16 Unknown
-    HOUR: 17, //Hours
-    MIN: 18 //Mins
+    ERR: 15,
+    //16 Unknown
+    TIMER: 18, //Have to explore
+    HOUR: 19, //Hours
+    MIN: 20 //Mins
 }
 
 const namePacketFields = {
-    NUMBER: 4,
-    CIRCUITFUNCTION: 5,
-    NAME: 6,
+    NUMBER: 6,
+    CIRCUITFUNCTION: 7,
+    NAME: 8,
 }
 
 const pumpAction = {
@@ -428,33 +433,53 @@ const ctrlString = {
 
 
 
+var configurationFile = 'config.json';
+const fs = require('fs');
+var configFile = JSON.parse(fs.readFileSync(configurationFile));
+
+
+intellicom = configFile.Equipment.intellicom;
+intellitouch = configFile.Equipment.intellitouch;
+pumpOnly = configFile.Equipment.pumpOnly;
+ISYController = configFile.Equipment.ISYController;
+chlorinator = configFile.Equipment.chlorinator;
+numberOfPumps = configFile.Equipment.numberOfPumps;
+safePumpOperation = configFile.Equipment.safePumpOperation;
+
+netConnect = configFile.Network.netConnect;
+
+loglevel = configFile.Log.loglevel;
+logType = configFile.Log.logType;
+logPumpMessages = configFile.Log.logPumpMessages;
+logDuplicateMessages = configFile.Log.logDuplicateMessages;
+logConsoleNotDecoded = configFile.Log.logConsoleNotDecoded;
+logConfigMessages = configFile.Log.logConfigMessages;
+logMessageDecoding = configFile.Log.logMessageDecoding;
+logChlorinator = configFile.Log.logChlorinator;
+
+/*
+for (var key in configFile.Equipment) {
+if (poolConfig.Pentair.hasOwnProperty(key)) {
+    var myEQ = 0;
+    if (j < 8) {
+        myEQ = 0; //8 bits for first mode byte
+    } else if (j >= 8 && j < 16) {
+        (myEQ = 1) //8 bits for 2nd mode byte
+    } else(myEQ = 2); //8 bits for 3rd mode byte
+    circuitArr[myEQ].push(poolConfig.Pentair[key]);
+    j++;
+}
+}*/
+
+if (ISYController) {
+    var ISYHelper = require('./lib/ISY.js')
+    var ISYConfig; //object to hold ISY variables.
+    ISYConfig = JSON.parse(JSON.stringify(configFile.ISY))
+}
 
 
 var winston = require('winston');
-//{ error: 0, warn: 1, info: 2, verbose: 3, debug: 4, silly: 5 }
 
-/*var logger = new(winston.Logger)({
-    transports: [
-    new(winston.transports.File)({
-            name: 'info-file',
-            colorize: true,
-            filename: 'pentair_info.log',
-            level: 'silly'
-        })
-  ]
-});
-
-var fulllogger = new(winston.Logger)({
-    transports: [
-    new(winston.transports.File)({
-            name: 'full-dump-file',
-            colorize: true,
-            filename: 'pentair_full_dump.log',
-            level: 'silly'
-
-        })
-  ]
-});*/
 
 
 var logger = new(winston.Logger)({
@@ -475,10 +500,6 @@ var logger = new(winston.Logger)({
 });
 
 
-
-var configurationFile = 'config.json';
-const fs = require('fs');
-var poolConfig = JSON.parse(fs.readFileSync(configurationFile));
 
 
 
@@ -552,23 +573,8 @@ var circuitArr = [
 
 
 
-/*  <-- Delete this section if we can read the configuration from the broadcast
-for (var key in poolConfig.Pentair) {
-    if (poolConfig.Pentair.hasOwnProperty(key)) {
-        var myEQ = 0;
-        if (j < 8) {
-            myEQ = 0; //8 bits for first mode byte
-        } else if (j >= 8 && j < 16) {
-            (myEQ = 1) //8 bits for 2nd mode byte
-        } else(myEQ = 2); //8 bits for 3rd mode byte
-        circuitArr[myEQ].push(poolConfig.Pentair[key]);
-        j++;
-    }
-}
-*/
 
-
-function pump(number, time, run, mode, drivestate, watts, rpm, ppc, err, timer, currentprogram, program1rpm, program2rpm, program3rpm, program4rpm, remotecontrol, power) {
+function pump(number, time, run, mode, drivestate, watts, rpm, ppc, err, timer, duration, currentprogram, program1rpm, program2rpm, program3rpm, program4rpm, remotecontrol, power) {
     this.pump = number; //1 or 2
     this.time = time;
     this.run = run;
@@ -579,6 +585,7 @@ function pump(number, time, run, mode, drivestate, watts, rpm, ppc, err, timer, 
     this.ppc = ppc;
     this.err = err;
     this.timer = timer;
+    this.duration = duration;
     this.currentprogram = currentprogram;
     this.program1rpm = program1rpm;
     this.program2rpm = program2rpm;
@@ -587,8 +594,8 @@ function pump(number, time, run, mode, drivestate, watts, rpm, ppc, err, timer, 
     this.remotecontrol = remotecontrol;
     this.power = power;
 }
-var pump1 = new pump(1, 'timenotset', 'runnotset', 'modenotset', 'drivestatenotset', 'wattsnotset', 'rpmnotset', 'ppcnotset', 'errnotset', 'timernotset', 'currentprognotset', 'prg1notset', 'prg2notset', 'prg3notset', 'prg4notset', 'remotecontrolnotset', 'powernotset');
-var pump2 = new pump(2, 'timenotset', 'runnotset', 'modenotset', 'drivestatenotset', 'wattsnotset', 'rpmnotset', 'ppcnotset', 'errnotset', 'timernotset', 'currentprognotset', 'prg1notset', 'prg2notset', 'prg3notset', 'prg4notset', 'remotecontrolnotset', 'powernotset');
+var pump1 = new pump(1, 'timenotset', 'runnotset', 'modenotset', 'drivestatenotset', 'wattsnotset', 'rpmnotset', 'ppcnotset', 'errnotset', 'timernotset', 'durationnotset', 'currentprognotset', 'prg1notset', 'prg2notset', 'prg3notset', 'prg4notset', 'remotecontrolnotset', 'powernotset');
+var pump2 = new pump(2, 'timenotset', 'runnotset', 'modenotset', 'drivestatenotset', 'wattsnotset', 'rpmnotset', 'ppcnotset', 'errnotset', 'timernotset', 'durationnotset', 'currentprognotset', 'prg1notset', 'prg2notset', 'prg3notset', 'prg4notset', 'remotecontrolnotset', 'powernotset');
 //object to hold pump information.  Pentair uses 1 and 2 as the pumps so we will set array[0] to a placeholder.
 var currentPumpStatus = ['blank', pump1, pump2]
 var currentPumpStatusPacket = ['blank', [], []]; // variable to hold the status packets of the pumps
@@ -608,7 +615,7 @@ introMsg += '\n In general, if you specify the Intellitouch controller, the app 
 introMsg += '\n To change the amount of output to the console, change the "logx" flags in lines 45-51 of this app.';
 introMsg += '\n Visit http://_your_machine_name_:3000 to see a basic UI';
 introMsg += '\n Visit http://_your_machine_name_:3000/debug.html for a way to listen for specific messages\n\n';
-introMsg += '*******************************'
+introMsg += '*******************************\n'
 logger.info(introMsg)
 
 var settingsStr = '' // \n*******************************';
@@ -673,11 +680,6 @@ function countObjects(obj) {
     return count;
 }
 
-//var equipmentCount = countObjects(circuitArr)
-//logger.debug('total # equipment: ', equipmentCount) //17
-//logger.debug('equipLen: ', circuitArr.length, '0 array: ', circuitArr[0].length) //3, 8
-
-
 
 sp.on('error', function (err) {
     return logger.error('Error opening port: ', err.message)
@@ -686,324 +688,201 @@ sp.on('error', function (err) {
 
 sp.on('open', function () {
     logger.verbose('Serial Port opened');
+})
+
+sp.on('data', function (data) {
+
+    var brokeBufferLoop = false; //flag to see if there was a message at the end of the buffer
+
+    if (typeof data2 === "undefined") {
+        data2 = data.slice(0);
+    } else {
+        data2 = Buffer.concat([data2, data]);
+    }
+    //put this in a static variable as the length might grow as we process more serial bus data!
+    var currBufferLen = data2.length;
+
+    //start to parse message at 250 bytes.  Is there a better time or way to know when the buffer has a full message or to start processing?
+    if (currBufferLen > 10 && !processingBuffer) {
+
+        var chatter; //a {potential} message we have found on the bus
+        var b = data2.toJSON();
+
+        //console.warn('Incoming packet: ', JSON.stringify(b));
+        var i = 0;
+        //-9 because the 8th byte is the length byte and we check for a full message below.
+        loop1: {
+            for (i; i < currBufferLen - 8; i++) {
+
+                if (b.data[i] == 0) {
+                    continue;
+                } else {
+
+                    if ((b.data[i] == 255 && b.data[i + 1] == 0 && b.data[i + 2] == 255 && b.data[i + 3] == 165) ||
+                        (b.data[i] == 255 && b.data[i + 1] == 255 && b.data[i + 2] == 255 && b.data[i + 3] == 165)
+                    ) {
+                        //NEED MORE CHECKS FOR VARIOUS TYPES OF MESSAGES!  :-)
 
 
-    sp.on('data', function (data) {
-
-        var brokeBufferLoop = false; //flag to see if there was a message at the end of the buffer
-
-        if (typeof data2 === "undefined") {
-            data2 = data.slice(0);
-        } else {
-            data2 = Buffer.concat([data2, data]);
-        }
-        //put this in a static variable as the length might grow as we process more serial bus data!
-        var currBufferLen = data2.length;
-
-        //start to parse message at 250 bytes.  Is there a better time or way to know when the buffer has a full message or to start processing?
-        if (currBufferLen > 10 && !processingBuffer) {
-
-            var chatter; //a {potential} message we have found on the bus
-            var b = data2.toJSON();
-
-            //console.warn('Incoming packet: ', JSON.stringify(b));
-            var i = 0;
-            //-9 because the 8th byte is the length byte and we check for a full message below.
-            loop1: {
-                for (i; i < currBufferLen - 8; i++) {
-
-                    if (b.data[i] == 0) {
-                        continue;
-                    } else {
-                        //look for Pentair preamble 255,0,255,165
-                        /*I've VERY rarely seen this:  data: 
-                                       [ 255,
-                                         255,
-                                         255,
-                                         255,
-                                         165,
-                                         16,
-                                         15,
-                                         16,
-                                         2,
-                                         29,
-                                         ...]
-
-                                         So wondering if we can just look for 255,165.  But for now we will also check 255,255,255,165.
-                                         */
-                        if ((b.data[i] == 255 && b.data[i + 1] == 0 && b.data[i + 2] == 255 && b.data[i + 3] == 165) ||
-                            (b.data[i] == 255 && b.data[i + 1] == 255 && b.data[i + 2] == 255 && b.data[i + 3] == 165)
-                        ) {
-                            //NEED MORE CHECKS FOR VARIOUS TYPES OF MESSAGES!  :-)
+                        var chatterlen = b.data[i + 8] + 6 + 2; //chatterlen is length of following message not including checksum (need to add 6 for start of chatter (165,07,Dest,Src,02,chatterlen) and 2 for checksum)
 
 
-                            var chatterlen = b.data[i + 8] + 6 + 2; //chatterlen is length of following message not including checksum (need to add 6 for start of chatter (165,07,Dest,Src,02,chatterlen) and 2 for checksum)
+                        //if we don't have the length bit in the buffer or the length of the message is less than the remaining buffer bytes
+                        if (logMessageDecoding) logger.silly('Msg#  n/a   Start of message in incoming buffer detected:  data2.len %s, chatterlen %s, i %s: TOTAL: %s True? %s ', data2.length, chatterlen, i, data2.length - i - 1 - chatterlen, (data2.length - i - 2 - chatterlen) <= 0)
 
 
-                            //if we don't have the length bit in the buffer or the length of the message is less than the remaining buffer bytes
-                            if (logMessageDecoding) logger.silly('Msg#  n/a   Start of message in incoming buffer detected:  data2.len %s, chatterlen %s, i %s: TOTAL: %s True? %s ', data2.length, chatterlen, i, data2.length - i - 1 - chatterlen, (data2.length - i - 2 - chatterlen) <= 0)
+                        if (chatterlen == undefined || (data2.length - i - 2 - chatterlen) <= 0) {
+                            //reset the buffer starting with the current partial message
+                            if (logMessageDecoding) logger.silly('Msg#  n/a   Incomplete message at end of buffer.  Prepending message to empty buffer string.');
+                            brokeBufferLoop = true;
+
+                            data2 = data2.slice(i - 2)
+                            break loop1;
+                        }
+
+                        msgCounter += 1;
+                        //logger.info('Msg# %s   Full buffer where message found: %s', msgCounter, b.data.toString())
+
+                        i += 3; //jump ahead to start of payload
 
 
-                            if (chatterlen == undefined || (data2.length - i - 2 - chatterlen) <= 0) {
-                                //reset the buffer starting with the current partial message
-                                if (logMessageDecoding) logger.silly('Msg#  n/a   Incomplete message at end of buffer.  Prepending message to empty buffer string.');
-                                brokeBufferLoop = true;
+                        //logger.silly('Msg#  %s   Length should be: %s  at position: %s ', msgCounter, chatterlen, i)
 
-                                data2 = data2.slice(i - 2)
+
+                        //iterate through the JSON array to pull out a valid message
+                        loop2: {
+                            for (j = 0; j < chatterlen; j++) {
+                                if (j == 0) {
+                                    var output = "     Found chatter (text): " //for logging, remove later
+                                    chatter = new Array(chatterlen);
+                                }
+
+                                output += b.data[i + j];
+                                output += " ";
+
+                                chatter[j] = b.data[i + j];
+
+                                if (j == chatterlen - 1) {
+                                    if (logMessageDecoding) logger.silly('Msg# %s   Extracting chatter from buffer: (length of chatter %s, position in buffer %s, start position of chatter in buffer %s) %s', msgCounter, chatterlen, i, j, output)
+
+                                    /* //This may be unnecessary; fixed code so we should get correct messages but will leave it for now
+                                     if (chatter[j] == undefined || chatter[j - 1] == undefined || chatter[j - 1] == undefined) {
+                                         if (logMessageDecoding) logger.warn('Msg# %s   Chatter length MISMATCH.  len %s, i %s currBufferLen %s', msgCounter, chatterlen, i, currBufferLen)
+                                     }*/
+
+                                    if (logMessageDecoding) logger.silly('Msg# %s Calling checksum: %s', msgCounter, chatter);
+
+                                    var packetType;
+                                    if (((chatter[2] == ctrl.PUMP1 || chatter[2] == ctrl.PUMP2)) || chatter[3] == ctrl.PUMP1 || chatter[3] == ctrl.PUMP2) {
+                                        packetType = 'pump'
+                                    } else {
+                                        packetType = 'controller';
+                                        preambleByte = chatter[3]; //not sure why we need this, but the 165,XX packet seems to change.  On my system it used to be 165,10 and then switched to 165,16.  Not sure why!  But we dynamically adjust it so it works for any value.  It is also different for the pumps (should always be 0 for pump messages)
+                                    }
+
+                                    processChecksum(chatter, msgCounter, packetType);
+                                    //skip ahead in the buffer for loop to the end of this message. 
+                                    i += chatterlen;
+                                    break loop1;
+
+                                }
+
+
+                            }
+                        }
+
+
+                    } else if (b.data[i] == 16 && b.data[i + 1] == 02) {
+                        //Looking for the Chlorinator preamble 10,2
+                        msgCounter += 1;
+
+                        //logger.error('/n STARTING CHLOR PACKET.')
+                        chatter = [];
+
+                        while (!(b.data[i] == 16 && b.data[i + 1] == 3)) {
+                            chatter.push(b.data[i]);
+                            i++;
+                            //logger.error('chlor ', i, chatter)
+                            if (b.data[i] == 16 && b.data[i + 1] == 3) {
+                                chatter.push(b.data[i]);
+                                chatter.push(b.data[i + 1]);
+                                i += 2;
+                                //logger.error('chlor BREAKING LOOP', i, chatter)
+                                processChecksum(chatter, msgCounter, 'chlorinator');
                                 break loop1;
                             }
 
-                            msgCounter += 1;
-                            //logger.info('Msg# %s   Full buffer where message found: %s', msgCounter, b.data.toString())
-
-                            i += 3; //jump ahead to start of payload
-
-
-                            //logger.silly('Msg#  %s   Length should be: %s  at position: %s ', msgCounter, chatterlen, i)
-
-
-                            //iterate through the JSON array to pull out a valid message
-                            loop2: {
-                                for (j = 0; j < chatterlen; j++) {
-                                    if (j == 0) {
-                                        var output = "     Found chatter (text): " //for logging, remove later
-                                        chatter = new Array(chatterlen);
-                                    }
-
-                                    output += b.data[i + j];
-                                    output += " ";
-
-                                    chatter[j] = b.data[i + j];
-
-                                    if (j == chatterlen - 1) {
-                                        if (logMessageDecoding) logger.silly('Msg# %s   Extracting chatter from buffer: (length of chatter %s, position in buffer %s, start position of chatter in buffer %s) %s', msgCounter, chatterlen, i, j, output)
-
-                                        /* //This may be unnecessary; fixed code so we should get correct messages but will leave it for now
-                                         if (chatter[j] == undefined || chatter[j - 1] == undefined || chatter[j - 1] == undefined) {
-                                             if (logMessageDecoding) logger.warn('Msg# %s   Chatter length MISMATCH.  len %s, i %s currBufferLen %s', msgCounter, chatterlen, i, currBufferLen)
-                                         }*/
-
-                                        if (logMessageDecoding) logger.silly('Msg# %s Calling checksum: %s', msgCounter, chatter);
-
-                                        var packetType;
-                                        if (((chatter[2] == ctrl.PUMP1 || chatter[2] == ctrl.PUMP2)) || chatter[3] == ctrl.PUMP1 || chatter[3] == ctrl.PUMP2) {
-                                            packetType = 'pump'
-                                        } else {
-                                            packetType = 'controller'
-                                        }
-
-                                        checksum(chatter, msgCounter, packetType);
-                                        //skip ahead in the buffer for loop to the end of this message. 
-                                        i += chatterlen;
-                                        break loop1;
-
-                                    }
+                            if ((i + 1) == currBufferLen)
+                            //if (i+1) == currBufferLen means that we reached the end of the buffer.  
+                            {
+                                i -= chatter.length;
+                                brokeBufferLoop = true;
+                                //logger.error('chlor MESSAGE NOT IN BUFFER', i, currBufferLen, chatter)
+                                break loop1;
+                            } else if (chatter.length > 35) {
 
 
-                                }
+                                //should work on this (if we ever get here).  This means the message is 25 bytes long (not what we should see) and likely there is a 16,2 somewhere in the middle of the message we are picking up...
+                                logger.error('Msg# %s   Aborting buffer.  Likely picking up 16,2 in the middle of another message. \n %s \n %s', msgCounter, chatter, JSON.stringify(data2))
+                                data2 = data2.slice(i);
+                                break loop1;
                             }
-
-
-                        } else if (b.data[i] == 16 && b.data[i + 1] == 02) {
-                            //Looking for the Chlorinator preamble 10,2
-                            msgCounter += 1;
-
-                            //logger.error('/n STARTING CHLOR PACKET.')
-                            chatter = [];
-
-                            while (!(b.data[i] == 16 && b.data[i + 1] == 3)) {
-                                chatter.push(b.data[i]);
-                                i++;
-                                //logger.error('chlor ', i, chatter)
-                                if (b.data[i] == 16 && b.data[i + 1] == 3) {
-                                    chatter.push(b.data[i]);
-                                    chatter.push(b.data[i + 1]);
-                                    i += 2;
-                                    //logger.error('chlor BREAKING LOOP', i, chatter)
-                                    checksum(chatter, msgCounter, 'chlorinator');
-                                    break loop1;
-                                }
-
-                                if ((i + 1) == currBufferLen)
-                                //if (i+1) == currBufferLen means that we reached the end of the buffer.  
-                                {
-                                    i -= chatter.length;
-                                    brokeBufferLoop = true;
-                                    //logger.error('chlor MESSAGE NOT IN BUFFER', i, currBufferLen, chatter)
-                                    break loop1;
-                                } else if (chatter.length > 35) {
-
-
-                                    //should work on this (if we ever get here).  This means the message is 25 bytes long (not what we should see) and likely there is a 16,2 somewhere in the middle of the message we are picking up...
-                                    logger.error('Msg# %s   Aborting buffer.  Likely picking up 16,2 in the middle of another message. \n %s \n %s', msgCounter, chatter, JSON.stringify(data2))
-                                    data2 = data2.slice(i);
-                                    break loop1;
-                                }
-                            }
-
-
-
-                            //logger.warn('Chlorinator Packet: ', JSON.stringify(b), chatter)
-                            checksum(chatter, msgCounter, 'chlorinator')
-
                         }
+
+
+
+                        //logger.warn('Chlorinator Packet: ', JSON.stringify(b), chatter)
+                        processChecksum(chatter, msgCounter, 'chlorinator')
+
 
 
                     }
 
 
                 }
+
+
             }
+        }
 
-            //slice the buffer from currBufferLen (what we have processed) to the end of the buffer
-            if (brokeBufferLoop) {
-                //we are here if we broke out of the buffer.  This means there is the start of a message in the last 9+/- bytes
-                //We do this above!  Don't need it here.  data2 = data2.slice(currBufferLen - 9);
-                if (logMessageDecoding) logger.silly('Incomplete message at end of buffer.  Sliced buffer so message is at beginning of buffer (sliced by %s) ', currBufferLen - 9);
+        //slice the buffer from currBufferLen (what we have processed) to the end of the buffer
+        if (brokeBufferLoop) {
+            //we are here if we broke out of the buffer.  This means there is the start of a message in the last 9+/- bytes
+            //We do this above!  Don't need it here.  data2 = data2.slice(currBufferLen - 9);
+            if (logMessageDecoding) logger.silly('Incomplete message at end of buffer.  Sliced buffer so message is at beginning of buffer (sliced by %s) ', currBufferLen - 9);
 
 
-            } else {
-                //We should get here after every message.  Slice the buffer to a new message
-                data2 = data2.slice(i);
-                if (logMessageDecoding) logger.silly('At end of message.  Sliced off %s from remaining buffer.', currBufferLen);
-            }
+        } else {
+            //We should get here after every message.  Slice the buffer to a new message
+            data2 = data2.slice(i);
+            if (logMessageDecoding) logger.silly('At end of message.  Sliced off %s from remaining buffer.', currBufferLen);
+        }
 
-        };
-    });
-
+    };
 });
 
 
-//Validate the checksum on the chatter
-function checksum(chatterdata, counter, packetType) {
 
-    //make a copy so when we callback the decode method it isn't changing our log output in Winston
-    if (logMessageDecoding) logger.silly("Msg# %s   Making sure we have a valid packet (matching checksum to actual packet): %s", counter, JSON.stringify(chatterdata));
-    var chatterCopy = chatterdata.slice(0);
-    var len = chatterCopy.length;
-
-
-    var chatterdatachecksum;
-    var databytes = 0;
-
-    if (packetType == 'chlorinator') {
-
-        chatterdatachecksum = chatterCopy[len - 3];
-        for (var i = 0; i < len - 3; i++) {
-            databytes += chatterCopy[i];
-        }
-        databytes %= 256; //Mod 256 because there is only the lower checksum byte.  No higher (256*x) byte.
-    } else {
-        //checksum is calculated by 256*2nd to last bit + last bit 
-        chatterdatachecksum = (chatterCopy[len - 2] * 256) + chatterCopy[len - 1];
-
-
-        // add up the data in the payload
-        for (var i = 0; i < len - 2; i++) {
-            databytes += chatterCopy[i];
-        }
-    }
-
-    var validChatter = (chatterdatachecksum == databytes);
-    if (!validChatter) {
-        if (logMessageDecoding) {
-
-            logger.debug('Msg# %s   Packet collision on bus detected.', counter)
-            logger.silly('Msg# %s   Mismatch on checksum:   %s!=%s   %s', counter, chatterdatachecksum, databytes, chatterCopy);
-        }
-        //console.log('Msg# %s   Mismatch on checksum:    %s!=%s   %s', counter, chatterdatachecksum, databytes, chatterCopy)
-
-        //if a mismatch, rewrite the packet in case it was from us.
-        /***if (queuePacketsArr.length > 0) {
-          //  writePacket();
-        }*/
-    } else {
-        if (logMessageDecoding) logger.silly('Msg# %s   Match on Checksum:    %s==%s   %s', counter, chatterdatachecksum, databytes, chatterCopy)
-    }
-
-    //Go back to working on the original, not the copy
-    //now that we calculated checksum, strip leading 165 and 10 as it is extraneous  (or for chlorinator, strip 10,2)
-    var preamble;
-    preamble = chatterCopy.slice(0, 2)
-    chatterCopy = chatterCopy.splice(2);
-
-
-
-    //logger.silly("Msg# %s   Chatterdata splice: %s --> %s ", counter, chatterdata, chatterCopy)
+function processChecksum(chatter, counter, packetType) {
 
     //call new function to process message; if it isn't valid, we noted above so just don't continue
-    if (validChatter) {
+    if (decodeHelper.checksum(chatter, counter, packetType)) {
         if (queuePacketsArr.length > 0) {
-            isResponse(chatterCopy, counter, preamble, packetType)
-        } else {
-            decode(chatterCopy, counter, preamble, packetType)
-        }
-    }
-};
-
-function dec2bin(dec) {
-    return (dec >>> 0).toString(2);
-}
-
-function printStatus(data1, data2) {
-    str1 = clone(data1);
-    str2 = clone(data2);
-    str3 = ''; //delta
-    spacepadding = '';
-    spacepaddingNum = 19;
-    for (var i = 0; i <= spacepaddingNum; i++) {
-        spacepadding += ' ';
-    }
-
-
-    header = '\n';
-    header += (spacepadding + '      S       L                                           V           H   P   S   H       A   S           H\n');
-    header += (spacepadding + '      O       E           M   M   M                       A           T   OO  P   T       I   O           E\n');
-    header += (spacepadding + '  D   U       N   H       O   O   O                   U   L           R   L   A   R       R   L           A                           C   C\n');
-    header += (spacepadding + '  E   R   C   G   O   M   D   D   D                   O   V           M   T   T   _       T   T           T                           H   H\n');
-    header += (spacepadding + '  S   C   M   T   U   I   E   E   E                   M   E           D   M   M   O       M   M           M                           K   K\n');
-    header += (spacepadding + '  T   E   D   H   R   N   1   2   3                       S           E   P   P   N       P   P           D                           H   L\n');
-    //                    e.g.  15, 16,  2, 29, 11, 33, 32,  0,  0,  0,  0,  0,  0,  0, 51,  0, 64,  4, 79, 79, 32,  0, 69,102,  0,  0,  7,  0,  0,182,215,  0, 13,  4,186
-
-
-    //compare arrays so we can mark which are different
-    //doing string 2 first so we can compare string arrays
-    if (data2 != null || data2 != undefined) {
-        for (var i = 0; i < str2.length - 1; i++) {
-            if (str1[i] == str2[i]) {
-                str3 += '    '
+            if (decodeHelper.isResponse(chatter, counter, packetType, logger, loglevel, packetFields, queuePacketsArr)) {
+                successfulAck(chatter, counter, true);
             } else {
-                str3 += '   *'
+                successfulAck(chatter, counter, false);
             }
-            str2[i] = pad(str2[i], 3);
+
+
         }
-        str2 = ' New: ' + spacepadding.substr(6) + str2 + '\n'
-        str3 = 'Diff:' + spacepadding.substr(6) + str3 + '\n'
-    } else {
-        str2 = ''
+        decode(chatter, counter, packetType)
     }
-
-
-    //format status1 so numbers are three digits
-    for (var i = 0; i < str1.length - 1; i++) {
-        str1[i] = pad(str1[i], 3);
-    }
-    str1 = 'Orig: ' + spacepadding.substr(6) + str1 + '\n';
-
-    str = header + str1 + str2 + str3;
-
-    return (str);
-}
-
-function pad(num, size) {
-    //makes any digit returned as a string of length size (for outputting formatted byte text)
-    var s = "   " + num;
-    return s.substr(s.length - size);
 }
 
 
-//function decode(data, counter, responseBool) {
-function decode(data, counter, preamble, packetType) {
+
+function decode(data, counter, packetType) {
     var decoded = false;
 
     //when searchMode (from socket.io) is in 'start' status, any matching packets will be set to the browser at http://machine.ip:3000/debug.html
@@ -1037,14 +916,7 @@ function decode(data, counter, preamble, packetType) {
         }
     }
 
-    //uncomment the below line if you think the 'parser' is missing any messages.  It will output every message sent here.
-    //console.log('Msg# %s is %s', counter, JSON.stringify(data));  
-
-    logger.silly('Msg# %s  PREAMBLE %s, TYPE %s,  packet %s', counter, preamble, packetType, data)
-
-
-
-    if (logMessageDecoding) logger.silly('Msg# %s  Packet Type: %s', counter, packetType)
+    if (logMessageDecoding) logger.silly('Msg# %s  TYPE %s,  packet %s', counter, packetType, data)
 
     //Start Controller Decode
 
@@ -1052,7 +924,7 @@ function decode(data, counter, preamble, packetType) {
 
     if (packetType == 'controller') {
 
-        preambleByte = preamble[1]; //not sure why we need this, but the 165,XX packet seems to change.  On my system it used to be 165,10 and then switched to 165,16.  Not sure why!  But we dynamically adjust it so it works for any value.  It is also different for the pumps (should always be 0 for pump messages)
+
 
 
         //logger.silly('Msg# %s  Packet info: dest %s   from %s', counter, data[packetFields.DEST], data[packetFields.FROM]);
@@ -1109,11 +981,16 @@ function decode(data, counter, preamble, packetType) {
 
                 //Initialize static variable (currentStatus) if not defined, and log it.
                 if (currentStatus == null || currentStatus == undefined) {
-                    currentStatus = clone(status);
-                    currentStatusBytes = data.slice(0);
+
+                    //currentStatus = clone(status);
+                    //currentStatusBytes = data.slice(0);
+                    currentStatus = JSON.parse(JSON.stringify(status));
+                    currentStatusBytes = JSON.parse(JSON.stringify(data));
+
+
 
                     logger.info('Msg# %s   Discovered initial system settings: ', counter, currentStatus)
-                    logger.verbose('\n ', printStatus(data));
+                    logger.verbose('\n ', decodeHelper.printStatus(data));
 
                     //Loop through the three bits that start at 3rd (and 4th/5th) bit in the data payload
                     for (var i = 0; i < circuitArr.length; i++) {
@@ -1128,14 +1005,14 @@ function decode(data, counter, preamble, packetType) {
                         }
                     }
 
-
+                    var circuitStr = '';
                     //logger.info('Msg# %s  Initial circuits status discovered', counter)
                     for (var i = 1; i <= 20; i++) {
                         if (currentCircuitArrObj[i].name != undefined) {
-                            console.log('%s : %s', currentCircuitArrObj[i].name, currentCircuitArrObj[i].status)
+                            circuitStr += currentCircuitArrObj[i].name + ' : ' + currentCircuitArrObj[i].status + '\n'
                         }
                     }
-
+                    logger.info('Msg# %s: Circuits discovered: \n %s', counter, circuitStr)
 
 
                     emit();
@@ -1146,7 +1023,8 @@ function decode(data, counter, preamble, packetType) {
                 } else {
 
                     //Check if we have the same data
-                    if (!data.equals(currentStatusBytes)) {
+                    //if (!data.equals(currentStatusBytes)) {
+                    if (JSON.stringify(data) != JSON.stringify(currentStatusBytes)) {
 
                         //the following is a copy of the array.  We will update it and then compare it back to the currentCircuitArrObj  
                         var circuitArrObj = JSON.parse(JSON.stringify(currentCircuitArrObj));
@@ -1162,11 +1040,8 @@ function decode(data, counter, preamble, packetType) {
                         }
 
 
-                        logger.verbose('-->EQUIPMENT Msg# %s   \n', counter)
-                        currentWhatsDifferent = currentStatus.whatsDifferent(status);
-                        if (currentWhatsDifferent != "Nothing!") {
-                            logger.info('Msg# %s   System Status changed: %s', counter, currentWhatsDifferent)
-                        }
+                        logger.info('Msg# %s   System Status changed: %s', counter, currentStatus.whatsDifferent(status))
+
 
                         //THE LOOP IS BECAUSE THERE IS A BUG IN THE RECURSIVE LOOP.  It won't display the output.  Need to fix for objects embedded inside an array.
                         var results;
@@ -1181,15 +1056,12 @@ function decode(data, counter, preamble, packetType) {
                         //console.log('Msg# %s   What\'s Different with Circuits? (Need to fix): %s', counter, currentCircuitArrObj.whatsDifferent(circuitArrObj))
 
 
+                        logger.verbose('Msg# %s: \n', counter, decodeHelper.printStatus(currentStatusBytes, data));
 
-
-                        logger.verbose('Msg# %s: \n', counter, printStatus(currentStatusBytes, data));
-                        //console.log(circuitArrObj);F..
-                        logger.verbose('<-- EQUIPMENT \n');
-
-
-                        currentStatus = clone(status);
-                        currentStatusBytes = data.slice(0);
+                        //currentStatus = clone(status);
+                        //currentStatusBytes = data.slice(0);
+                        currentStatus = JSON.parse(JSON.stringify(status));
+                        currentStatusBytes = JSON.parse(JSON.stringify(data))
                         currentCircuitArrObj = JSON.parse(JSON.stringify(circuitArrObj));
                         decoded = true;
                         emit();
@@ -1306,7 +1178,7 @@ function decode(data, counter, preamble, packetType) {
             {
                 //   [15,16,8,13,75,75,64,87,101,11,0,0,62,0,0,0,0,2,190]
 
-                var status = new heatObj(data[7], data[9] & 3, data[8], (data[9] & 12) >> 2)
+                var status = new heatObj(data[9], data[11] & 3, data[10], (data[11] & 12) >> 2)
 
                 logger.debug('heat status ', status, data);
 
@@ -1353,7 +1225,7 @@ function decode(data, counter, preamble, packetType) {
         case 10: //Get Custom Names
             {
                 var customName = '';
-                for (var i = 5; i < 16; i++) {
+                for (var i = 7; i < 18; i++) {
                     if (data[i] > 0 && data[i] < 251) //251 is used to terminate the custom name string if shorter than 11 digits
                     {
                         //console.log('i: %s and data[i]: %s',i, data[i])
@@ -1369,7 +1241,7 @@ function decode(data, counter, preamble, packetType) {
                 customNameArr[data[4]] = customName;
 
                 //display custom names when we reach the last circuit
-                if (data[4] == 9) {
+                if (data[6] == 9) {
                     logger.info('\n  Custom Circuit Names retrieved from configuration: ', customNameArr)
                 }
 
@@ -1455,14 +1327,14 @@ function decode(data, counter, preamble, packetType) {
 
 
                 var whichCircuit = 0;
-                if (data[5] < 8) {
+                if (data[7] < 8) {
                     whichCircuit = 0; //8 bits for first mode byte
-                } else if (data[5] >= 8 && data[5] < 16) {
+                } else if (data[7] >= 8 && data[7] < 16) {
                     (whichCircuit = 1) //8 bits for 2nd mode byte
                 } else(whichCircuit = 2); //8 bits for 3rd mode byte
                 schedule.CIRCUIT = circuitArr[whichCircuit][data[5] - (8 * whichCircuit) - 1];
 
-                if (data[6] == 25) //25 = Egg Timer 
+                if (data[8] == 25) //25 = Egg Timer 
                 {
                     schedule.MODE = 'Egg Timer'
                     schedule.DURATION = data[8] + ':' + data[9];
@@ -1474,16 +1346,16 @@ function decode(data, counter, preamble, packetType) {
 
                     schedule.DAYS = '';
 
-                    if (data[10] == 255) {
+                    if (data[12] == 255) {
                         schedule.DAYS += 'EVERY DAY'
                     } else { //0 = none
-                        if ((data[10] & 129) == 129) schedule.DAYS += 'Sunday '; //129
-                        if ((data[10] & 2) >> 1 == 1) schedule.DAYS += 'Monday '; // 2
-                        if ((data[10] & 4) >> 2 == 1) schedule.DAYS += 'Tuesday '; // 4
-                        if ((data[10] & 8) >> 3 == 1) schedule.DAYS += 'Wednesday '; //8
-                        if ((data[10] & 16) >> 4 == 1) schedule.DAYS += 'Thursday '; //16
-                        if ((data[10] & 32) >> 5 == 1) schedule.DAYS += 'Friday '; //32
-                        if ((data[10] & 64) >> 6 == 1) schedule.DAYS += 'Saturday '; //64
+                        if ((data[12] & 129) == 129) schedule.DAYS += 'Sunday '; //129
+                        if ((data[12] & 2) >> 1 == 1) schedule.DAYS += 'Monday '; // 2
+                        if ((data[12] & 4) >> 2 == 1) schedule.DAYS += 'Tuesday '; // 4
+                        if ((data[12] & 8) >> 3 == 1) schedule.DAYS += 'Wednesday '; //8
+                        if ((data[12] & 16) >> 4 == 1) schedule.DAYS += 'Thursday '; //16
+                        if ((data[12] & 32) >> 5 == 1) schedule.DAYS += 'Friday '; //32
+                        if ((data[12] & 64) >> 6 == 1) schedule.DAYS += 'Saturday '; //64
                     }
                 }
 
@@ -1493,9 +1365,9 @@ function decode(data, counter, preamble, packetType) {
 
                 if (logConfigMessages) logger.silly('\nMsg# %s  Schedule packet %s', counter, JSON.stringify(data))
                 if (schedule.MODE == 'Egg Timer') {
-                    if (logConfigMessages) logger.info('Msg# %s  Schedule: ID:%s  CIRCUIT:(%s)%s  MODE:%s  DURATION:%s  ', counter, schedule.ID, data[5], schedule.CIRCUIT, schedule.MODE, schedule.DURATION)
+                    if (logConfigMessages) logger.info('Msg# %s  Schedule: ID:%s  CIRCUIT:(%s)%s  MODE:%s  DURATION:%s  ', counter, schedule.ID, data[7], schedule.CIRCUIT, schedule.MODE, schedule.DURATION)
                 } else {
-                    if (logConfigMessages) logger.info('Msg# %s  Schedule: ID:%s  CIRCUIT:(%s)%s  MODE:%s  START_TIME:%s  END_TIME:%s  DAYS:(%s)%s', counter, schedule.ID, data[5], schedule.CIRCUIT, schedule.MODE, schedule.START_TIME, schedule.END_TIME, data[10], schedule.DAYS)
+                    if (logConfigMessages) logger.info('Msg# %s  Schedule: ID:%s  CIRCUIT:(%s)%s  MODE:%s  START_TIME:%s  END_TIME:%s  DAYS:(%s)%s', counter, schedule.ID, data[7], schedule.CIRCUIT, schedule.MODE, schedule.START_TIME, schedule.END_TIME, data[12], schedule.DAYS)
                 }
 
                 currentSchedule[schedule.ID] = schedule;
@@ -1515,10 +1387,10 @@ function decode(data, counter, preamble, packetType) {
                     var chlorinatorStatus = new chlorinatorObj;
 
 
-                    chlorinatorStatus.outputSpaPercent = (data[4] - 1) / 2; //41 would equal 20%, for example
-                    chlorinatorStatus.outputPercent = data[5];
-                    chlorinatorStatus.saltPPM = data[7] * 50;
-                    switch (data[8]) {
+                    chlorinatorStatus.outputSpaPercent = (data[6] - 1) / 2; //41 would equal 20%, for example
+                    chlorinatorStatus.outputPercent = data[7];
+                    chlorinatorStatus.saltPPM = data[9] * 50;
+                    switch (data[10]) {
                     case 0: //ok
                         {
                             chlorinatorStatus.status = "Ok";
@@ -1553,11 +1425,11 @@ function decode(data, counter, preamble, packetType) {
                         }
                     default:
                         {
-                            chlorinatorStatus.status = "Unknown - Status code: " + data[3];
+                            chlorinatorStatus.status = "Unknown - Status code: " + data[5];
                         }
                     }
                     chlorinatorStatus.name = '';
-                    for (var i = 10; i <= 25; i++) {
+                    for (var i = 12; i <= 27; i++) {
                         chlorinatorStatus.name += String.fromCharCode(data[i]);
                     }
                     if (currentChlorinatorStatus.name == '') {
@@ -1593,15 +1465,15 @@ function decode(data, counter, preamble, packetType) {
                 }
                 status.source = data[packetFields.FROM]
                 status.destination = data[packetFields.DEST]
-                status.b3 = data[2] //134... always?
-                status.CMD = data[3] == 4 ? 'pool temp' : 'feature'; // either 4=pool temp or 2=feature
+                status.b3 = data[4] //134... always?
+                status.CMD = data[5] == 4 ? 'pool temp' : 'feature'; // either 4=pool temp or 2=feature
 
 
-                if (data[3] == 2) {
+                if (data[5] == 2) {
                     status.sFeature = circuitArrStr(data[4])
-                    if (data[5] == 0) {
+                    if (data[7] == 0) {
                         status.ACTION = "off"
-                    } else if (data[5] == 1) {
+                    } else if (data[7] == 1) {
                         status.ACTION = "on"
                     }
                     logger.info('Msg# %s   %s --> %s: Change %s %s to %s : %s', counter, ctrlString[data[packetFields.FROM]], ctrlString[data[packetFields.DEST]], status.CMD, status.sFeature, status.ACTION, JSON.stringify(data));
@@ -1634,10 +1506,10 @@ function decode(data, counter, preamble, packetType) {
                 status.source = data[packetFields.FROM]
                 status.destination = data[packetFields.DEST]
 
-                status.POOLSETPOINT = data[4];
-                status.SPASETPOINT = data[5];
-                status.POOLHEATMODE = heatModeStr[data[6] & 3]; //mask the data[6] with 0011
-                status.SPAHEATMODE = heatModeStr[(data[6] & 12) >> 2]; //mask the data[6] with 1100 and shift right two places
+                status.POOLSETPOINT = data[6];
+                status.SPASETPOINT = data[7];
+                status.POOLHEATMODE = heatModeStr[data[8] & 3]; //mask the data[6] with 0011
+                status.SPAHEATMODE = heatModeStr[(data[8] & 12) >> 2]; //mask the data[6] with 1100 and shift right two places
                 logger.info('Msg# %s   %s asking %s to change pool heat mode to %s (@ %s degrees) & spa heat mode to %s (at %s degrees): %s', counter, ctrlString[data[packetFields.FROM]], ctrlString[data[packetFields.DEST]], status.POOLHEATMODE, status.POOLSETPOINT, status.SPAHEATMODE, status.SPASETPOINT, JSON.stringify(data));
 
                 decoded = true;
@@ -1724,63 +1596,23 @@ function decode(data, counter, preamble, packetType) {
             {
                 var str1;
                 var str2;
-                var setAmount = data[6] * 256 + data[7];
+                var setAmount = data[8] * 256 + data[9];
 
 
                 //if (data[packetFields.DEST] == 96 || data[packetFields.DEST] == 97) //Command to the pump.  Also think we know that if length = 4 than it is to the pump and length=2 is a response.
                 //{
 
-                if (data[3] == 2) // Length==2 is a response.
+                if (data[5] == 2) // Length==2 is a response.
                 {
 
                     var str1;
-                    var setAmount = data[4] * 256 + data[5];
+                    var setAmount = data[6] * 256 + data[7];
 
-                    //This section was removed because the response is *solely* the last two bytes of the request packet (before the checksum).  This means that a response of 8/16/24/32 could either be a) Program 1/2/3/4 now running or b) Timer set for 8/16/24/32 minutes.  Pump RPM would be 450-3450 but theoretically a timer could also be set for that range.
-
-                    /*switch (setAmount) {
-                    case 0:
-                        {
-                            str1 = 'Power is now off';
-                            break;
-                        }
-                    case 1:
-                        {
-                            str1 = 'Timer is now set';
-                            break;
-                        }
-                    case 8:
-                        {
-                            str1 = 'Program 1 now running';
-                            break;
-                        }
-                    case 16:
-                        {
-                            str1 = 'Program 2 now running';
-                            break;
-                        }
-                    case 24:
-                        {
-                            str1 = 'Program 3 now running';
-                            break;
-                        }
-                    case 32:
-                        {
-                            str1 = 'Program 4 now running'
-                            break;
-                        }
-                    default:
-                        {
-                            str1 = 'Speed saved as ' + setAmount + ' RPM'
-                            break;
-                        }
-
-                    } */
                     decoded = true;
                     if (logPumpMessages && loglevel) logger.verbose('Msg# %s   %s responded with acknowledgement: %s', counter, ctrlString[data[packetFields.FROM]], JSON.stringify(data));
-                } else if (data[4] == 3) // data[4]: 1== Response; 2==IntelliTouch; 3==Intellicom2(?)/manual
+                } else if (data[6] == 3) // data[4]: 1== Response; 2==IntelliTouch; 3==Intellicom2(?)/manual
                 {
-                    switch (data[5]) {
+                    switch (data[7]) {
 
                     case 33: //0x21
                         {
@@ -1835,44 +1667,21 @@ function decode(data, counter, preamble, packetType) {
 
                     if (logPumpMessages && loglevel) logger.verbose('Msg# %s   %s: %s %s %s', counter, ctrlString[data[packetFields.FROM]], str1, str2, JSON.stringify(data));
                     decoded = true;
-                } else if (data[4] == 2) // data[4]: 1== Response; 2==IntelliTouch; 3==Intellicom2(?)/manual
+                } else if (data[6] == 2) // data[4]: 1== Response; 2==IntelliTouch; 3==Intellicom2(?)/manual
                 {
 
                     var str1;
-                    var setAmount = data[6] * 256 + data[7];
+                    var setAmount = data[8] * 256 + data[9];
                     if (logPumpMessages & loglevel) logger.verbose('Msg# %s   %s --> %s: Set Speed (Intellitouch) to %s rpm: %s', counter, ctrlString[data[packetFields.FROM]], ctrlString[data[packetFields.DEST]], setAmount, JSON.stringify(data));
 
 
                 } else {
-                    str1 = '[' + data[4] + ',' + data[5] + ']';
+                    str1 = '[' + data[6] + ',' + data[7] + ']';
                     str2 = ' rpm(?)'
                     logger.warn('Msg# %s  Pump data ?', str1, str2, counter, data)
                 }
                 decoded = true;
 
-                /*
-
-                } else //response from the pump
-                {
-                    //var pumpResponse = ''
-                    //pumpResponse += data[pumpPacketFields.LENGTH + 1] + ', ' + data[pumpPacketFields.LENGTH + 2]
-                    if (data[2] == 1 && data[3] == 2 && data[4] == 0) //response to run program
-                    {
-                        if (data[5] == 1) {
-                            if (logPumpMessages && loglevel) logger.verbose('Msg# %s   %s: Not sure what this response is!: %s \n', counter, ctrlString[data[packetFields.FROM]], JSON.stringify(data));
-                            decoded = true;
-                        } else {
-                            if (logPumpMessages && loglevel) logger.verbose('Msg# %s   %s: Speed Program %s to current program: %s \n', counter, ctrlString[data[packetFields.FROM]], data[5] / 8, JSON.stringify(data));
-                            decoded = true;
-                        }
-                    } else //response to speed 
-                    {
-
-                        if (logPumpMessages && loglevel) logger.verbose('Msg# %s   %s: Speed Set to %s rpm: %s \n', counter, ctrlString[data[packetFields.FROM]], data[4] * 256 + data[5], JSON.stringify(data));
-                        decoded = true;
-                    }
-                }
-                */
                 break;
             }
         case 2: //??
@@ -1914,7 +1723,7 @@ function decode(data, counter, preamble, packetType) {
                     if (logPumpMessages && loglevel) logger.verbose('Msg# %s   %s --> %s: Set pump mode to _%s_: %s', counter, ctrlString[data[packetFields.FROM]], ctrlString[data[packetFields.DEST]], data[pumpPacketFields.CMD], JSON.stringify(data));
 
                     var pumpMode;
-                    switch (data[5]) {
+                    switch (data[7]) {
                     case 0:
                         {
                             pumpMode = "Filter";
@@ -2001,9 +1810,9 @@ function decode(data, counter, preamble, packetType) {
             {
 
                 var power;
-                if (data[4] == 10)
+                if (data[6] == 10)
                     power = "on"
-                else if (data[4] == 4)
+                else if (data[6] == 4)
                     power = "off";
                 pumpStatus.power = power;
 
@@ -2116,7 +1925,7 @@ function decode(data, counter, preamble, packetType) {
         if (!intellitouch) //If we have an intellitouch, we will get it from decoding the controller packets (25, 153 or 217)
         {
             var destination;
-            if (data[0] == 80) {
+            if (data[chlorinatorPacketFields.DEST] == 80) {
                 destination = 'Salt cell';
                 from = 'Controller'
             } else {
@@ -2140,7 +1949,7 @@ function decode(data, counter, preamble, packetType) {
 
 
 
-            switch (data[1]) {
+            switch (data[chlorinatorPacketFields.ACTION]) {
             case 0: //Get status of Chlorinator
                 {
                     if (logChlorinator) logger.verbose('Msg# %s   %s --> %s: Please provide status: %s', counter, from, destination, data)
@@ -2156,8 +1965,8 @@ function decode(data, counter, preamble, packetType) {
             case 3: //Response to version
                 {
                     chlorinatorStatus.name = '';
-                    chlorinatorStatus.version = data[2];
-                    for (var i = 3; i <= 18; i++) {
+                    chlorinatorStatus.version = data[4];
+                    for (var i = 5; i <= 20; i++) {
                         chlorinatorStatus.name += String.fromCharCode(data[i]);
                     }
                     if (logChlorinator) logger.verbose('Msg# %s   %s --> %s: Chlorinator version (%s) and name (%s): %s', counter, from, destination, chlorinatorStatus.version, chlorinatorStatus.name, data);
@@ -2166,8 +1975,8 @@ function decode(data, counter, preamble, packetType) {
                 }
             case 17: //Set Generate %
                 {
-                    chlorinatorStatus.outputPercent = data[2];
-                    if (data[2] == 101) {
+                    chlorinatorStatus.outputPercent = data[4];
+                    if (data[4] == 101) {
                         chlorinatorStatus.superChlorinate = 'On'
                     } else {
                         chlorinatorStatus.superChlorinate = 'On'
@@ -2178,7 +1987,7 @@ function decode(data, counter, preamble, packetType) {
                 }
             case 18: //Response to 17 (set generate %)
                 {
-                    chlorinatorStatus.saltPPM = data[2] * 50;
+                    chlorinatorStatus.saltPPM = data[4] * 50;
 
 
                     switch (data[3]) {
@@ -2211,7 +2020,7 @@ function decode(data, counter, preamble, packetType) {
                         }
                     default:
                         {
-                            chlorinatorStatus.status = "Unknown - Status code: " + data[3];
+                            chlorinatorStatus.status = "Unknown - Status code: " + data[5];
                         }
                     }
                     if (logChlorinator) logger.verbose('Msg# %s   %s --> %s: Current Salt level is %s PPM: %s', counter, from, destination, chlorinatorStatus.saltPPM, data);
@@ -2227,7 +2036,7 @@ function decode(data, counter, preamble, packetType) {
                 }
             case 21: //Set Generate %, but value / 10??
                 {
-                    chlorinatorStatus.outputPercent = data[2] / 10;
+                    chlorinatorStatus.outputPercent = data[6] / 10;
                     if (logChlorinator) logger.verbose('Msg# %s   %s --> %s: Set current output to %s %: %s', counter, from, destination, chlorinatorStatus.outputPercent, data);
                     decoded = true;
                     break;
@@ -2275,102 +2084,8 @@ function decode(data, counter, preamble, packetType) {
 
 
 
-//this function is the "broker" between the receiving workflow and the sending workflow
-function isResponse(chatter, counter, preamble, packetType) {
-
-    logger.silly('Msg# %s  Checking to see if inbound message matches previously sent outbound message (isResponse function): %s ', counter, chatter, preamble, packetType)
 
 
-    //For Broadcast Packets
-    //Ex set circuit name[255,0,255,165, 10, 16, 32, 139, 5, 7, 0, 7, 0, 0, 1,125]
-    //Ex ACK circuit name[255,0,255,165, 10, 15, 16,  10,12, 0,85,83,69,82,78, 65,77,69,45,48,49]  
-
-    if (loglevel) logger.silly('   isResponse:  Msg#: %s  chatterreceived.action: %s (10?) == queue[0].action&63: %s ALL TRUE?  %s \n\n', counter, chatter[packetFields.ACTION], queuePacketsArr[0][7] & 63, ((chatter[packetFields.ACTION] == (queuePacketsArr[0][7] & 63))))
-
-    if (packetType == 'pump') {
-
-        var tempObj = queuePacketsArr[0].slice(5);
-        var tempDest = tempObj[0];
-        tempObj[0] = tempObj[1];
-        tempObj[1] = tempDest;
-        //logger.error('comparing pump chatter: %s   tempObj: %s', chatter, tempObj)
-
-        if (tempObj.equals(chatter)) //Scenario 1, pump messages are mimics of each other but the dest/src are swapped
-        {
-            //if (queuePacketsArr.length > 0) {      ///  <-- Why is this here?
-            //successfulAck(chatter, counter, false)
-            //}
-            successfulAck(chatter, counter, true) //<--Added 9/30/16 to replace the above 3 lines.
-            decode(chatter, counter, preamble, packetType)
-        } else
-        if (queuePacketsArr[0][7] == 1 && chatter[2] == 1) //Any commands with <01> are 4 bytes.  The responses are 2 bytes (after the length).  The 3rd/4th byte of the request seem to match the 1st/2nd bytes of the response.
-        {
-            if (queuePacketsArr[0][11] == chatter[4] && queuePacketsArr[0][12] == chatter[5]) {
-                successfulAck(chatter, counter, true);
-                decode(chatter, counter, preamble, packetType);
-            } else {
-                successfulAck(chatter, counter, false);
-                decode(chatter, counter, preamble, packetType);
-            }
-        } else if ((queuePacketsArr[0][7] == 7 && chatter[2] == 7)) //Scenario 3.  Request for pump status.
-        {
-            successfulAck(chatter, counter, true);
-            decode(chatter, counter, preamble, packetType);
-        } else //no match
-        {
-            successfulAck(chatter, counter, false)
-            decode(chatter, counter, preamble, packetType);
-            //console.log('Msg#: %s In isResponse -- Not a. %s', counter, chatter)
-        }
-    } else
-
-    if (packetType == 'chlorinator') {
-        /* CHECK FOR RESPONSES
-         0=>1
-         17=>18
-         21=>18
-         20=>3*/
-        if (chatter[chatter.length - 2] == 16 && chatter[chatter.length - 1] == 3)
-        //quick double check here to make sure last two bytes of packet we are matching is 16,3
-        {
-            if ((queuePacketsArr[0][3] == 0 && chatter[1] == 1) ||
-                (queuePacketsArr[0][3] == 17 && chatter[1] == 18) ||
-                (queuePacketsArr[0][3] == 21 && chatter[1] == 18) ||
-                (queuePacketsArr[0][3] == 20 && chatter[1] == 3)) {
-                successfulAck(chatter, counter, true);
-            }
-        } else {
-            successfulAck(chatter, counter, false);
-        }
-
-        decode(chatter, counter, preamble, packetType);
-    } else
-
-    if (packetType == 'controller') {
-        if (chatter[packetFields.ACTION] == 1 && chatter[4] == queuePacketsArr[0][7])
-        //if an ACK
-        {
-            successfulAck(chatter, counter, true);
-            decode(chatter, counter, preamble, packetType);
-        }
-        //If a broadcast response to request 202 --> 10
-        else if ((chatter[packetFields.ACTION] == (queuePacketsArr[0][7] & 63))) {
-            /*this works because:
-            There appears to be a relationship between the various Status, Get, and Set messages. It may be that the low order bits designate the type of message and the high order bits control whether or not you are requesting the current status or setting the current values. For example the Date/Time message is type 5(00000101). To request the Date/Time you would set the top two bits resulting in a type of 197(11000101). To set the Date/Time you would set only the topmost bit resulting in a type of 133(10000101). The same seems to apply to many of the other message types.
-                
-            see https://github.com/tagyoureit/nodejs-Pentair/wiki/Broadcast
-            */
-            successfulAck(chatter, counter, true);
-            decode(chatter, counter, preamble, packetType);
-        }
-    } else //if we get here, no match
-    {
-        successfulAck(chatter, counter, false);
-        decode(chatter, counter, preamble, packetType);
-        logger.error('Msg# %s  No match on response.  How did we get here? %s', counter, chatter)
-    }
-
-};
 
 
 
@@ -2385,24 +2100,7 @@ function successfulAck(chatter, counter, messageAck) {
     if (messageAck == true) {
         queuePacketsArr.shift();
     }
-    /*
-            //Only call writePacket if there are more instructions to write to the serial bus
-            if (queuePacketsArr.length > 0) {
-                writePacket()
-            };
-        } else {
 
-            if (queuePacketsArr.length > 0) {
-                //console.log('****HOW MANY RETRIES:  counter: %s   packetwrittenAt: %s  diff: %s', counter, packetWrittenAt, counter-                packetWrittenAt)
-                //what is the best way to send messages again?
-                if (counter - packetWrittenAt > 5) {
-
-                    //retry same packet
-                    writePacket();
-                }
-            }
-        }
-        */
 }
 
 function queuePacket(message) {
@@ -2498,40 +2196,43 @@ function writePacket() {
         logger.silly('Entering Write Queue')
         logger.silly('Queue = %s', JSON.stringify(queuePacketsArr))
 
-        //logger.verbose('Sending packet: %s', queuePacketsArr[0])
-        sp.write(queuePacketsArr[0], function (err) {
-            sp.drain(function () {
-                if (err) {
-                    logger.error('Error writing packet: ' + err.message)
-                }
-                if (queuePacketsArr[0].equals(msgWriteCounter.msgWrote)) //msgWriteCounter will store the message that is being written.  If it doesn't match the 1st msg in the queue, then we have received the ACK for the message and can move on.  If it is the same message, then we are retrying the same message again so increment the counter.
-                {
-                    msgWriteCounter.counter++;
-                } else {
-                    msgWriteCounter.msgWrote = queuePacketsArr[0].slice(0);
-                    msgWriteCounter.counter = 1;
-                }
-                if (loglevel) logger.verbose('Sent Packet ' + queuePacketsArr[0] + ' Try: ' + msgWriteCounter.counter)
-                if (msgWriteCounter.counter >= 10) //if we get to 10 retries, then throw an Error.
-                {
-                    logger.error('Error writing packet to serial bus.  Tried %s times to write %s', msgWriteCounter.counter, msgWriteCounter.msgWrote)
-                    if (logType == "info" || logType == "warn" || logType == "error") {
-                        logger.warn('Setting logging level to Debug')
-                        logType = 'debug'
-                        logger.transports.console.level = 'debug';
+        if (netConnect === 0) {
+            sp.write(queuePacketsArr[0], function (err) {
+                sp.drain(function () {
+                    if (err) {
+                        logger.error('Error writing packet: ' + err.message)
                     }
-                    if (msgWriteCounter.counter >= 20) //if we get to 20 retries, then abort this packet.
+                    if (queuePacketsArr[0].equals(msgWriteCounter.msgWrote)) //msgWriteCounter will store the message that is being written.  If it doesn't match the 1st msg in the queue, then we have received the ACK for the message and can move on.  If it is the same message, then we are retrying the same message again so increment the counter.
                     {
+                        msgWriteCounter.counter++;
+                    } else {
                         msgWriteCounter.msgWrote = queuePacketsArr[0].slice(0);
                         msgWriteCounter.counter = 1;
                     }
+                    if (loglevel) logger.verbose('Sent Packet ' + queuePacketsArr[0] + ' Try: ' + msgWriteCounter.counter)
+                    if (msgWriteCounter.counter >= 10) //if we get to 10 retries, then throw an Error.
+                    {
+                        logger.error('Error writing packet to serial bus.  Tried %s times to write %s', msgWriteCounter.counter, msgWriteCounter.msgWrote)
+                        if (logType == "info" || logType == "warn" || logType == "error") {
+                            logger.warn('Setting logging level to Debug')
+                            logType = 'debug'
+                            logger.transports.console.level = 'debug';
+                        }
+                        if (msgWriteCounter.counter >= 20) //if we get to 20 retries, then abort this packet.
+                        {
+                            msgWriteCounter.msgWrote = queuePacketsArr[0].slice(0);
+                            msgWriteCounter.counter = 1;
+                        }
 
 
 
-                }
-            });
+                    }
+                });
 
-        })
+            })
+        } else {
+            sp.write(new Buffer(queuePacketsArr[0]), 'binary');
+        }
         packetWrittenAt = msgCounter;
         if (queuePacketsArr.length > 0) {
             writePacketTimer.setTimeout(writePacket, '', '200m')
@@ -2547,7 +2248,6 @@ if (pumpOnly) {
 
     var pump1Timer = new NanoTimer();
     var pump1TimerDelay = new NanoTimer();
-    var pump1Countdown = 0;
     var pumpInitialRequestConfigDelay = new NanoTimer();
 
 
@@ -2559,7 +2259,6 @@ if (pumpOnly) {
     } else {
         var pump2Timer = new NanoTimer();
         var pump2TimerDelay = new NanoTimer();
-        var pump2Countdown = 0;
         pumpStatusTimer.setInterval(pumpStatusCheck, [1, 2], '30s');
         pumpInitialRequestConfigDelay.setTimeout(pumpStatusCheck, [1, 2], '2500m'); //must give a short delay to allow the port to open
     }
@@ -2773,8 +2472,8 @@ function pumpStatusCheck(pump1, pump2) {
 
 
 function pump1SafePumpMode() {
-    pump1Countdown--;
-    if (pump1Countdown > 0) {
+    currentPumpStatus[1].duration--;
+    if (currentPumpStatus[1].duration > 0) {
         //set pump to remote control
         var remoteControlPacket = [165, 0, 96, 16, 4, 1, 255];
         logger.verbose('Sending Set pump to remote control: %s', remoteControlPacket)
@@ -2783,7 +2482,7 @@ function pump1SafePumpMode() {
         //Initially this was resending the 'timer' packet, but that was found to be ineffective.  
         //Instead, sending the Program packet again resets the timer.
         var setProgramPacket = [165, 0, 96, 16, 1, 4, 3, 33, 0, currentPumpStatus[1].currentprogram * 8];
-        logger.verbose('App -> Pump 1: Sending Run Program %s: %s (%s total minutes left)', currentPumpStatus[1].currentprogram, setProgramPacket, pump1Countdown);
+        logger.verbose('App -> Pump 1: Sending Run Program %s: %s (%s total minutes left)', currentPumpStatus[1].currentprogram, setProgramPacket, currentPumpStatus[1].duration);
         queuePacket(setProgramPacket);
 
 
@@ -2802,8 +2501,8 @@ function pump1SafePumpMode() {
 }
 
 function pump2SafePumpMode() {
-    pump2Countdown--;
-    if (pump2Countdown > 0) {
+    currentPumpStatus[2].duration--;
+    if (currentPumpStatus[2].duration > 0) {
         //set pump to remote control
         var remoteControlPacket = [165, 0, 97, 16, 4, 1, 255];
         logger.verbose('Sending Set pump to remote control: %s', remoteControlPacket)
@@ -2812,7 +2511,7 @@ function pump2SafePumpMode() {
         //Initially this was resending the 'timer' packet, but that was found to be ineffective.  
         //Instead, sending the Program packet again resets the timer.
         var setProgramPacket = [165, 0, 97, 34, 1, 4, 3, 33, 0, currentPumpStatus[2].currentprogram * 8];
-        logger.verbose('App -> Pump 2: Sending Run Program %s: %s (%s total minutes left)', currentPumpStatus[2].currentprogram, setProgramPacket, pump2Countdown);
+        logger.verbose('App -> Pump 2: Sending Run Program %s: %s (%s total minutes left)', currentPumpStatus[2].currentprogram, setProgramPacket, currentPumpStatus[2].duration);
         queuePacket(setProgramPacket);
 
 
@@ -2840,6 +2539,12 @@ function pump2SafePumpModeDelay() {
 }
 
 function emit() {
+
+
+    if (ISYController) {
+        ISYHelper.emit(ISYConfig, currentStatus, currentPumpStatus, currentChlorinatorStatus, NanoTimer, logger)
+    }
+
     io.sockets.emit('circuit',
         currentCircuitArrObj
     )
@@ -3156,11 +2861,11 @@ io.on('connection', function (socket, error) {
             if (program == 'off') {
                 setPrg = [6, 1, 4];
                 if (equip == 1) {
-                    pump1Countdown = 0;
+                    currentPumpStatus[1].duration = 0;
                     pump1Timer.clearTimeout();
                     pump1TimerDelay.clearTimeout();
                 } else {
-                    pump2Countdown = 0;
+                    currentPumpStatus[2].duration = 0;
                     pump2Timer.clearTimeout();
                     pump2TimerDelay.clearTimeout();
                 }
@@ -3230,11 +2935,11 @@ io.on('connection', function (socket, error) {
                     duration = 1;
                 }
                 if (equip == 1) {
-                    pump1Countdown = duration;
+                    currentPumpStatus[1].duration = duration;
                     //run the timer update 50s into the 1st minute
                     pump1Timer.setTimeout(pump1SafePumpMode, '', '50s')
                 } else {
-                    pump2Countdown = duration;
+                    currentPumpStatus[2].duration = duration;
                     //run the timer update 50s into the 1st minute
                     pump2Timer.setTimeout(pump2SafePumpMode, '', '50s')
                 }
