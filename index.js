@@ -7,7 +7,7 @@ console.log('\033[2J'); //clear the console
 var dateFormat = require('dateformat');
 var Dequeue = require('dequeue')
 var decodeHelper = require('./lib/decode.js');
-var version = '0.1.11 alpha 2'
+var version = '0.1.11 alpha 3'
 //-------  EQUIPMENT SETUP -----------
 
 //ONE and only 1 of the following should be set to 1.
