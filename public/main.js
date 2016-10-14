@@ -2,10 +2,10 @@ $(function () {
     var FADE_TIME = 150; // ms
     var TYPING_TIMER_LENGTH = 400; // ms
     var COLORS = [
-    '#e21400', '#91580f', '#f8a700', '#f78b00',
-    '#58dc00', '#287b00', '#a8f07a', '#4ae8c4',
-    '#3b88eb', '#3824aa', '#a700ff', '#d300e7'
-  ];
+        '#e21400', '#91580f', '#f8a700', '#f78b00',
+        '#58dc00', '#287b00', '#a8f07a', '#4ae8c4',
+        '#3b88eb', '#3824aa', '#a700ff', '#d300e7'
+    ];
 
     // Initialize variables
 
@@ -114,19 +114,19 @@ $(function () {
 
         if (data != null) {
             $('#config').html('Time #: ' + data.TIME +
-                '<br>Water Temp: ' + data.poolTemp +
-                '<br>Spa Temp: ' + data.spaTemp +
-                '<br>Air Temp: ' + data.airTemp +
-                '<br>Solar Temp: ' + data.solarTemp +
-                '<br>Unknown?: ' + data.poolHeatMode2 +
-                '<br>Unknown?: ' + data.spaHeatMode2 +
-                '<br>Pool Heat Mode: ' + data.poolHeatMode +
-                '<br>Spa Heat Mode: ' + data.spaHeatMode +
-                '<br>Valve: ' + data.valves +
-                '<br>Run Mode: ' + data.runmode +
-                '<br>Unit of Measure: ' + data.UOM +
-                '<br>Heater Active(?): ' + data.HEATER_ACTIVE +
-                '<p>');
+                    '<br>Water Temp: ' + data.poolTemp +
+                    '<br>Spa Temp: ' + data.spaTemp +
+                    '<br>Air Temp: ' + data.airTemp +
+                    '<br>Solar Temp: ' + data.solarTemp +
+                    '<br>Unknown?: ' + data.poolHeatMode2 +
+                    '<br>Unknown?: ' + data.spaHeatMode2 +
+                    '<br>Pool Heat Mode: ' + data.poolHeatMode +
+                    '<br>Spa Heat Mode: ' + data.spaHeatMode +
+                    '<br>Valve: ' + data.valves +
+                    '<br>Run Mode: ' + data.runmode +
+                    '<br>Unit of Measure: ' + data.UOM +
+                    '<br>Heater Active(?): ' + data.HEATER_ACTIVE +
+                    '<p>');
             $('#poolCurrentTemp').html('Pool Temp: ' + data.poolTemp);
             $('#spaCurrentTemp').html('Spa Temp: ' + data.spaTemp);
         }
@@ -141,14 +141,14 @@ $(function () {
 
         if (data != null) {
             $('#chlorinator').html('Salt: ' + data.saltPPM + ' PPM' +
-                '<br>[Pool/Default] Output (%): ' + data.outputPercent + '%' +
-                '<br>Spa Output (%): ' + data.outputSpaPercent + '%' +
-                '<br>Output Level: ' + data.outputLevel +
-                '<br>superChlorinate: ' + data.superChlorinate +
-                '<br>version: ' + data.version +
-                '<br>name: ' + data.name +          
-                '<br>Status: ' + data.status +
-                '<p>');
+                    '<br>[Pool/Default] Output (%): ' + data.outputPercent + '%' +
+                    '<br>Spa Output (%): ' + data.outputSpaPercent + '%' +
+                    '<br>Output Level: ' + data.outputLevel +
+                    '<br>superChlorinate: ' + data.superChlorinate +
+                    '<br>version: ' + data.version +
+                    '<br>name: ' + data.name +
+                    '<br>Status: ' + data.status +
+                    '<p>');
 
         }
 
@@ -164,22 +164,23 @@ $(function () {
         var i = 1;
 
         for (i; i < data.length; i++) {
+            if (data[i] != null) {
+                if (data[i].MODE == "Schedule") {
+                    $('#schedules').append('Schedule #: ' + data[i].ID +
+                            '<br>Circuit: ' + data[i].CIRCUIT +
+                            '<br>Start Time: ' + data[i].START_TIME +
+                            '<br>End Time: ' + data[i].END_TIME +
+                            '<br>Days: ' + data[i].DAYS +
+                            '<p>')
 
-            if (data[i].MODE == "Schedule") {
-                $('#schedules').append('Schedule #: ' + data[i].ID +
-                    '<br>Circuit: ' + data[i].CIRCUIT +
-                    '<br>Start Time: ' + data[i].START_TIME +
-                    '<br>End Time: ' + data[i].END_TIME +
-                    '<br>Days: ' + data[i].DAYS +
-                    '<p>')
+                } else //Egg timer
+                {
+                    $('#eggTimer').append('Schedule #: ' + data[i].ID +
+                            '<br>Circuit: ' + data[i].CIRCUIT +
+                            '<br>Duration: ' + data[i].DURATION +
+                            '<p>')
 
-            } else //Egg timer
-            {
-                $('#eggTimer').append('Schedule #: ' + data[i].ID +
-                    '<br>Circuit: ' + data[i].CIRCUIT +
-                    '<br>Duration: ' + data[i].DURATION +
-                    '<p>')
-
+                }
             }
         }
 
@@ -225,7 +226,7 @@ $(function () {
 
 
         switch (data.poolHeatMode) {
-        case 0: //Off
+            case 0: //Off
             {
                 $('#poolHeatModeOff').prop('checked', true);
                 $('#poolHeatModeHeater').prop('checked', false);
@@ -233,7 +234,7 @@ $(function () {
                 $('#poolHeatModeSolarOnly').prop('checked', false);
                 break;
             }
-        case 1: //Heater
+            case 1: //Heater
             {
                 $('#poolHeatModeOff').prop('checked', false);
                 $('#poolHeatModeHeater').prop('checked', true);
@@ -241,7 +242,7 @@ $(function () {
                 $('#poolHeatModeSolarOnly').prop('checked', false);
                 break;
             }
-        case 2: //Solar Pref
+            case 2: //Solar Pref
             {
                 $('#poolHeatModeOff').prop('checked', false);
                 $('#poolHeatModeHeater').prop('checked', false);
@@ -249,7 +250,7 @@ $(function () {
                 $('#poolHeatModeSolarOnly').prop('checked', false);
                 break;
             }
-        case 3: //Solar Only
+            case 3: //Solar Only
             {
                 $('#poolHeatModeOff').prop('checked', false);
                 $('#poolHeatModeHeater').prop('checked', false);
@@ -262,7 +263,7 @@ $(function () {
 
 
         switch (data.spaHeatMode) {
-        case 0: //Off
+            case 0: //Off
             {
                 $('#spaHeatModeOff').prop('checked', true);
                 $('#spaHeatModeHeater').prop('checked', false);
@@ -270,7 +271,7 @@ $(function () {
                 $('#spaHeatModeSolarOnly').prop('checked', false);
                 break;
             }
-        case 1: //Heater
+            case 1: //Heater
             {
                 $('#spaHeatModeOff').prop('checked', false);
                 $('#spaHeatModeHeater').prop('checked', true);
@@ -278,7 +279,7 @@ $(function () {
                 $('#spaHeatModeSolarOnly').prop('checked', false);
                 break;
             }
-        case 2: //Solar Pref
+            case 2: //Solar Pref
             {
                 $('#spaHeatModeOff').prop('checked', false);
                 $('#spaHeatModeHeater').prop('checked', false);
@@ -286,7 +287,7 @@ $(function () {
                 $('#spaHeatModeSolarOnly').prop('checked', false);
                 break;
             }
-        case 3: //Solar Only
+            case 3: //Solar Only
             {
                 $('#spaHeatModeOff').prop('checked', false);
                 $('#spaHeatModeHeater').prop('checked', false);
@@ -350,7 +351,8 @@ $(function () {
 
     function setEquipmentStatus(equipment) {
         socket.emit('toggleCircuit', equipment)
-    };
+    }
+    ;
 
     socket.on('circuit', function (data) {
         //console.log(data)
