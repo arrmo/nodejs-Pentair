@@ -1,32 +1,34 @@
 {
-    "name": "nodejs-pentair",
-    "version": "0.1.11",
-    "description": "NodeJS program to read and write to the Pentair serial bus.",
-    "main": "index.js",
-    "scripts": {"start":"node index.js",
-        "test": "echo \"Error: no test specified\" && exit 1"
-    },
-    "repository": {
-        "type": "git",
-        "url": "git+https://github.com/tagyoureit/nodejs-Pentair.git"
-    },
-    "keywords": [
+  "name": "nodejs-pentair",
+  "version": "0.1.11",
+  "description": "NodeJS program to read and write to the Pentair serial bus.",
+  "main": "index.js",
+  "scripts": {
+    "start": "node index.js",
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/tagyoureit/nodejs-Pentair.git"
+  },
+  "keywords": [
     "Pentair"
   ],
-    "author": "Russ Goldin",
-    "license": "ISC",
-    "bugs": {
-        "url": "https://github.com/tagyoureit/nodejs-Pentair/issues"
-    },
-    "homepage": "https://github.com/tagyoureit/nodejs-Pentair#readme",
-    "dependencies": {
-        "dateformat": "^1.0.12",
-        "express": "^4.14.0",
-        "serialport": "^4.0.1",
-        "socket.io": "^1.4.8",
-        "winston": "^2.2.0",
-        "nanotimer": "^0.3.14",
-        "net": "latest",
-        "request": "^2.75.0"
-    }
+  "author": "Russ Goldin",
+  "license": "ISC",
+  "bugs": {
+    "url": "https://github.com/tagyoureit/nodejs-Pentair/issues"
+  },
+  "homepage": "https://github.com/tagyoureit/nodejs-Pentair#readme",
+  "dependencies": {
+    "dateformat": "^1.0.12",
+    "dequeue": "^1.0.5",
+    "express": "^4.14.0",
+    "nanotimer": "^0.3.14",
+    "net": "latest",
+    "request": "^2.75.0",
+    "serialport": "^4.0.1",
+    "socket.io": "^1.4.8",
+    "winston": "^2.2.0"
+  }
 }
