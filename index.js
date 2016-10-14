@@ -614,7 +614,7 @@ settingsStr += '\n //-------  END EQUIPMENT SETUP -----------\n\n';
 
 logger.debug(settingsStr);
 //return a given equipment name given the circuit # 0-16++
-function circuitArrStr(equip) {
+/*function circuitArrStr(equip) {
     equip = equip - 1; //because equip starts at 1 but array starts at 0
     if (equip < 8) {
         return circuitArr[0][equip]
@@ -624,7 +624,7 @@ function circuitArrStr(equip) {
         return circuitArr[2][equip - 16]
     }
     return 'Error';
-}
+}*/
 
 //Used to count all items in array 
 //countObjects(circuitArr) will count all items provided in config.json
@@ -685,7 +685,7 @@ function iterateOverArrayOfArrays() {
         bufferToProcess = bufferToProcess.concat(bufferArrayOfArrays.shift())
 
     }
-    if (bufferToProcess.length == 32)
+    if (bufferToProcess.length % 16 == 0)
     {
         //this logic is here because many of the longer Intellitouch controller status packets come through in chunks of 32 bits
         //eg  
@@ -926,7 +926,7 @@ function decode(data, counter, packetType) {
                     logger.info('Msg# %s   Discovered initial system settings: ', counter, currentStatus)
                     logger.verbose('\n ', decodeHelper.printStatus(data));
                     //Loop through the three bits that start at 3rd (and 4th/5th) bit in the data payload
-                    for (var i = 0; i < circuitArr.length; i++) {
+                   /* for (var i = 0; i < circuitArr.length; i++) {
 //loop through all physical circuits within each of the bits
                         for (j = 0; j < circuitArr[i].length; j++) {
 //get rid of next two lines?
@@ -936,7 +936,7 @@ function decode(data, counter, packetType) {
 
                             currentCircuitArrObj[j + (i * 8) + 1].status = (equip & (1 << (j))) >> j ? "on" : "off"
                         }
-                    }
+                    }*/
 
                     var circuitStr = '';
                     //logger.info('Msg# %s  Initial circuits status discovered', counter)
@@ -945,7 +945,7 @@ function decode(data, counter, packetType) {
                             circuitStr += currentCircuitArrObj[i].name + ' : ' + currentCircuitArrObj[i].status + '\n'
                         }
                     }
-                    logger.info('Msg# %s: Circuits discovered: \n %s', counter, circuitStr)
+                    logger.info('Msg# %s: Circuit state discovered: \n %s', counter, circuitStr)
 
 
                     emit();
@@ -957,7 +957,7 @@ function decode(data, counter, packetType) {
 
 //the following is a copy of the array.  We will update it and then compare it back to the currentCircuitArrObj  
                         var circuitArrObj = JSON.parse(JSON.stringify(currentCircuitArrObj));
-                        for (var i = 0; i < circuitArr.length; i++) {
+                  /*      for (var i = 0; i < circuitArr.length; i++) {
 //loop through all physical circuits within each of the bits
                             for (j = 0; j < circuitArr[i].length; j++) {
 //delete the next line?
@@ -965,7 +965,7 @@ function decode(data, counter, packetType) {
 
                                 circuitArrObj[j + (i * 8) + 1].status = (equip & (1 << (j))) >> j ? "on" : "off"
                             }
-                        }
+                        }*/
 
 
                         logger.info('Msg# %s   System Status changed: %s', counter, currentStatus.whatsDifferent(status))
@@ -1163,7 +1163,7 @@ function decode(data, counter, packetType) {
                     logger.verbose('Msg# %s  Custom Circuit Name Decoded: "%s"', counter, customName)
                 }
 
-                customNameArr[data[4]] = customName;
+                customNameArr[data[6]] = customName;
                 //display custom names when we reach the last circuit
                 if (data[6] == 9) {
                     logger.info('\n  Custom Circuit Names retrieved from configuration: ', customNameArr)
@@ -1211,7 +1211,7 @@ function decode(data, counter, packetType) {
 //-(8*whichCircuit) because this will subtract 0, 8 or 16 from the index so each secondary index will start at 0
 
 //array
-                if (data[namePacketFields.NAME] < 200) {
+               /* if (data[namePacketFields.NAME] < 200) {
                     circuitArr[whichCircuit][data[namePacketFields.NUMBER] - (8 * whichCircuit) - 1] = strCircuitName[data[namePacketFields.NAME]];
                 } else {
                     if (logConfigMessages)
@@ -1221,7 +1221,7 @@ function decode(data, counter, packetType) {
 
                 if (logConfigMessages)
                     logger.debug('circuit name for %s: %s', data[namePacketFields.NUMBER], strCircuitName[data[namePacketFields.NAME]])
-
+*/
                 //arrayObj
                 if (data[namePacketFields.NUMBER] != null) { //|| data[namePacketFields.NUMBER] != undefined) {
                     if (data[namePacketFields.NAME] < 200) {
@@ -1250,26 +1250,27 @@ function decode(data, counter, packetType) {
             }
 
             case 17: // Get Schedules
-            {
+            {   //byte:      0  1  2  3  4 5 6 7 8  9 10 11  12 13 14
+                //example: 165,16,15,16,17,7,1,6,9,25,15,55,255,2, 90
                 var schedule = {};
-                schedule.ID = data[4];
-                var whichCircuit = 0;
+                schedule.ID = data[6];
+           /*     var whichCircuit = 0;
                 if (data[7] < 8) {
                     whichCircuit = 0; //8 bits for first mode byte
                 } else if (data[7] >= 8 && data[7] < 16) {
                     (whichCircuit = 1) //8 bits for 2nd mode byte
                 } else
-                    (whichCircuit = 2); //8 bits for 3rd mode byte
-                schedule.CIRCUIT = circuitArr[whichCircuit][data[5] - (8 * whichCircuit) - 1];
+                    (whichCircuit = 2); //8 bits for 3rd mode byte*/
+        schedule.CIRCUIT = currentCircuitArrObj[data[7]].name; //Correct???
                 if (data[8] == 25) //25 = Egg Timer 
                 {
                     schedule.MODE = 'Egg Timer'
-                    schedule.DURATION = data[8] + ':' + data[9];
+                    schedule.DURATION = data[10] + ':' + data[11];
                 } else {
                     schedule.MODE = 'Schedule'
                     schedule.DURATION = 'n/a'
-                    schedule.START_TIME = data[6] + ':' + data[7];
-                    schedule.END_TIME = data[8] + ':' + data[9];
+                    schedule.START_TIME = data[8] + ':' + data[9];
+                    schedule.END_TIME = data[10] + ':' + data[11];
                     schedule.DAYS = '';
                     if (data[12] == 255) {
                         schedule.DAYS += 'EVERY DAY'
@@ -1299,7 +1300,7 @@ function decode(data, counter, packetType) {
                     logger.silly('\nMsg# %s  Schedule packet %s', counter, JSON.stringify(data))
                 if (schedule.MODE == 'Egg Timer') {
                     if (logConfigMessages)
-                        logger.info('Msg# %s  Schedule: ID:%s  CIRCUIT:(%s)%s  MODE:%s  DURATION:%s  ', counter, schedule.ID, data[7], schedule.CIRCUIT, schedule.MODE, schedule.DURATION)
+                        logger.info('Msg# %s  Schedule: ID:%s  CIRCUIT:(%s)%s  MODE:%s  DURATION:%s  ', counter, schedule.ID, data[6], schedule.CIRCUIT, schedule.MODE, schedule.DURATION)
                 } else {
                     if (logConfigMessages)
                         logger.info('Msg# %s  Schedule: ID:%s  CIRCUIT:(%s)%s  MODE:%s  START_TIME:%s  END_TIME:%s  DAYS:(%s)%s', counter, schedule.ID, data[7], schedule.CIRCUIT, schedule.MODE, schedule.START_TIME, schedule.END_TIME, data[12], schedule.DAYS)
