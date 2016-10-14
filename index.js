@@ -657,10 +657,10 @@ var bufferArrayOfArrays = new Dequeue();
 
 
 sp.on('data', function (data) {
-    //Push the incoming array onto the end of the arrays
+    //Push the incoming array onto the end of the dequeue array
 
     bufferArrayOfArrays.push(Array.prototype.slice.call(data));
-
+    
     if (!processingBuffer)
         iterateOverArrayOfArrays();
 });
@@ -668,24 +668,42 @@ sp.on('data', function (data) {
 
 function iterateOverArrayOfArrays() {
 
-    processingBuffer = true; //we don't want this function to run asynchronously beyond this point or it will start to process the same array multiple times
-
-    if (bufferToProcess.length == 0) {
-        bufferToProcess = bufferArrayOfArrays.shift()  //move the first element from Array of Arrays to bufferToProcess
-
-    } else
-    {
-        bufferToProcess = bufferToProcess.concat(bufferArrayOfArrays.shift())
-
-    }
-    if (logMessageDecoding)
-        logger.debug('iOAOA: Packet being analyzed: %s', bufferToProcess);
-
     var chatter = []; //a {potential} message we have found on the bus
     var packetType;
     var preambleStd = [255, 165];
     var preambleChlorinator = [16, 2]
     var breakLoop = false
+
+    processingBuffer = true; //we don't want this function to run asynchronously beyond this point or it will start to process the same array multiple times
+
+    if (bufferToProcess.length == 0) {
+        bufferToProcess = bufferArrayOfArrays.shift()  //move the first element from Array of Arrays to bufferToProcess
+
+    }
+    else
+    {
+        bufferToProcess = bufferToProcess.concat(bufferArrayOfArrays.shift())
+
+    }
+    if (bufferToProcess.length == 32)
+    {
+        //this logic is here because many of the longer Intellitouch controller status packets come through in chunks of 32 bits
+        //eg  
+        //[255,255,255,255,255,255,255,255,0,255,165,16,15,16,2,29,5,50,0,64,0,0,0,0,0,0,3,0,64,4,86,86]
+        //[32,0,61,58,0,0,6,0,0,126,138,0,13,4,15]
+        //Instead of going through this logic twice, let's be proactive.
+        //We can simply bypass this loop because next time we come here the bufferToProcess.concat will merge the packets
+        //Is this the same on all O/S?  This is from a RasPi 3.
+        console.log('\n\n')
+        logger.debug('iOAOA: Packet analysis delayed because a partial packet is in the queue.')
+        breakLoop = true
+    }else
+    {
+    if (logMessageDecoding)
+        console.log('\n\n')
+        logger.debug('iOAOA: Packet being analyzed: %s', bufferToProcess);
+    }
+
 
     while (bufferToProcess.length > 0 && !breakLoop) {
         if (preambleStd[0] == bufferToProcess[0] && preambleStd[1] == bufferToProcess[1]) //match on pump or controller packet
@@ -784,133 +802,6 @@ function iterateOverArrayOfArrays() {
 
 }
 
-
-
-function interimBufferConcat(data) {
-//var dataLen = interimBuffer.length + data.length
-//console.log('length interim: %s  data: %s', interimBuffer.length,  data.length)
-    interimBuffer = Array.prototype.concat(interimBuffer, data)  //here is where we store all incoming data
-    //console.log('interimBuffer: ', interimBuffer)
-    logger.info('IBC: incoming data %s \n concat\'d to interimBuffer: %s \n result: %s ', data, interimBuffer)
-
-
-    if (!processingBuffer) {
-//1. remove (splice) all elements from incoming data (interimBuffer) array and 
-//2. concat (append) this to what we have already processed
-        bufferToProcess = Array.prototype.concat(bufferToProcess, interimBuffer);
-        interimBuffer = [];
-        iterateOverBufferArr(bufferToProcess);
-        logger.info('IBC: interimBuffer spliced (should be 0): ', interimBuffer)
-        logger.info('IBC: sending buffer to be processed: %s ', bufferToProcess)
-    } else
-    {
-        logger.warn('IBC: data received when processing other messages.  Storing interimBuffer %s: ', interimBuffer)
-    }
-
-
-    /*if (interimBuffer.length > 250)
-     {
-     interimBuffer.splice(0)
-     console.log('Resetting buffer')
-     }*/
-}
-
-function iterateOverBufferArr(bufferArr) {
-
-    logger.info('IOB: iterate over array with %s ', bufferArr)
-
-    if (bufferArr.length > 10 && !processingBuffer) {
-        processingBuffer = true; //we don't want this function to run asynchronously beyond this point or it will start to process the same array multiple times
-        var chatter = []; //a {potential} message we have found on the bus
-        var packetType;
-        var i = 0;
-        var preambleStd = [255, 165];
-        var preambleChlorinator = [16, 2]
-        var stdMatch = false;
-        var chlorinatorMatch = false;
-        if (preambleStd[0] == bufferArr[0] && preambleStd[1] == bufferArr[1]) {
-            stdMatch = true;
-        } else if (preambleChlorinator[0] == bufferArr[0] && preambleChlorinator[1] == bufferArr[1]) {
-            chlorinatorMatch = true;
-        }
-        while (!(stdMatch || chlorinatorMatch || bufferArr.length == 0))
-
-        {
-            bufferArr.shift();
-            if (preambleStd[0] == bufferArr[0] && preambleStd[1] == bufferArr[1]) {
-                stdMatch = true;
-            } else if (preambleChlorinator[0] == bufferArr[0] && preambleChlorinator[1] == bufferArr[1]) {
-                chlorinatorMatch = true;
-            }
-        }
-
-        if (stdMatch)
-        {
-
-            var chatterlen = bufferArr[6] + 6 + 2; //chatterlen is length of following message not including checksum (need to add 6 for start of chatter, 2 for checksum)
-            //   0,   1,      2,      3,    4, 5,        6
-            //(255,165,preambleByte,Dest,Src,cmd,chatterlen) and 2 for checksum)
-
-            if (chatterlen == undefined || (bufferArr.length - chatterlen) <= 0) {
-//reset the buffer starting with the current partial message
-                if (logMessageDecoding)
-                    logger.silly('Msg#  n/a   Incomplete message at end of buffer.');
-
-
-            } else
-            {
-                msgCounter += 1;
-                bufferArr.shift(); //remove the 255 byte
-                chatter = bufferArr.splice(0, chatterlen); //splice modifies the existing buffer.  We remove chatter from the bufferarray.
-                if (((chatter[2] == ctrl.PUMP1 || chatter[2] == ctrl.PUMP2)) || chatter[3] == ctrl.PUMP1 || chatter[3] == ctrl.PUMP2) {
-                    packetType = 'pump'
-                } else {
-                    packetType = 'controller';
-                    preambleByte = chatter[1]; //not sure why we need this, but the 165,XX packet seems to change.  On my system it used to be 165,10 and then switched to 165,16.  Not sure why!  But we dynamically adjust it so it works for any value.  It is also different for the pumps (should always be 0 for pump messages)
-                }
-                logger.info('Msg# %s  Found incoming %s packet: %s', msgCounter, packetType, chatter)
-
-                //logger.warn('chatter %s: ', chatter)
-                //logger.warn('bufferArr before splice: %s', bufferArr)
-
-
-                //logger.warn('Interimbufferarr before splice: %s', interimBufferArr)
-
-                //interimBufferArr = bufferArr.concat(interimBufferArr);  //concat (shallow copy) cthe existing bufferrArr + interimBufferArr (if anything was written here).  
-                //logger.warn('Interimbufferarr AFTER splice: %s \n\n', interimBufferArr)
-
-                processChecksum(chatter, msgCounter, packetType);
-
-            }
-            stdMatch = false  //need this to re-evaluate the while loop with a fresh set of eyes... err, variables.. in case this isn't the only packet in the bufferToProcess
-        } else if (chlorinatorMatch)
-        {
-//example packet:
-//byte  0  1   2   3  4    5   6  7
-//len                             8
-//     16  2  80  20  2  120  16  3
-
-            var j = 0; //start looking from the beginning of the packet just in case the buffer ends early  
-            while ((!(bufferArr[j] == 16 && bufferArr[j + 1] == 3)) && j < bufferArr.length)
-            {
-                j++
-            }
-            if (j < bufferArr.length)  //if j is less than the buffer, we will do nothing (no else statement), and let the on function run with a longer buffer
-            {
-                j += 2; //add 2 for the [16,3]
-                chatter = bufferArr.splice(0, j) //remove elements 0->j in the bufferArr
-                logger.info('Msg# %s  Found incoming chlorinator packet: %s', msgCounter, chatter)
-                //interimBufferArr = bufferArr.concat(interimBufferArr);  //concat (shallow copy) cthe existing bufferrArr + interimBufferArr (if anything was written here).  
-
-                processChecksum(chatter, msgCounter, 'chlorinator');
-
-            }
-            chlorinatorMatch = false  //need this to re-evaluate the while loop with a fresh set of eyes... err, variables.. in case this isn't the only packet in the bufferToProcess
-        }
-
-    }
-    processingBuffer = false;
-}
 
 
 function processChecksum(chatter, counter, packetType) {
