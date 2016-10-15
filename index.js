@@ -7,7 +7,7 @@ console.log('\033[2J'); //clear the console
 var dateFormat = require('dateformat');
 var Dequeue = require('dequeue')
 var decodeHelper = require('./lib/decode.js');
-var version = '0.1.11 alpha 3'
+var version = '0.1.12 alpha 5'
 //-------  EQUIPMENT SETUP -----------
 
 //ONE and only 1 of the following should be set to 1.
@@ -615,16 +615,16 @@ settingsStr += '\n //-------  END EQUIPMENT SETUP -----------\n\n';
 logger.debug(settingsStr);
 //return a given equipment name given the circuit # 0-16++
 /*function circuitArrStr(equip) {
-    equip = equip - 1; //because equip starts at 1 but array starts at 0
-    if (equip < 8) {
-        return circuitArr[0][equip]
-    } else if (equip >= 8 && equip < 16) {
-        return circuitArr[1][equip - 8]
-    } else {
-        return circuitArr[2][equip - 16]
-    }
-    return 'Error';
-}*/
+ equip = equip - 1; //because equip starts at 1 but array starts at 0
+ if (equip < 8) {
+ return circuitArr[0][equip]
+ } else if (equip >= 8 && equip < 16) {
+ return circuitArr[1][equip - 8]
+ } else {
+ return circuitArr[2][equip - 16]
+ }
+ return 'Error';
+ }*/
 
 //Used to count all items in array 
 //countObjects(circuitArr) will count all items provided in config.json
@@ -660,7 +660,7 @@ sp.on('data', function (data) {
     //Push the incoming array onto the end of the dequeue array
 
     bufferArrayOfArrays.push(Array.prototype.slice.call(data));
-    
+
     if (!processingBuffer)
         iterateOverArrayOfArrays();
 });
@@ -679,8 +679,7 @@ function iterateOverArrayOfArrays() {
     if (bufferToProcess.length == 0) {
         bufferToProcess = bufferArrayOfArrays.shift()  //move the first element from Array of Arrays to bufferToProcess
 
-    }
-    else
+    } else
     {
         bufferToProcess = bufferToProcess.concat(bufferArrayOfArrays.shift())
 
@@ -697,10 +696,10 @@ function iterateOverArrayOfArrays() {
         console.log('\n\n')
         logger.debug('iOAOA: Packet analysis delayed because a partial packet is in the queue.')
         breakLoop = true
-    }else
+    } else
     {
-    if (logMessageDecoding)
-        console.log('\n\n')
+        if (logMessageDecoding)
+            console.log('\n\n')
         logger.debug('iOAOA: Packet being analyzed: %s', bufferToProcess);
     }
 
@@ -926,17 +925,17 @@ function decode(data, counter, packetType) {
                     logger.info('Msg# %s   Discovered initial system settings: ', counter, currentStatus)
                     logger.verbose('\n ', decodeHelper.printStatus(data));
                     //Loop through the three bits that start at 3rd (and 4th/5th) bit in the data payload
-                   /* for (var i = 0; i < circuitArr.length; i++) {
-//loop through all physical circuits within each of the bits
-                        for (j = 0; j < circuitArr[i].length; j++) {
-//get rid of next two lines?
-                            var tempFeature = circuitArr[i][j]; //name of circuit
-                            equip = data[controllerStatusPacketFields.EQUIP1 + i]
-
-
-                            currentCircuitArrObj[j + (i * 8) + 1].status = (equip & (1 << (j))) >> j ? "on" : "off"
-                        }
-                    }*/
+                    /* for (var i = 0; i < circuitArr.length; i++) {
+                     //loop through all physical circuits within each of the bits
+                     for (j = 0; j < circuitArr[i].length; j++) {
+                     //get rid of next two lines?
+                     var tempFeature = circuitArr[i][j]; //name of circuit
+                     equip = data[controllerStatusPacketFields.EQUIP1 + i]
+                     
+                     
+                     currentCircuitArrObj[j + (i * 8) + 1].status = (equip & (1 << (j))) >> j ? "on" : "off"
+                     }
+                     }*/
 
                     var circuitStr = '';
                     //logger.info('Msg# %s  Initial circuits status discovered', counter)
@@ -948,7 +947,7 @@ function decode(data, counter, packetType) {
                     logger.info('Msg# %s: Circuit state discovered: \n %s', counter, circuitStr)
 
 
-                    emit();
+                    emit('config');
                 } else {
 
 //Check if we have the same data
@@ -957,15 +956,15 @@ function decode(data, counter, packetType) {
 
 //the following is a copy of the array.  We will update it and then compare it back to the currentCircuitArrObj  
                         var circuitArrObj = JSON.parse(JSON.stringify(currentCircuitArrObj));
-                  /*      for (var i = 0; i < circuitArr.length; i++) {
-//loop through all physical circuits within each of the bits
-                            for (j = 0; j < circuitArr[i].length; j++) {
-//delete the next line?
-                                equip = data[controllerStatusPacketFields.EQUIP1 + i]
-
-                                circuitArrObj[j + (i * 8) + 1].status = (equip & (1 << (j))) >> j ? "on" : "off"
-                            }
-                        }*/
+                        /*      for (var i = 0; i < circuitArr.length; i++) {
+                         //loop through all physical circuits within each of the bits
+                         for (j = 0; j < circuitArr[i].length; j++) {
+                         //delete the next line?
+                         equip = data[controllerStatusPacketFields.EQUIP1 + i]
+                         
+                         circuitArrObj[j + (i * 8) + 1].status = (equip & (1 << (j))) >> j ? "on" : "off"
+                         }
+                         }*/
 
 
                         logger.info('Msg# %s   System Status changed: %s', counter, currentStatus.whatsDifferent(status))
@@ -991,7 +990,7 @@ function decode(data, counter, packetType) {
                         currentStatusBytes = JSON.parse(JSON.stringify(data))
                         currentCircuitArrObj = JSON.parse(JSON.stringify(circuitArrObj));
                         decoded = true;
-                        emit();
+                        emit('config');
                     } else {
 
                         if (logDuplicateMessages)
@@ -1088,7 +1087,7 @@ function decode(data, counter, packetType) {
                                 logger.verbose('Msg# %s   Pump %s status changed: ', counter, status.pump, currentPumpStatus[pumpNum].whatsDifferent(status));
                             currentPumpStatus[pumpNum] = pumpStatus;
                             //currentPumpStatusPacket[status.pump] = data;
-                            emit();
+                            emit('pump')
                         }
                         //}
                     }
@@ -1119,7 +1118,7 @@ function decode(data, counter, packetType) {
                         logger.verbose('Msg# %s   Pool/Spa heat set point changed:  pool heat mode: %s @ %s degrees; spa heat mode %s at %s degrees', counter, heatModeStr[status.poolHeatMode], status.poolSetPoint, heatModeStr[status.spaHeatMode], status.spaSetPoint);
                         logger.info('Msg# %s  Change in Pool/Spa Heat Mode:  %s', counter, currentHeat.whatsDifferent(status))
                         currentHeat = status;
-                        emit();
+                        emit('heat');
                     }
                 }
 
@@ -1169,7 +1168,7 @@ function decode(data, counter, packetType) {
                     logger.info('\n  Custom Circuit Names retrieved from configuration: ', customNameArr)
                 }
 
-                emit();
+                emit('circuit');
                 decoded = true;
                 break;
             }
@@ -1211,17 +1210,17 @@ function decode(data, counter, packetType) {
 //-(8*whichCircuit) because this will subtract 0, 8 or 16 from the index so each secondary index will start at 0
 
 //array
-               /* if (data[namePacketFields.NAME] < 200) {
-                    circuitArr[whichCircuit][data[namePacketFields.NUMBER] - (8 * whichCircuit) - 1] = strCircuitName[data[namePacketFields.NAME]];
-                } else {
-                    if (logConfigMessages)
-                        logger.silly('mapping %s to %s', strCircuitName[data[namePacketFields.NAME]], customNameArr[data[namePacketFields.NAME] - 200]);
-                    circuitArr[whichCircuit][data[namePacketFields.NUMBER] - (8 * whichCircuit) - 1] = customNameArr[data[namePacketFields.NAME] - 200];
-                }
-
-                if (logConfigMessages)
-                    logger.debug('circuit name for %s: %s', data[namePacketFields.NUMBER], strCircuitName[data[namePacketFields.NAME]])
-*/
+                /* if (data[namePacketFields.NAME] < 200) {
+                 circuitArr[whichCircuit][data[namePacketFields.NUMBER] - (8 * whichCircuit) - 1] = strCircuitName[data[namePacketFields.NAME]];
+                 } else {
+                 if (logConfigMessages)
+                 logger.silly('mapping %s to %s', strCircuitName[data[namePacketFields.NAME]], customNameArr[data[namePacketFields.NAME] - 200]);
+                 circuitArr[whichCircuit][data[namePacketFields.NUMBER] - (8 * whichCircuit) - 1] = customNameArr[data[namePacketFields.NAME] - 200];
+                 }
+                 
+                 if (logConfigMessages)
+                 logger.debug('circuit name for %s: %s', data[namePacketFields.NUMBER], strCircuitName[data[namePacketFields.NAME]])
+                 */
                 //arrayObj
                 if (data[namePacketFields.NUMBER] != null) { //|| data[namePacketFields.NUMBER] != undefined) {
                     if (data[namePacketFields.NAME] < 200) {
@@ -1244,7 +1243,7 @@ function decode(data, counter, packetType) {
                 if (data[namePacketFields.NUMBER] == 20)
                     logger.info('\n  Circuit Array Discovered from configuration: \n[[%s][[]\n', circuitArr.join('],\n['))
 
-                emit();
+                emit('circuit');
                 decoded = true;
                 break;
             }
@@ -1254,14 +1253,14 @@ function decode(data, counter, packetType) {
                 //example: 165,16,15,16,17,7,1,6,9,25,15,55,255,2, 90
                 var schedule = {};
                 schedule.ID = data[6];
-           /*     var whichCircuit = 0;
-                if (data[7] < 8) {
-                    whichCircuit = 0; //8 bits for first mode byte
-                } else if (data[7] >= 8 && data[7] < 16) {
-                    (whichCircuit = 1) //8 bits for 2nd mode byte
-                } else
-                    (whichCircuit = 2); //8 bits for 3rd mode byte*/
-        schedule.CIRCUIT = currentCircuitArrObj[data[7]].name; //Correct???
+                /*     var whichCircuit = 0;
+                 if (data[7] < 8) {
+                 whichCircuit = 0; //8 bits for first mode byte
+                 } else if (data[7] >= 8 && data[7] < 16) {
+                 (whichCircuit = 1) //8 bits for 2nd mode byte
+                 } else
+                 (whichCircuit = 2); //8 bits for 3rd mode byte*/
+                schedule.CIRCUIT = currentCircuitArrObj[data[7]].name; //Correct???
                 if (data[8] == 25) //25 = Egg Timer 
                 {
                     schedule.MODE = 'Egg Timer'
@@ -1369,7 +1368,7 @@ function decode(data, counter, packetType) {
                         currentChlorinatorStatus = chlorinatorStatus;
                         if (logChlorinator)
                             logger.info('Msg# %s   Initial chlorinator settings discovered: ', counter, JSON.stringify(currentChlorinatorStatus))
-                        emit();
+                        emit('chlorinator');
                     } else
                     if (currentChlorinatorStatus.equals(chlorinatorStatus)) {
                         if (logChlorinator)
@@ -1378,7 +1377,7 @@ function decode(data, counter, packetType) {
                         if (logChlorinator)
                             logger.verbose('Msg# %s   Chlorinator status changed: ', counter, currentChlorinatorStatus.whatsDifferent(chlorinatorStatus));
                         currentChlorinatorStatus = chlorinatorStatus;
-                        emit();
+                        emit('chlorinator');
                     }
                     decoded = true;
                     break;
@@ -1842,7 +1841,7 @@ function decode(data, counter, packetType) {
                     }
 
                     currentPumpStatus[pumpStatus.pump] = JSON.parse(JSON.stringify(pumpStatus));
-                    emit();
+                    emit('pump');
                 }
 
 
@@ -1994,7 +1993,7 @@ function decode(data, counter, packetType) {
                 if (logChlorinator)
                     logger.verbose('Msg# %s   Chlorinator status changed: ', counter, currentChlorinatorStatus.whatsDifferent(chlorinatorStatus));
                 currentChlorinatorStatus = chlorinatorStatus;
-                emit();
+                emit('chlorinator');
             }
         } else //need to set decoded to true or it will show up as NOT DECODED in the log.  Essentially, we are dropping it if we have an intellitouch.
         {
@@ -2457,36 +2456,70 @@ function pump2SafePumpModeDelay() {
     pump2Timer.setTimeout(pump2SafePumpMode, '', '50s')
 }
 
-function emit() {
+function emit(outputType) {
 
 
-    if (ISYController) {
-        ISYHelper.emit(ISYConfig, currentStatus, currentPumpStatus, currentChlorinatorStatus, NanoTimer, logger)
+
+    if (outputType == 'circuit' || outputType == 'all') {
+        io.sockets.emit('circuit',
+                currentCircuitArrObj
+                )
+        if (ISYController) {
+            ISYHelper.emit(ISYConfig, currentStatus, currentPumpStatus, currentChlorinatorStatus, NanoTimer, logger, outputType)
+        }
     }
 
-    io.sockets.emit('circuit',
-            currentCircuitArrObj
-            )
-    io.sockets.emit('config',
-            currentStatus
-            )
-    io.sockets.emit('pump',
-            currentPumpStatus
-            );
-    if (currentHeat != null) {
-        io.sockets.emit('heat',
-                currentHeat
-
-                );
-    }
-    if (currentSchedule.length > 3) {
-        io.sockets.emit('schedule',
-                currentSchedule)
+    if (outputType == 'config' || outputType == 'all') {
+        io.sockets.emit('config',
+                currentStatus
+                )
+        if (ISYController) {
+            ISYHelper.emit(ISYConfig, currentStatus, currentPumpStatus, currentChlorinatorStatus, NanoTimer, logger, outputType)
+        }
     }
 
-    if (currentChlorinatorStatus.saltPPM != 'undefined')
-        io.sockets.emit('chlorinator', currentChlorinatorStatus)
+    if (outputType == 'pump' || outputType == 'all') {
+        io.sockets.emit('pump',
+                currentPumpStatus
+                )
+        if (ISYController) {
+            ISYHelper.emit(ISYConfig, currentStatus, currentPumpStatus, currentChlorinatorStatus, NanoTimer, logger, outputType)
+        }
+    }
 
+    if (outputType == 'heat' || outputType == 'all') {
+        if (currentHeat != null) {
+            io.sockets.emit('heat',
+                    currentHeat
+                    )
+            if (ISYController) {
+                ISYHelper.emit(ISYConfig, currentStatus, currentPumpStatus, currentChlorinatorStatus, NanoTimer, logger, outputType)
+            }
+        }
+    }
+
+    if (outputType == 'schedule' || outputType == 'all') {
+        if (currentSchedule.length > 3) {
+            io.sockets.emit('schedule',
+                    currentSchedule)
+            if (ISYController) {
+                ISYHelper.emit(ISYConfig, currentStatus, currentPumpStatus, currentChlorinatorStatus, NanoTimer, logger, outputType)
+            }
+        }
+    }
+
+    if (outputType == 'chlorinator' || outputType == 'all') {
+        if (currentChlorinatorStatus.saltPPM != 'undefined')
+            io.sockets.emit('chlorinator', currentChlorinatorStatus)
+        if (ISYController) {
+            ISYHelper.emit(ISYConfig, currentStatus, currentPumpStatus, currentChlorinatorStatus, NanoTimer, logger, outputType)
+        }
+    }
+
+    if (outputType == 'search' || outputType == 'all') {
+        io.sockets.emit('searchResults',
+                'Input values and click start.  All values optional.  Please refer to https://github.com/tagyoureit/nodejs-Pentair/wiki/Broadcast for values.');
+    }
 }
 
 
@@ -2875,31 +2908,7 @@ io.on('connection', function (socket, error) {
     })
 
 
-
-
-
-
-    io.sockets.emit('circuit',
-            currentCircuitArrObj
-            );
-    io.sockets.emit('config',
-            currentStatus
-            );
-    io.sockets.emit('pump',
-            currentPumpStatus
-            );
-    if (currentHeat != null) {
-        io.sockets.emit('heat',
-                currentHeat
-                );
-    }
-    if (currentSchedule.length > 3) {
-        io.sockets.emit('schedule',
-                currentSchedule)
-    }
-
-    io.sockets.emit('searchResults',
-            'Input values and click start.  All values optional.  Please refer to https://github.com/tagyoureit/nodejs-Pentair/wiki/Broadcast for values.');
+    emit('all')
 })
         ;
 //---->  END SERVER CODE
