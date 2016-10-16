@@ -8,38 +8,7 @@ var dateFormat = require('dateformat');
 var Dequeue = require('dequeue')
 var decodeHelper = require('./lib/decode.js');
 var version = '0.1.12 alpha 5'
-//-------  EQUIPMENT SETUP -----------
 
-//ONE and only 1 of the following should be set to 1.
-var intellicom = 0; //set this to 1 if you have the IntelliComII, otherwise 0.
-var intellitouch = 1; //set this to 1 if you have the IntelliTouch, otherwise 0.
-var pumpOnly = 0; //set this to 1 if you ONLY have pump(s), otherwise 0.
-
-//1 or 0
-var ISYController = 0; //1 if you have an ISY, otherwise 0
-var chlorinator = 0; //set this to 1 if you have a chlorinator, otherwise 0.
-
-//only relevant if pumpOnly=1
-var numberOfPumps = 1; //this is only used with pumpOnly=1.  It will query 1 (or 2) pumps every 30 seconds for their status
-var safePumpOperation = true; //Set this to true if you want the app to run the pump for successive 1 minute operations; false if you want to set the timer on the pump directly.
-//-------  END EQUIPMENT SETUP -----------
-
-//-------  MISC NETWORK SETUP -----------
-// Setup for Network Connection (socat or nc)
-var netConnect = 0; //set this to 1 to use a remote (net) connection, 0 for direct serial connection;
-//-------  END MISC NETWORK SETUP -----------
-
-//-------  LOG SETUP -----------
-//Change the following log message levels as needed
-var loglevel = 1; //1=more, 0=less;  This will show more or less messages within the logType
-var logType = 'debug'; // one of { error: 0, warn: 1, info: 2, verbose: 3, debug: 4, silly: 5 }
-var logPumpMessages = 1; //variable if we want to output pump messages or not
-var logDuplicateMessages = 1; //variable if we want to output duplicate broadcast messages
-var logConsoleNotDecoded = 1; //variable to hide any unknown messages
-var logConfigMessages = 1; //variable to show/hide configuration messages
-var logMessageDecoding = 1; //variable to show messages regarding the buffer, checksum calculation, etc.
-var logChlorinator = 1; //variable to show messages from the chlorinator
-//-------  END EQUIPMENT SETUP -----------
 
 var bufferArr = []; //variable to process buffer.  interimBufferArr will be copied here when ready to process
 var interimBufferArr = []; //variable to hold all serialport.open data; incomind data is appended to this with each read
@@ -400,7 +369,37 @@ const ctrlString = {
     97: 'Pump2'
 }
 
+//-------  EQUIPMENT SETUP -----------
 
+//ONE and only 1 of the following should be set to 1.
+var intellicom; //set this to 1 if you have the IntelliComII, otherwise 0.
+var intellitouch; //set this to 1 if you have the IntelliTouch, otherwise 0.
+var pumpOnly; //set this to 1 if you ONLY have pump(s), otherwise 0.
+
+//1 or 0
+var ISYController; //1 if you have an ISY, otherwise 0
+var chlorinator; //set this to 1 if you have a chlorinator, otherwise 0.
+
+//only relevant if pumpOnly=1
+var numberOfPumps; //this is only used with pumpOnly=1.  It will query 1 (or 2) pumps every 30 seconds for their status
+//-------  END EQUIPMENT SETUP -----------
+
+//-------  MISC NETWORK SETUP -----------
+// Setup for Network Connection (socat or nc)
+var netConnect; //set this to 1 to use a remote (net) connection, 0 for direct serial connection;
+//-------  END MISC NETWORK SETUP -----------
+
+//-------  LOG SETUP -----------
+//Change the following log message levels as needed
+var loglevel; //1=more, 0=less;  This will show more or less messages within the logType
+var logType; // one of { error: 0, warn: 1, info: 2, verbose: 3, debug: 4, silly: 5 }
+var logPumpMessages; //variable if we want to output pump messages or not
+var logDuplicateMessages; //variable if we want to output duplicate broadcast messages
+var logConsoleNotDecoded; //variable to hide any unknown messages
+var logConfigMessages; //variable to show/hide configuration messages
+var logMessageDecoding; //variable to show messages regarding the buffer, checksum calculation, etc.
+var logChlorinator; //variable to show messages from the chlorinator
+//-------  END EQUIPMENT SETUP -----------
 
 var configurationFile = 'config.json';
 const fs = require('fs');
@@ -411,7 +410,6 @@ pumpOnly = configFile.Equipment.pumpOnly;
 ISYController = configFile.Equipment.ISYController;
 chlorinator = configFile.Equipment.chlorinator;
 numberOfPumps = configFile.Equipment.numberOfPumps;
-safePumpOperation = configFile.Equipment.safePumpOperation;
 netConnect = configFile.Network.netConnect;
 netPort = configFile.Network.netPort;
 netHost = configFile.Network.netHost;
@@ -423,6 +421,7 @@ logConsoleNotDecoded = configFile.Log.logConsoleNotDecoded;
 logConfigMessages = configFile.Log.logConfigMessages;
 logMessageDecoding = configFile.Log.logMessageDecoding;
 logChlorinator = configFile.Log.logChlorinator;
+
 /*
  for (var key in configFile.Equipment) {
  if (poolConfig.Pentair.hasOwnProperty(key)) {
@@ -592,7 +591,7 @@ settingsStr += '\n var intellitouch = ' + intellitouch;
 settingsStr += '\n var chlorinator = ' + chlorinator;
 settingsStr += '\n var pumpOnly = ' + pumpOnly;
 settingsStr += '\n var numberOfPumps = ' + numberOfPumps;
-settingsStr += '\n var safePumpOperation = ' + safePumpOperation;
+settingsStr += '\n var ISYController = ' + ISYController;
 settingsStr += '\n //-------  END EQUIPMENT SETUP -----------';
 settingsStr += '\n ';
 settingsStr += '\n //-------  MISC NETWORK SETUP -----------';
@@ -654,18 +653,13 @@ sp.on('open', function () {
 var interimBuffer = [];
 var bufferToProcess = [];
 var bufferArrayOfArrays = new Dequeue();
-
-
 sp.on('data', function (data) {
     //Push the incoming array onto the end of the dequeue array
 
     bufferArrayOfArrays.push(Array.prototype.slice.call(data));
-
     if (!processingBuffer)
         iterateOverArrayOfArrays();
 });
-
-
 function iterateOverArrayOfArrays() {
 
     var chatter = []; //a {potential} message we have found on the bus
@@ -693,16 +687,19 @@ function iterateOverArrayOfArrays() {
         //Instead of going through this logic twice, let's be proactive.
         //We can simply bypass this loop because next time we come here the bufferToProcess.concat will merge the packets
         //Is this the same on all O/S?  This is from a RasPi 3.
-        console.log('\n\n')
-        logger.debug('iOAOA: Packet analysis delayed because a partial packet is in the queue.')
+        if (logMessageDecoding) {
+            console.log('\n\n')
+            logger.debug('iOAOA: Packet analysis delayed because a partial packet is in the queue.')
+        }
         breakLoop = true
     } else
     {
         if (logMessageDecoding)
+        {
             console.log('\n\n')
-        logger.debug('iOAOA: Packet being analyzed: %s', bufferToProcess);
+            logger.debug('iOAOA: Packet being analyzed: %s', bufferToProcess);
+        }
     }
-
 
     while (bufferToProcess.length > 0 && !breakLoop) {
         if (preambleStd[0] == bufferToProcess[0] && preambleStd[1] == bufferToProcess[1]) //match on pump or controller packet
@@ -739,7 +736,6 @@ function iterateOverArrayOfArrays() {
                     logger.info('Msg# %s  Found incoming %s packet: %s', msgCounter, packetType, chatter)
 
                 processChecksum(chatter, msgCounter, packetType);
-
             }
             breakLoop = true;
         } else if (preambleChlorinator[0] == bufferToProcess[0] && preambleChlorinator[1] == bufferToProcess[1]
@@ -798,7 +794,6 @@ function iterateOverArrayOfArrays() {
      }
      */
     processingBuffer = false;
-
 }
 
 
@@ -924,18 +919,18 @@ function decode(data, counter, packetType) {
                     currentStatusBytes = JSON.parse(JSON.stringify(data));
                     logger.info('Msg# %s   Discovered initial system settings: ', counter, currentStatus)
                     logger.verbose('\n ', decodeHelper.printStatus(data));
-                    //Loop through the three bits that start at 3rd (and 4th/5th) bit in the data payload
-                    /* for (var i = 0; i < circuitArr.length; i++) {
-                     //loop through all physical circuits within each of the bits
-                     for (j = 0; j < circuitArr[i].length; j++) {
-                     //get rid of next two lines?
-                     var tempFeature = circuitArr[i][j]; //name of circuit
-                     equip = data[controllerStatusPacketFields.EQUIP1 + i]
-                     
-                     
-                     currentCircuitArrObj[j + (i * 8) + 1].status = (equip & (1 << (j))) >> j ? "on" : "off"
-                     }
-                     }*/
+
+
+                    for (var i = 0; i < 3; i++) {
+                        for (var j = 0; j < 8; j++) {
+                            if ((j + (i * 8) + 1) <= 20) {
+                                equip = data[controllerStatusPacketFields.EQUIP1 + i]
+                                if (logMessageDecoding)
+                                    logger.silly('Decode Case 2:   i: %s  j:  %s  j + (i * 8) + 1: %s   equip: %s', i, j, j + (i * 8) + 1, equip)
+                                currentCircuitArrObj[j + (i * 8) + 1].status = (equip & (1 << (j))) >> j ? "on" : "off"
+                            }
+                        }
+                    }
 
                     var circuitStr = '';
                     //logger.info('Msg# %s  Initial circuits status discovered', counter)
@@ -944,31 +939,25 @@ function decode(data, counter, packetType) {
                             circuitStr += currentCircuitArrObj[i].name + ' : ' + currentCircuitArrObj[i].status + '\n'
                         }
                     }
-                    logger.info('Msg# %s: Circuit state discovered: \n %s', counter, circuitStr)
+                    logger.info('Msg# %s: Circuit states discovered: \n %s', counter, circuitStr)
 
 
-                    emit('config');
+                    emit('config')
+                    emit('circuit')
                 } else {
 
-//Check if we have the same data
-//if (!data.equals(currentStatusBytes)) {
+
                     if (JSON.stringify(data) != JSON.stringify(currentStatusBytes)) {
 
-//the following is a copy of the array.  We will update it and then compare it back to the currentCircuitArrObj  
                         var circuitArrObj = JSON.parse(JSON.stringify(currentCircuitArrObj));
-                        /*      for (var i = 0; i < circuitArr.length; i++) {
-                         //loop through all physical circuits within each of the bits
-                         for (j = 0; j < circuitArr[i].length; j++) {
-                         //delete the next line?
-                         equip = data[controllerStatusPacketFields.EQUIP1 + i]
-                         
-                         circuitArrObj[j + (i * 8) + 1].status = (equip & (1 << (j))) >> j ? "on" : "off"
-                         }
-                         }*/
-
-
-                        logger.info('Msg# %s   System Status changed: %s', counter, currentStatus.whatsDifferent(status))
-
+                        for (var i = 0; i < 3; i++) {
+                            for (j = 0; j < 8; j++) {
+                                if ((j + (i * 8) + 1) <= 20) {
+                                    equip = data[controllerStatusPacketFields.EQUIP1 + i]
+                                    circuitArrObj[j + (i * 8) + 1].status = (equip & (1 << (j))) >> j ? "on" : "off"
+                                }
+                            }
+                        }
 
                         //THE LOOP IS BECAUSE THERE IS A BUG IN THE RECURSIVE LOOP.  It won't display the output.  Need to fix for objects embedded inside an array.
                         var results;
@@ -980,17 +969,14 @@ function decode(data, counter, packetType) {
                                 }
                             }
                         }
-//console.log('Msg# %s   What\'s Different with Circuits? (Need to fix): %s', counter, currentCircuitArrObj.whatsDifferent(circuitArrObj))
-
 
                         logger.verbose('Msg# %s: \n', counter, decodeHelper.printStatus(currentStatusBytes, data));
-                        //currentStatus = clone(status);
-                        //currentStatusBytes = data.slice(0);
                         currentStatus = JSON.parse(JSON.stringify(status));
                         currentStatusBytes = JSON.parse(JSON.stringify(data))
                         currentCircuitArrObj = JSON.parse(JSON.stringify(circuitArrObj));
                         decoded = true;
-                        emit('config');
+                        emit('config')
+                        emit('circuit')
                     } else {
 
                         if (logDuplicateMessages)
@@ -1239,10 +1225,13 @@ function decode(data, counter, packetType) {
 
 
 
-
-                if (data[namePacketFields.NUMBER] == 20)
-                    logger.info('\n  Circuit Array Discovered from configuration: \n[[%s][[]\n', circuitArr.join('],\n['))
-
+                if (data[namePacketFields.NUMBER] == 20) {
+                    var circuitStr = '';
+                    for (var i = 1; i <= 20; i++) {
+                        circuitStr += 'Circuit ' + currentCircuitArrObj[i].number + ': ' + currentCircuitArrObj[i].name + '\n'
+                    }
+                    logger.info('\n  Circuit Array Discovered from configuration: \n%s \n', circuitStr)
+                }
                 emit('circuit');
                 decoded = true;
                 break;
@@ -1299,10 +1288,10 @@ function decode(data, counter, packetType) {
                     logger.silly('\nMsg# %s  Schedule packet %s', counter, JSON.stringify(data))
                 if (schedule.MODE == 'Egg Timer') {
                     if (logConfigMessages)
-                        logger.info('Msg# %s  Schedule: ID:%s  CIRCUIT:(%s)%s  MODE:%s  DURATION:%s  ', counter, schedule.ID, data[6], schedule.CIRCUIT, schedule.MODE, schedule.DURATION)
+                        logger.verbose('Msg# %s  Schedule: ID:%s  CIRCUIT:(%s)%s  MODE:%s  DURATION:%s  ', counter, schedule.ID, data[6], schedule.CIRCUIT, schedule.MODE, schedule.DURATION)
                 } else {
                     if (logConfigMessages)
-                        logger.info('Msg# %s  Schedule: ID:%s  CIRCUIT:(%s)%s  MODE:%s  START_TIME:%s  END_TIME:%s  DAYS:(%s)%s', counter, schedule.ID, data[7], schedule.CIRCUIT, schedule.MODE, schedule.START_TIME, schedule.END_TIME, data[12], schedule.DAYS)
+                        logger.verbose('Msg# %s  Schedule: ID:%s  CIRCUIT:(%s)%s  MODE:%s  START_TIME:%s  END_TIME:%s  DAYS:(%s)%s', counter, schedule.ID, data[7], schedule.CIRCUIT, schedule.MODE, schedule.START_TIME, schedule.END_TIME, data[12], schedule.DAYS)
                 }
 
                 currentSchedule[schedule.ID] = schedule;
@@ -1391,34 +1380,23 @@ function decode(data, counter, packetType) {
 
                     source: null,
                     destination: null,
-                    b3: null,
                     CMD: null,
                     sFeature: null,
                     ACTION: null,
-                    b7: null
-
                 }
                 status.source = data[packetFields.FROM]
                 status.destination = data[packetFields.DEST]
-                status.b3 = data[4] //134... always?
-                status.CMD = data[5] == 4 ? 'pool temp' : 'feature'; // either 4=pool temp or 2=feature
 
 
-                if (data[5] == 2) {
-                    status.sFeature = circuitArrStr(data[4])
-                    if (data[7] == 0) {
-                        status.ACTION = "off"
-                    } else if (data[7] == 1) {
-                        status.ACTION = "on"
-                    }
-                    logger.info('Msg# %s   %s --> %s: Change %s %s to %s : %s', counter, ctrlString[data[packetFields.FROM]], ctrlString[data[packetFields.DEST]], status.CMD, status.sFeature, status.ACTION, JSON.stringify(data));
-                    decoded = true;
-                    break;
+                status.sFeature = currentCircuitArrObj[data[6]].name
+                if (data[7] == 0) {
+                    status.ACTION = "off"
+                } else if (data[7] == 1) {
+                    status.ACTION = "on"
                 }
-
-
-
-
+                logger.info('Msg# %s   %s --> %s: Change %s %s to %s : %s', counter, ctrlString[data[packetFields.FROM]], ctrlString[data[packetFields.DEST]], status.CMD, status.sFeature, status.ACTION, JSON.stringify(data));
+                decoded = true;
+                break;
             }
 
 //This is _SET_ heat/temp... not the response.
@@ -2862,30 +2840,25 @@ io.on('connection', function (socket, error) {
             var turnPumpOnPacket = [165, 0, pump, 16, 6, 1, 10];
             logger.verbose('Sending Turn pump on: %s', turnPumpOnPacket)
             queuePacket(turnPumpOnPacket);
-            if (safePumpOperation) {
-                //set a timer for 1 minute
-                var setTimerPacket = [165, 0, pump, 16, 1, 4, 3, 43, 0, 1];
-                logger.info('Sending Set a 1 minute timer (safe mode enabled, timer will reset every minute for a total of %s minutes): %s', duration, setTimerPacket);
-                queuePacket(setTimerPacket);
-                //fix until the default duration actually is set to 1
-                if (duration < 1 || duration == null) {
-                    duration = 1;
-                }
-                if (equip == 1) {
-                    currentPumpStatus[1].duration = duration;
-                    //run the timer update 50s into the 1st minute
-                    pump1Timer.setTimeout(pump1SafePumpMode, '', '50s')
-                } else {
-                    currentPumpStatus[2].duration = duration;
-                    //run the timer update 50s into the 1st minute
-                    pump2Timer.setTimeout(pump2SafePumpMode, '', '50s')
-                }
-            } else {
-                //set a timer for [duration] variable
-                var setTimerPacket = [165, 0, pump, 16, 1, 4, 3, 43, 0, duration];
-                logger.verbose('Sending Set a %s minute (safe mode disabled) timer: %s', duration, setTimerPacket);
-                queuePacket(setTimerPacket);
+
+            //set a timer for 1 minute
+            var setTimerPacket = [165, 0, pump, 16, 1, 4, 3, 43, 0, 1];
+            logger.info('Sending Set a 1 minute timer (safe mode enabled, timer will reset every minute for a total of %s minutes): %s', duration, setTimerPacket);
+            queuePacket(setTimerPacket);
+            //fix until the default duration actually is set to 1
+            if (duration < 1 || duration == null) {
+                duration = 1;
             }
+            if (equip == 1) {
+                currentPumpStatus[1].duration = duration;
+                //run the timer update 50s into the 1st minute
+                pump1Timer.setTimeout(pump1SafePumpMode, '', '50s')
+            } else {
+                currentPumpStatus[2].duration = duration;
+                //run the timer update 50s into the 1st minute
+                pump2Timer.setTimeout(pump2SafePumpMode, '', '50s')
+            }
+
 
 
         } else {

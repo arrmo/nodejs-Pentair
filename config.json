@@ -7,8 +7,7 @@
 
         "chlorinator": 0,
 
-        "numberOfPumps": 2,
-        "safePumpOperation": 1
+        "numberOfPumps": 2
     },
     "Network": {
         "netConnect": 1,
@@ -16,14 +15,14 @@
         "netPort": "9801"
     },
     "Log": {
-        "loglevel": 1,
-        "logType": "silly",
-        "logPumpMessages": 1,
-        "logDuplicateMessages": 1,
-        "logConsoleNotDecoded": 1,
+        "loglevel": 0,
+        "logType": "debug",
+        "logPumpMessages": 0,
+        "logDuplicateMessages": 0,
+        "logConsoleNotDecoded": 0,
         "logConfigMessages": 1,
-        "logMessageDecoding": 1,
-        "logChlorinator": 1
+        "logMessageDecoding": 0,
+        "logChlorinator": 0
     },
     "ISY": {
         "username": "blank",
