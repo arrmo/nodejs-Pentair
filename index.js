@@ -7,8 +7,9 @@ console.log('\033[2J'); //clear the console
 var dateFormat = require('dateformat');
 var Dequeue = require('dequeue')
 var decodeHelper = require('./lib/decode.js');
-var version = '0.1.12 alpha 5'
+var version = '0.1.12 alpha 6'
 
+const events = require('events')
 
 var bufferArr = []; //variable to process buffer.  interimBufferArr will be copied here when ready to process
 var interimBufferArr = []; //variable to hold all serialport.open data; incomind data is appended to this with each read
@@ -384,10 +385,16 @@ var chlorinator; //set this to 1 if you have a chlorinator, otherwise 0.
 var numberOfPumps; //this is only used with pumpOnly=1.  It will query 1 (or 2) pumps every 30 seconds for their status
 //-------  END EQUIPMENT SETUP -----------
 
-//-------  MISC NETWORK SETUP -----------
-// Setup for Network Connection (socat or nc)
+//-------  MISC SETUP -----------
+// Setup for Miscellaneous items
 var netConnect; //set this to 1 to use a remote (net) connection, 0 for direct serial connection;
-//-------  END MISC NETWORK SETUP -----------
+//-------  END MISC SETUP -----------
+
+
+//-------  NETWORK SETUP -----------
+// Setup for Network Connection (socat or nc)
+var expressDir; //set this to the default directory for the web interface (either "/bootstrap" or "/public")
+//-------  END NETWORK SETUP -----------
 
 //-------  LOG SETUP -----------
 //Change the following log message levels as needed
@@ -410,6 +417,7 @@ pumpOnly = configFile.Equipment.pumpOnly;
 ISYController = configFile.Equipment.ISYController;
 chlorinator = configFile.Equipment.chlorinator;
 numberOfPumps = configFile.Equipment.numberOfPumps;
+expressDir = configFile.Misc.expressDir;
 netConnect = configFile.Network.netConnect;
 netPort = configFile.Network.netPort;
 netHost = configFile.Network.netHost;
@@ -421,7 +429,6 @@ logConsoleNotDecoded = configFile.Log.logConsoleNotDecoded;
 logConfigMessages = configFile.Log.logConfigMessages;
 logMessageDecoding = configFile.Log.logMessageDecoding;
 logChlorinator = configFile.Log.logChlorinator;
-
 /*
  for (var key in configFile.Equipment) {
  if (poolConfig.Pentair.hasOwnProperty(key)) {
@@ -455,6 +462,8 @@ if (netConnect === 0) {
     });
 }
 
+const loggerEmitter = new events.EventEmitter();
+//loggerEmitter.on('debug', )
 
 if (ISYController) {
     var ISYHelper = require('./lib/ISY.js')
@@ -476,7 +485,8 @@ var logger = new (winston.Logger)({
                         (options.meta && Object.keys(options.meta).length ? '\n\t' + JSON.stringify(options.meta) : '');
             },
             colorize: true,
-            level: logType
+            level: logType,
+            stderrLevels: []
         })
     ]
 });
@@ -864,130 +874,263 @@ function decode(data, counter, packetType) {
 
 //logger.silly('Msg# %s  Packet info: dest %s   from %s', counter, data[packetFields.DEST], data[packetFields.FROM]);
         switch (data[packetFields.ACTION]) {
-
             case 2: //Controller Status 
             {
+                //quick gut test to see if we have a duplicate packet
+                if (JSON.stringify(data) != JSON.stringify(currentStatusBytes)) {
 
-//status will be our return object
-                var status = {};
-                //time returned in HH:MM (24 hour)  <-- need to clean this up so we don't get times like 5:3
-                var timeStr = ''
-                if (data[controllerStatusPacketFields.HOUR] > 12) {
-                    timeStr += data[controllerStatusPacketFields.HOUR] - 12
-                } else {
-                    timeStr += data[controllerStatusPacketFields.HOUR]
-                }
-                timeStr += ':'
-                if (data[controllerStatusPacketFields.MIN] < 10)
-                    timeStr += '0';
-                timeStr += data[controllerStatusPacketFields.MIN]
-                if (data[controllerStatusPacketFields.HOUR] > 11 && data[controllerStatusPacketFields.HOUR] < 24) {
-                    timeStr += " PM"
-                } else {
-                    timeStr += " AM"
-                }
+                    //--------Following code (re)-assigns all the incoming data to the status object
+                    var status = {};
 
-                status.time = timeStr;
-                status.poolTemp = data[controllerStatusPacketFields.POOL_TEMP];
-                status.spaTemp = data[controllerStatusPacketFields.SPA_TEMP];
-                status.airTemp = data[controllerStatusPacketFields.AIR_TEMP];
-                status.solarTemp = data[controllerStatusPacketFields.SOLAR_TEMP];
-                status.poolHeatMode2 = heatModeStr[data[controllerStatusPacketFields.UNKNOWN] & 3]; //mask the data[6] with 0011
-                status.spaHeatMode2 = heatModeStr[(data[controllerStatusPacketFields.UNKNOWN] & 12) >> 2]; //mask the data[6] with 1100 and shift right two places
+                    //if the currentStatus is present, copy it.
+                    if (currentStatus != undefined) {
+                        status = JSON.parse(JSON.stringify(currentStatus))
+                    }
 
-                status.poolHeatMode = heatModeStr[data[controllerStatusPacketFields.HEATER_MODE] & 3]; //mask the data[6] with 0011
-                status.spaHeatMode = heatModeStr[(data[controllerStatusPacketFields.HEATER_MODE] & 12) >> 2]; //mask the data[6] with 1100 and shift right two places
+                    var timeStr = ''
+                    if (data[controllerStatusPacketFields.HOUR] > 12) {
+                        timeStr += data[controllerStatusPacketFields.HOUR] - 12
+                    } else {
+                        timeStr += data[controllerStatusPacketFields.HOUR]
+                    }
+                    timeStr += ':'
+                    if (data[controllerStatusPacketFields.MIN] < 10)
+                        timeStr += '0';
+                    timeStr += data[controllerStatusPacketFields.MIN]
+                    if (data[controllerStatusPacketFields.HOUR] > 11 && data[controllerStatusPacketFields.HOUR] < 24) {
+                        timeStr += " PM"
+                    } else {
+                        timeStr += " AM"
+                    }
 
-                status.valves = strValves[data[controllerStatusPacketFields.VALVES]];
-                status.runmode = strRunMode[data[controllerStatusPacketFields.UOM] & 129]; // more here?
-                status.UOM = String.fromCharCode(176) + ((data[controllerStatusPacketFields.UOM] & 4) >> 3) ? ' Farenheit' : ' Celsius';
-                if (data[controllerStatusPacketFields.HEATER_ACTIVE] == 0) {
-                    status.HEATER_ACTIVE = 'Off'
-                } else
-                if (data[controllerStatusPacketFields.HEATER_ACTIVE] == 32) {
-                    status.HEATER_ACTIVE = 'Heater On'
-                } else {
-                    status.HEATER_ACTIVE = 'Unknown'
-                }
-                ;
-                //Initialize static variable (currentStatus) if not defined, and log it.
-                if (currentStatus == null || currentStatus == undefined) {
+                    status.time = timeStr;
+                    status.poolTemp = data[controllerStatusPacketFields.POOL_TEMP];
+                    status.spaTemp = data[controllerStatusPacketFields.SPA_TEMP];
+                    status.airTemp = data[controllerStatusPacketFields.AIR_TEMP];
+                    status.solarTemp = data[controllerStatusPacketFields.SOLAR_TEMP];
+                    status.poolHeatMode2 = heatModeStr[data[controllerStatusPacketFields.UNKNOWN] & 3]; //mask the data[6] with 0011
+                    status.spaHeatMode2 = heatModeStr[(data[controllerStatusPacketFields.UNKNOWN] & 12) >> 2]; //mask the data[6] with 1100 and shift right two places
 
-//currentStatus = clone(status);
-//currentStatusBytes = data.slice(0);
-                    currentStatus = JSON.parse(JSON.stringify(status));
-                    currentStatusBytes = JSON.parse(JSON.stringify(data));
-                    logger.info('Msg# %s   Discovered initial system settings: ', counter, currentStatus)
-                    logger.verbose('\n ', decodeHelper.printStatus(data));
+                    status.poolHeatMode = heatModeStr[data[controllerStatusPacketFields.HEATER_MODE] & 3]; //mask the data[6] with 0011
+                    status.spaHeatMode = heatModeStr[(data[controllerStatusPacketFields.HEATER_MODE] & 12) >> 2]; //mask the data[6] with 1100 and shift right two places
 
+                    status.valves = strValves[data[controllerStatusPacketFields.VALVES]];
+                    status.runmode = strRunMode[data[controllerStatusPacketFields.UOM] & 129]; // more here?
+                    status.UOM = String.fromCharCode(176) + ((data[controllerStatusPacketFields.UOM] & 4) >> 3) ? ' Farenheit' : ' Celsius';
+                    if (data[controllerStatusPacketFields.HEATER_ACTIVE] == 0) {
+                        status.HEATER_ACTIVE = 'Off'
+                    } else
+                    if (data[controllerStatusPacketFields.HEATER_ACTIVE] == 32) {
+                        status.HEATER_ACTIVE = 'Heater On'
+                    } else {
+                        status.HEATER_ACTIVE = 'Unknown'
+                    }
 
+                    var circuitArrObj = {}
+                    if (currentCircuitArrObj!=undefined){
+                        circuitArrObj = JSON.parse(JSON.stringify(currentCircuitArrObj))
+                    }
+                    //assign circuit status to circuitArrObj
                     for (var i = 0; i < 3; i++) {
                         for (var j = 0; j < 8; j++) {
                             if ((j + (i * 8) + 1) <= 20) {
                                 equip = data[controllerStatusPacketFields.EQUIP1 + i]
                                 if (logMessageDecoding)
                                     logger.silly('Decode Case 2:   i: %s  j:  %s  j + (i * 8) + 1: %s   equip: %s', i, j, j + (i * 8) + 1, equip)
-                                currentCircuitArrObj[j + (i * 8) + 1].status = (equip & (1 << (j))) >> j ? "on" : "off"
+                                circuitArrObj[j + (i * 8) + 1].status = (equip & (1 << (j))) >> j ? "on" : "off"
                             }
                         }
                     }
-
-                    var circuitStr = '';
-                    //logger.info('Msg# %s  Initial circuits status discovered', counter)
-                    for (var i = 1; i <= 20; i++) {
-                        if (currentCircuitArrObj[i].name != undefined) {
-                            circuitStr += currentCircuitArrObj[i].name + ' : ' + currentCircuitArrObj[i].status + '\n'
-                        }
-                    }
-                    logger.info('Msg# %s: Circuit states discovered: \n %s', counter, circuitStr)
+                    //-----------------Finished assigning new data to temporary object
 
 
-                    emit('config')
-                    emit('circuit')
-                } else {
+                    //For the first time we have a 2 packete
+                    if (currentStatusBytes == null) {
+                        logger.info('Msg# %s   Discovered initial system settings: ', counter, status)
+                        logger.verbose('\n ', decodeHelper.printStatus(data));
 
+                        //do we need to output the circuits when we first discover them?  
 
-                    if (JSON.stringify(data) != JSON.stringify(currentStatusBytes)) {
-
-                        var circuitArrObj = JSON.parse(JSON.stringify(currentCircuitArrObj));
-                        for (var i = 0; i < 3; i++) {
-                            for (j = 0; j < 8; j++) {
-                                if ((j + (i * 8) + 1) <= 20) {
-                                    equip = data[controllerStatusPacketFields.EQUIP1 + i]
-                                    circuitArrObj[j + (i * 8) + 1].status = (equip & (1 << (j))) >> j ? "on" : "off"
-                                }
-                            }
-                        }
-
-                        //THE LOOP IS BECAUSE THERE IS A BUG IN THE RECURSIVE LOOP.  It won't display the output.  Need to fix for objects embedded inside an array.
-                        var results;
+                        var circuitStr = '';
+                        //logger.info('Msg# %s  Initial circuits status discovered', counter)
                         for (var i = 1; i <= 20; i++) {
-                            if (currentCircuitArrObj[i].status != undefined) {
-                                results = currentCircuitArrObj[i].whatsDifferent(circuitArrObj[i]);
-                                if (!(results == "Nothing!" || currentCircuitArrObj[i].name == undefined)) {
-                                    logger.info('Msg# %s   Circuit %s change:  %s', counter, circuitArrObj[i].name, results)
-                                }
+                            if (currentCircuitArrObj[i].name != undefined) {
+                                circuitStr += currentCircuitArrObj[i].name + ' : ' + currentCircuitArrObj[i].status + '\n'
                             }
                         }
+                        logger.info('Msg# %s: Circuit states discovered: \n %s', counter, circuitStr)
 
-                        logger.verbose('Msg# %s: \n', counter, decodeHelper.printStatus(currentStatusBytes, data));
-                        currentStatus = JSON.parse(JSON.stringify(status));
-                        currentStatusBytes = JSON.parse(JSON.stringify(data))
-                        currentCircuitArrObj = JSON.parse(JSON.stringify(circuitArrObj));
-                        decoded = true;
-                        emit('config')
-                        emit('circuit')
+
                     } else {
 
-                        if (logDuplicateMessages)
-                            logger.debug('Msg# %s   Duplicate broadcast.', counter)
-                        decoded = true;
+                        //now, let's output what is different between the packet and stored packets  
+                        if (logConfigMessages) {
+                            //what's different (overall) with the status packet
+                            logger.verbose('-->EQUIPMENT Msg# %s   \n', counter)
+                            //this will output the difference between currentStatusByte and data
+                            logger.verbose('Msg# %s: \n', counter, decodeHelper.printStatus(currentStatusBytes, data));
+                            currentWhatsDifferent = currentStatus.whatsDifferent(status);
+                            if (currentWhatsDifferent != "Nothing!") {
+                                logger.verbose('Msg# %s   System Status changed: %s', counter, currentWhatsDifferent)
+                            }
+
+
+                            //What's different with the circuit status?
+                            //THE LOOP IS BECAUSE THERE IS A BUG IN THE RECURSIVE LOOP.  It won't display the output.  Need to fix for objects embedded inside an array.
+                            var results;
+                            for (var i = 1; i <= 20; i++) {
+                                if (currentCircuitArrObj[i].status != undefined) {
+                                    results = currentCircuitArrObj[i].whatsDifferent(circuitArrObj[i]);
+                                    if (!(results == "Nothing!" || currentCircuitArrObj[i].name == undefined)) {
+                                        logger.verbose('Msg# %s   Circuit %s change:  %s', counter, circuitArrObj[i].name, results)
+                                    }
+                                }
+                            }
+                        }
                     }
+
+
+                    //and finally assign the temporary variables to the permanent one
+                    currentStatus = JSON.parse(JSON.stringify(status));
+                    currentStatusBytes = JSON.parse(JSON.stringify(data));
+                    currentCircuitArrObj = JSON.parse(JSON.stringify(circuitArrObj));
+
+
+                    //and finally emit the packets
+                    emit('config')
+                    emit('circuit')
+
+                } else
+                {
+                    if (logDuplicateMessages)
+                        logger.debug('Msg# %s   Duplicate broadcast.', counter)
                 }
+
                 decoded = true;
                 break;
             }
 
+            /*            case 2: //Controller Status 
+             {
+             
+             //status will be our return object
+             var status = {};
+             //time returned in HH:MM (24 hour)  <-- need to clean this up so we don't get times like 5:3
+             var timeStr = ''
+             if (data[controllerStatusPacketFields.HOUR] > 12) {
+             timeStr += data[controllerStatusPacketFields.HOUR] - 12
+             } else {
+             timeStr += data[controllerStatusPacketFields.HOUR]
+             }
+             timeStr += ':'
+             if (data[controllerStatusPacketFields.MIN] < 10)
+             timeStr += '0';
+             timeStr += data[controllerStatusPacketFields.MIN]
+             if (data[controllerStatusPacketFields.HOUR] > 11 && data[controllerStatusPacketFields.HOUR] < 24) {
+             timeStr += " PM"
+             } else {
+             timeStr += " AM"
+             }
+             
+             status.time = timeStr;
+             status.poolTemp = data[controllerStatusPacketFields.POOL_TEMP];
+             status.spaTemp = data[controllerStatusPacketFields.SPA_TEMP];
+             status.airTemp = data[controllerStatusPacketFields.AIR_TEMP];
+             status.solarTemp = data[controllerStatusPacketFields.SOLAR_TEMP];
+             status.poolHeatMode2 = heatModeStr[data[controllerStatusPacketFields.UNKNOWN] & 3]; //mask the data[6] with 0011
+             status.spaHeatMode2 = heatModeStr[(data[controllerStatusPacketFields.UNKNOWN] & 12) >> 2]; //mask the data[6] with 1100 and shift right two places
+             
+             status.poolHeatMode = heatModeStr[data[controllerStatusPacketFields.HEATER_MODE] & 3]; //mask the data[6] with 0011
+             status.spaHeatMode = heatModeStr[(data[controllerStatusPacketFields.HEATER_MODE] & 12) >> 2]; //mask the data[6] with 1100 and shift right two places
+             
+             status.valves = strValves[data[controllerStatusPacketFields.VALVES]];
+             status.runmode = strRunMode[data[controllerStatusPacketFields.UOM] & 129]; // more here?
+             status.UOM = String.fromCharCode(176) + ((data[controllerStatusPacketFields.UOM] & 4) >> 3) ? ' Farenheit' : ' Celsius';
+             if (data[controllerStatusPacketFields.HEATER_ACTIVE] == 0) {
+             status.HEATER_ACTIVE = 'Off'
+             } else
+             if (data[controllerStatusPacketFields.HEATER_ACTIVE] == 32) {
+             status.HEATER_ACTIVE = 'Heater On'
+             } else {
+             status.HEATER_ACTIVE = 'Unknown'
+             }
+             ;
+             //Initialize static variable (currentStatus) if not defined, and log it.
+             if (currentStatus == null || currentStatus == undefined) {
+             
+             currentStatus = JSON.parse(JSON.stringify(status));
+             currentStatusBytes = JSON.parse(JSON.stringify(data));
+             logger.info('Msg# %s   Discovered initial system settings: ', counter, currentStatus)
+             logger.verbose('\n ', decodeHelper.printStatus(data));
+             
+             
+             for (var i = 0; i < 3; i++) {
+             for (var j = 0; j < 8; j++) {
+             if ((j + (i * 8) + 1) <= 20) {
+             equip = data[controllerStatusPacketFields.EQUIP1 + i]
+             if (logMessageDecoding)
+             logger.silly('Decode Case 2:   i: %s  j:  %s  j + (i * 8) + 1: %s   equip: %s', i, j, j + (i * 8) + 1, equip)
+             currentCircuitArrObj[j + (i * 8) + 1].status = (equip & (1 << (j))) >> j ? "on" : "off"
+             }
+             }
+             }
+             
+             var circuitStr = '';
+             //logger.info('Msg# %s  Initial circuits status discovered', counter)
+             for (var i = 1; i <= 20; i++) {
+             if (currentCircuitArrObj[i].name != undefined) {
+             circuitStr += currentCircuitArrObj[i].name + ' : ' + currentCircuitArrObj[i].status + '\n'
+             }
+             }
+             logger.info('Msg# %s: Circuit states discovered: \n %s', counter, circuitStr)
+             
+             
+             emit('config')
+             emit('circuit')
+             } else {
+             
+             
+             if (JSON.stringify(data) != JSON.stringify(currentStatusBytes)) {
+             
+             var circuitArrObj = JSON.parse(JSON.stringify(currentCircuitArrObj));
+             for (var i = 0; i < 3; i++) {
+             for (j = 0; j < 8; j++) {
+             if ((j + (i * 8) + 1) <= 20) {
+             equip = data[controllerStatusPacketFields.EQUIP1 + i]
+             circuitArrObj[j + (i * 8) + 1].status = (equip & (1 << (j))) >> j ? "on" : "off"
+             }
+             }
+             }
+             
+             //THE LOOP IS BECAUSE THERE IS A BUG IN THE RECURSIVE LOOP.  It won't display the output.  Need to fix for objects embedded inside an array.
+             var results;
+             for (var i = 1; i <= 20; i++) {
+             if (currentCircuitArrObj[i].status != undefined) {
+             results = currentCircuitArrObj[i].whatsDifferent(circuitArrObj[i]);
+             if (!(results == "Nothing!" || currentCircuitArrObj[i].name == undefined)) {
+             logger.info('Msg# %s   Circuit %s change:  %s', counter, circuitArrObj[i].name, results)
+             }
+             }
+             }
+             
+             logger.verbose('Msg# %s: \n', counter, decodeHelper.printStatus(currentStatusBytes, data));
+             currentStatus = JSON.parse(JSON.stringify(status));
+             currentStatusBytes = JSON.parse(JSON.stringify(data))
+             currentCircuitArrObj = JSON.parse(JSON.stringify(circuitArrObj));
+             decoded = true;
+             emit('config')
+             emit('circuit')
+             } else {
+             
+             if (logDuplicateMessages)
+             logger.debug('Msg# %s   Duplicate broadcast.', counter)
+             decoded = true;
+             }
+             }
+             decoded = true;
+             break;
+             }
+             */
             case 7:
 
             //Send request/response for pump status
@@ -998,7 +1141,7 @@ function decode(data, counter, packetType) {
                 } else {
                     pumpNum = 2
                 }
-                ;
+
                 //var pumpname = (data[packetFields.FROM]).toString(); //returns 96 (pump1) or 97 (pump2)
                 //time returned in HH:MM (24 hour)  <-- need to clean this up so we don't get times like 5:3
 
@@ -1086,7 +1229,9 @@ function decode(data, counter, packetType) {
             }
             case 8: //Broadcast current heat set point and mode 
             {
-//   [15,16,8,13,75,75,64,87,101,11,0,0,62,0,0,0,0,2,190]
+                //   0 1  2  3 4  5  6 7   8  9  19 11 12 13  14 15 16 17 18 19  20
+                //[165,x,15,16,8,13,75,75,64,87,101,11,0,  0 ,62 ,0 ,0 ,0 ,0 ,2,190]
+                //function heatObj(poolSetPoint, poolHeatMode, spaSetPoint, spaHeatMode)
 
                 var status = new heatObj(data[9], data[11] & 3, data[10], (data[11] & 12) >> 2)
 
@@ -1137,7 +1282,7 @@ function decode(data, counter, packetType) {
                 for (var i = 7; i < 18; i++) {
                     if (data[i] > 0 && data[i] < 251) //251 is used to terminate the custom name string if shorter than 11 digits
                     {
-//console.log('i: %s and data[i]: %s',i, data[i])
+
                         customName += String.fromCharCode(data[i])
                     }
                     ;
@@ -1163,16 +1308,7 @@ function decode(data, counter, packetType) {
 
             case 11: // Get Circuit Names
             {
-
-
-                var whichCircuit = 0;
-                if (data[namePacketFields.NUMBER] <= 8) {
-                    whichCircuit = 0; //8 bits for first mode byte
-                } else if (data[namePacketFields.NUMBER] > 8 && data[namePacketFields.NUMBER] <= 16) {
-                    (whichCircuit = 1) //8 bits for 2nd mode byte
-                } else
-                    (whichCircuit = 2); //8 bits for 3rd mode byte
-
+                logger.warn('GET CIRCUIT NAMES: %s', data)
                 var freezeProtection;
                 if ((data[namePacketFields.CIRCUITFUNCTION] & 64) == 64) {
                     freezeProtection = 'on'
@@ -1180,34 +1316,14 @@ function decode(data, counter, packetType) {
                     freezeProtection = 'off'
                 }
 //The &63 masks to 00111111 because 01000000 is freeze protection bit
-                if (logConfigMessages) {
-                    logger.silly('Msg# %s  Circuit Info  %s', counter, JSON.stringify(data))
 
-                    //if (logConfigMessages == 1) console.log('Msg# %s  Schedule Discovered.  CIRCUIT NUMBER: %s  CIRCUIT NAME: %s(%s)  CIRCUIT FUNCTION: %s(%s, %s)  FREEZE PROTECTION: %s(masked:%s)', counter, data[namePacketFields.NUMBER], strCircuitName[data[namePacketFields.NAME]], data[namePacketFields.NAME], strCircuitFunction[data[namePacketFields.CIRCUITFUNCTION] & 63], data[namePacketFields.CIRCUITFUNCTION], data[namePacketFields.CIRCUITFUNCTION] & 63, freezeProtection, data[namePacketFields.CIRCUITFUNCTION] & 64)
-
-
-                    if (logConfigMessages)
-                        logger.verbose('Msg# %s  Circuit %s:   Name: %s  Function: %s  Freeze Protection: %s', counter, data[namePacketFields.NUMBER], strCircuitName[data[namePacketFields.NAME]], strCircuitFunction[data[namePacketFields.CIRCUITFUNCTION] & 63], freezeProtection)
-                }
 
 
 //if the ID of the circuit name is 1-101 then it is a standard name.  If it is 200-209 it is a custom name.  The mapping between the string value in the getCircuitNames and getCustomNames is 200.  So subtract 200 from the circuit name to get the id in the custom name array.
 //data[4]-1 because this array starts at 1 and JS arrays start at 0.
 //-(8*whichCircuit) because this will subtract 0, 8 or 16 from the index so each secondary index will start at 0
 
-//array
-                /* if (data[namePacketFields.NAME] < 200) {
-                 circuitArr[whichCircuit][data[namePacketFields.NUMBER] - (8 * whichCircuit) - 1] = strCircuitName[data[namePacketFields.NAME]];
-                 } else {
-                 if (logConfigMessages)
-                 logger.silly('mapping %s to %s', strCircuitName[data[namePacketFields.NAME]], customNameArr[data[namePacketFields.NAME] - 200]);
-                 circuitArr[whichCircuit][data[namePacketFields.NUMBER] - (8 * whichCircuit) - 1] = customNameArr[data[namePacketFields.NAME] - 200];
-                 }
-                 
-                 if (logConfigMessages)
-                 logger.debug('circuit name for %s: %s', data[namePacketFields.NUMBER], strCircuitName[data[namePacketFields.NAME]])
-                 */
-                //arrayObj
+
                 if (data[namePacketFields.NUMBER] != null) { //|| data[namePacketFields.NUMBER] != undefined) {
                     if (data[namePacketFields.NAME] < 200) {
                         currentCircuitArrObj[data[namePacketFields.NUMBER]].name = strCircuitName[data[namePacketFields.NAME]]
@@ -1220,10 +1336,20 @@ function decode(data, counter, packetType) {
                     currentCircuitArrObj[data[namePacketFields.NUMBER]].freeze = freezeProtection;
                 }
 
-                if (logConfigMessages)
-                    logger.debug('currentCircuitArrObj[%s]: %s ', data[namePacketFields.NUMBER], JSON.stringify(currentCircuitArrObj[data[namePacketFields.NUMBER]]))
 
 
+                if (logConfigMessages) {
+                    logger.silly('Msg# %s  Circuit Info  %s', counter, JSON.stringify(data))
+                    //logger.debug('currentCircuitArrObj[%s]: %s ', data[namePacketFields.NUMBER], JSON.stringify(currentCircuitArrObj[data[namePacketFields.NUMBER]]))
+                    //logger.verbose('Msg# %s  Circuit %s:   Name: %s  Function: %s  Status: %s  Freeze Protection: %s', counter, data[namePacketFields.NUMBER], strCircuitName[data[namePacketFields.NAME]], strCircuitFunction[data[namePacketFields.CIRCUITFUNCTION] & 63], freezeProtection)
+                    if (currentCircuitArrObj[data[namePacketFields.NUMBER]].status == undefined) {
+                        logger.verbose('Msg# %s  Circuit %s:   Name: %s  Function: %s  Status: (not received yet)  Freeze Protection: %s', counter, currentCircuitArrObj[namePacketFields.NUMBER].number, currentCircuitArrObj[data[namePacketFields.NUMBER]].name, currentCircuitArrObj[data[namePacketFields.NUMBER]].circuitFunction, currentCircuitArrObj[data[namePacketFields.NUMBER]].freeze)
+                    } else
+                    {
+                        logger.verbose('Msg# %s  Circuit %s:   Name: %s  Function: %s  Status: %s  Freeze Protection: %s', counter, currentCircuitArrObj[namePacketFields.NUMBER].number, currentCircuitArrObj[data[namePacketFields.NUMBER]].name, currentCircuitArrObj[data[namePacketFields.NUMBER]].circuitFunction, currentCircuitArrObj[data[namePacketFields.NUMBER]].status, currentCircuitArrObj[data[namePacketFields.NUMBER]].freeze)
+
+                    }
+                }
 
                 if (data[namePacketFields.NUMBER] == 20) {
                     var circuitStr = '';
@@ -1242,13 +1368,6 @@ function decode(data, counter, packetType) {
                 //example: 165,16,15,16,17,7,1,6,9,25,15,55,255,2, 90
                 var schedule = {};
                 schedule.ID = data[6];
-                /*     var whichCircuit = 0;
-                 if (data[7] < 8) {
-                 whichCircuit = 0; //8 bits for first mode byte
-                 } else if (data[7] >= 8 && data[7] < 16) {
-                 (whichCircuit = 1) //8 bits for 2nd mode byte
-                 } else
-                 (whichCircuit = 2); //8 bits for 3rd mode byte*/
                 schedule.CIRCUIT = currentCircuitArrObj[data[7]].name; //Correct???
                 if (data[8] == 25) //25 = Egg Timer 
                 {
@@ -2166,12 +2285,12 @@ if (pumpOnly) {
     var pumpStatusTimer = new NanoTimer();
     if (numberOfPumps == 1) {
         pumpStatusTimer.setInterval(pumpStatusCheck, [1], '30s');
-        pumpInitialRequestConfigDelay.setTimeout(pumpStatusCheck, [1], '2500m'); //must give a short delay to allow the port to open
+        pumpInitialRequestConfigDelay.setTimeout(pumpStatusCheck, [1], '3500m'); //must give a short delay to allow the port to open
     } else {
         var pump2Timer = new NanoTimer();
         var pump2TimerDelay = new NanoTimer();
         pumpStatusTimer.setInterval(pumpStatusCheck, [1, 2], '30s');
-        pumpInitialRequestConfigDelay.setTimeout(pumpStatusCheck, [1, 2], '2500m'); //must give a short delay to allow the port to open
+        pumpInitialRequestConfigDelay.setTimeout(pumpStatusCheck, [1, 2], '3500m'); //must give a short delay to allow the port to open
     }
 
 }
@@ -2513,7 +2632,7 @@ server.listen(port, function () {
     logger.verbose('Express Server listening at port %d', port);
 });
 // Routing
-app.use(express.static(__dirname + '/public'));
+app.use(express.static(__dirname + expressDir));
 app.get('/status', function (req, res) {
     res.send(currentStatus)
 })
@@ -2543,7 +2662,7 @@ app.get('/circuit/:circuit/toggle', function (req, res) {
     var toggleCircuitPacket = [165, preambleByte, 16, 34, 134, 2, Number(req.params.circuit), desiredStatus];
     queuePacket(toggleCircuitPacket);
     var response = 'User Request to toggle ' + currentCircuitArrObj[req.params.circuit].name + ' to ' + (desiredStatus == 0 ? 'off' : 'on') + ' received';
-    console.log(response)
+    logger.info(response)
     res.send(response)
 })
 
@@ -2840,7 +2959,6 @@ io.on('connection', function (socket, error) {
             var turnPumpOnPacket = [165, 0, pump, 16, 6, 1, 10];
             logger.verbose('Sending Turn pump on: %s', turnPumpOnPacket)
             queuePacket(turnPumpOnPacket);
-
             //set a timer for 1 minute
             var setTimerPacket = [165, 0, pump, 16, 1, 4, 3, 43, 0, 1];
             logger.info('Sending Set a 1 minute timer (safe mode enabled, timer will reset every minute for a total of %s minutes): %s', duration, setTimerPacket);
