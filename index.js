@@ -927,7 +927,7 @@ function decode(data, counter, packetType) {
                     }
 
                     var circuitArrObj = {}
-                    if (currentCircuitArrObj!=undefined){
+                    if (currentCircuitArrObj != undefined) {
                         circuitArrObj = JSON.parse(JSON.stringify(currentCircuitArrObj))
                     }
                     //assign circuit status to circuitArrObj
@@ -951,12 +951,18 @@ function decode(data, counter, packetType) {
 
                         //do we need to output the circuits when we first discover them?  
 
+
                         var circuitStr = '';
                         //logger.info('Msg# %s  Initial circuits status discovered', counter)
                         for (var i = 1; i <= 20; i++) {
-                            if (currentCircuitArrObj[i].name != undefined) {
-                                circuitStr += currentCircuitArrObj[i].name + ' : ' + currentCircuitArrObj[i].status + '\n'
+                            if (circuitArrObj[i].name != undefined) {
+                                circuitStr+= circuitArrObj[i].name + " status: "
                             }
+                            else
+                            {
+                                circuitStr += "Circuit " + i + " <name not broadcast yet> status is: "
+                            }
+                            circuitStr += circuitArrObj[i].status + '\n'
                         }
                         logger.info('Msg# %s: Circuit states discovered: \n %s', counter, circuitStr)
 
@@ -1235,19 +1241,25 @@ function decode(data, counter, packetType) {
 
                 var status = new heatObj(data[9], data[11] & 3, data[10], (data[11] & 12) >> 2)
 
-                logger.debug('heat status ', status, data);
-                logger.debug('currentHeat ', currentHeat)
+                if (logConfigMessages) {
+                    logger.silly('heat status packet object: %s  data: %s  currentHeat: %s', JSON.stringify(status), data, currentHeat == undefined ? "Not set yet" : JSON.stringify(currentHeat));
+
+                }
 
                 if (currentHeat.poolSetPoint == undefined) {
                     currentHeat = status;
-                    logger.info('Msg# %s   Pool/Spa heat set point discovered:  \n  Pool heat mode: %s @ %s degrees \n  Spa heat mode: %s at %s degrees', counter, heatModeStr[currentHeat.poolHeatMode], currentHeat.poolSetPoint, heatModeStr[currentHeat.spaHeatMode], currentHeat.spaSetPoint);
+                    if (logConfigMessages)
+                        logger.info('Msg# %s   Pool/Spa heat set point discovered:  \n  Pool heat mode: %s @ %s degrees \n  Spa heat mode: %s at %s degrees', counter, heatModeStr[currentHeat.poolHeatMode], currentHeat.poolSetPoint, heatModeStr[currentHeat.spaHeatMode], currentHeat.spaSetPoint);
+                    emit('heat');
                 } else {
 
                     if (currentHeat.equals(status)) {
                         logger.debug('Msg# %s   Pool/Spa heat set point HAS NOT CHANGED:  pool heat mode: %s @ %s degrees; spa heat mode %s at %s degrees', counter, heatModeStr[status.poolHeatMode], status.poolSetPoint, heatModeStr[status.spaHeatMode], status.spaSetPoint);
                     } else {
-                        logger.verbose('Msg# %s   Pool/Spa heat set point changed:  pool heat mode: %s @ %s degrees; spa heat mode %s at %s degrees', counter, heatModeStr[status.poolHeatMode], status.poolSetPoint, heatModeStr[status.spaHeatMode], status.spaSetPoint);
-                        logger.info('Msg# %s  Change in Pool/Spa Heat Mode:  %s', counter, currentHeat.whatsDifferent(status))
+                        if (logConfigMessages) {
+                            logger.verbose('Msg# %s   Pool/Spa heat set point changed:  pool heat mode: %s @ %s degrees; spa heat mode %s at %s degrees', counter, heatModeStr[status.poolHeatMode], status.poolSetPoint, heatModeStr[status.spaHeatMode], status.spaSetPoint);
+                            logger.info('Msg# %s  Change in Pool/Spa Heat Mode:  %s', counter, currentHeat.whatsDifferent(status))
+                        }
                         currentHeat = status;
                         emit('heat');
                     }
@@ -1308,7 +1320,8 @@ function decode(data, counter, packetType) {
 
             case 11: // Get Circuit Names
             {
-                logger.warn('GET CIRCUIT NAMES: %s', data)
+                var circuitNumber = data[namePacketFields.NUMBER]
+                logger.silly('get circuit names packet: %s', data)
                 var freezeProtection;
                 if ((data[namePacketFields.CIRCUITFUNCTION] & 64) == 64) {
                     freezeProtection = 'on'
@@ -1324,29 +1337,29 @@ function decode(data, counter, packetType) {
 //-(8*whichCircuit) because this will subtract 0, 8 or 16 from the index so each secondary index will start at 0
 
 
-                if (data[namePacketFields.NUMBER] != null) { //|| data[namePacketFields.NUMBER] != undefined) {
+                if (circuitNumber != null) { //|| circuitNumber != undefined) {
                     if (data[namePacketFields.NAME] < 200) {
-                        currentCircuitArrObj[data[namePacketFields.NUMBER]].name = strCircuitName[data[namePacketFields.NAME]]
+                        currentCircuitArrObj[circuitNumber].name = strCircuitName[data[namePacketFields.NAME]]
                     } else {
-                        currentCircuitArrObj[data[namePacketFields.NUMBER]].name = customNameArr[data[namePacketFields.NAME] - 200];
+                        currentCircuitArrObj[circuitNumber].name = customNameArr[data[namePacketFields.NAME] - 200];
                     }
-                    currentCircuitArrObj[data[namePacketFields.NUMBER]].number = data[namePacketFields.NUMBER];
-                    currentCircuitArrObj[data[namePacketFields.NUMBER]].numberStr = 'circuit' + data[namePacketFields.NUMBER];
-                    currentCircuitArrObj[data[namePacketFields.NUMBER]].circuitFunction = strCircuitFunction[data[namePacketFields.CIRCUITFUNCTION] & 63];
-                    currentCircuitArrObj[data[namePacketFields.NUMBER]].freeze = freezeProtection;
+                    currentCircuitArrObj[circuitNumber].number = circuitNumber;
+                    currentCircuitArrObj[circuitNumber].numberStr = 'circuit' + circuitNumber;
+                    currentCircuitArrObj[circuitNumber].circuitFunction = strCircuitFunction[data[namePacketFields.CIRCUITFUNCTION] & 63];
+                    currentCircuitArrObj[circuitNumber].freeze = freezeProtection;
                 }
 
 
 
                 if (logConfigMessages) {
                     logger.silly('Msg# %s  Circuit Info  %s', counter, JSON.stringify(data))
-                    //logger.debug('currentCircuitArrObj[%s]: %s ', data[namePacketFields.NUMBER], JSON.stringify(currentCircuitArrObj[data[namePacketFields.NUMBER]]))
-                    //logger.verbose('Msg# %s  Circuit %s:   Name: %s  Function: %s  Status: %s  Freeze Protection: %s', counter, data[namePacketFields.NUMBER], strCircuitName[data[namePacketFields.NAME]], strCircuitFunction[data[namePacketFields.CIRCUITFUNCTION] & 63], freezeProtection)
-                    if (currentCircuitArrObj[data[namePacketFields.NUMBER]].status == undefined) {
-                        logger.verbose('Msg# %s  Circuit %s:   Name: %s  Function: %s  Status: (not received yet)  Freeze Protection: %s', counter, currentCircuitArrObj[namePacketFields.NUMBER].number, currentCircuitArrObj[data[namePacketFields.NUMBER]].name, currentCircuitArrObj[data[namePacketFields.NUMBER]].circuitFunction, currentCircuitArrObj[data[namePacketFields.NUMBER]].freeze)
+                    //logger.debug('currentCircuitArrObj[%s]: %s ', circuitNumber, JSON.stringify(currentCircuitArrObj[circuitNumber]))
+                    //logger.verbose('Msg# %s  Circuit %s:   Name: %s  Function: %s  Status: %s  Freeze Protection: %s', counter, circuitNumber, strCircuitName[data[namePacketFields.NAME]], strCircuitFunction[data[namePacketFields.CIRCUITFUNCTION] & 63], freezeProtection)
+                    if (currentCircuitArrObj[circuitNumber].status == undefined) {
+                        logger.verbose('Msg# %s  Circuit %s:   Name: %s  Function: %s  Status: (not received yet)  Freeze Protection: %s', counter, currentCircuitArrObj[circuitNumber].number, currentCircuitArrObj[circuitNumber].name, currentCircuitArrObj[circuitNumber].circuitFunction, currentCircuitArrObj[circuitNumber].freeze)
                     } else
                     {
-                        logger.verbose('Msg# %s  Circuit %s:   Name: %s  Function: %s  Status: %s  Freeze Protection: %s', counter, currentCircuitArrObj[namePacketFields.NUMBER].number, currentCircuitArrObj[data[namePacketFields.NUMBER]].name, currentCircuitArrObj[data[namePacketFields.NUMBER]].circuitFunction, currentCircuitArrObj[data[namePacketFields.NUMBER]].status, currentCircuitArrObj[data[namePacketFields.NUMBER]].freeze)
+                        logger.verbose('Msg# %s  Circuit %s:   Name: %s  Function: %s  Status: %s  Freeze Protection: %s', counter, currentCircuitArrObj[circuitNumber].number, currentCircuitArrObj[circuitNumber].name, currentCircuitArrObj[circuitNumber].circuitFunction, currentCircuitArrObj[circuitNumber].status, currentCircuitArrObj[circuitNumber].freeze)
 
                     }
                 }
@@ -1499,7 +1512,6 @@ function decode(data, counter, packetType) {
 
                     source: null,
                     destination: null,
-                    CMD: null,
                     sFeature: null,
                     ACTION: null,
                 }
@@ -1513,7 +1525,7 @@ function decode(data, counter, packetType) {
                 } else if (data[7] == 1) {
                     status.ACTION = "on"
                 }
-                logger.info('Msg# %s   %s --> %s: Change %s %s to %s : %s', counter, ctrlString[data[packetFields.FROM]], ctrlString[data[packetFields.DEST]], status.CMD, status.sFeature, status.ACTION, JSON.stringify(data));
+                logger.info('Msg# %s   %s --> %s: Change %s to %s : %s', counter, ctrlString[data[packetFields.FROM]], ctrlString[data[packetFields.DEST]], status.sFeature, status.ACTION, JSON.stringify(data));
                 decoded = true;
                 break;
             }
