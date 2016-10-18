@@ -7,7 +7,7 @@ console.log('\033[2J'); //clear the console
 var dateFormat = require('dateformat');
 var Dequeue = require('dequeue')
 var decodeHelper = require('./lib/decode.js');
-var version = '0.1.12 alpha 6'
+var version = '0.1.12 alpha 7'
 
 const events = require('events')
 
