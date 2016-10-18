@@ -18,13 +18,13 @@
         "netPort": "9801"
     },
     "Log": {
-        "loglevel": 0,
+        "loglevel": 1,
         "logType": "debug",
         "logPumpMessages": 0,
         "logDuplicateMessages": 0,
         "logConsoleNotDecoded": 0,
         "logConfigMessages": 1,
-        "logMessageDecoding": 0,
+        "logMessageDecoding": 1,
         "logChlorinator": 0
     },
     "ISY": {

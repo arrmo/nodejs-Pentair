@@ -443,6 +443,27 @@ logChlorinator = configFile.Log.logChlorinator;
  }
  }*/
 
+
+
+var winston = require('winston');
+var logger = new (winston.Logger)({
+    transports: [
+        new (winston.transports.Console)({
+            timestamp: function () {
+                return dateFormat(Date.now(), "HH:MM:ss.l");
+            },
+            formatter: function (options) {
+                // Return string will be passed to logger.
+                return options.timestamp() + ' ' + winston.config.colorize(options.level, options.level.toUpperCase()) + ' ' + (undefined !== options.message ? options.message : '') +
+                        (options.meta && Object.keys(options.meta).length ? '\n\t' + JSON.stringify(options.meta) : '');
+            },
+            colorize: true,
+            level: logType,
+            stderrLevels: []
+        })
+    ]
+});
+
 if (netConnect === 0) {
     const serialport = require("serialport");
     //var SerialPort = serialport.SerialPort;
@@ -472,24 +493,6 @@ if (ISYController) {
 }
 
 
-var winston = require('winston');
-var logger = new (winston.Logger)({
-    transports: [
-        new (winston.transports.Console)({
-            timestamp: function () {
-                return dateFormat(Date.now(), "HH:MM:ss.l");
-            },
-            formatter: function (options) {
-                // Return string will be passed to logger.
-                return options.timestamp() + ' ' + winston.config.colorize(options.level, options.level.toUpperCase()) + ' ' + (undefined !== options.message ? options.message : '') +
-                        (options.meta && Object.keys(options.meta).length ? '\n\t' + JSON.stringify(options.meta) : '');
-            },
-            colorize: true,
-            level: logType,
-            stderrLevels: []
-        })
-    ]
-});
 //New Objects to replace arrays
 function circuit(number, numberStr, name, circuitFunction, status, freeze) {
     this.number = number; //1
@@ -688,21 +691,21 @@ function iterateOverArrayOfArrays() {
         bufferToProcess = bufferToProcess.concat(bufferArrayOfArrays.shift())
 
     }
-    if (bufferToProcess.length % 16 == 0)
-    {
-        //this logic is here because many of the longer Intellitouch controller status packets come through in chunks of 32 bits
-        //eg  
-        //[255,255,255,255,255,255,255,255,0,255,165,16,15,16,2,29,5,50,0,64,0,0,0,0,0,0,3,0,64,4,86,86]
-        //[32,0,61,58,0,0,6,0,0,126,138,0,13,4,15]
-        //Instead of going through this logic twice, let's be proactive.
-        //We can simply bypass this loop because next time we come here the bufferToProcess.concat will merge the packets
-        //Is this the same on all O/S?  This is from a RasPi 3.
-        if (logMessageDecoding) {
-            console.log('\n\n')
-            logger.debug('iOAOA: Packet analysis delayed because a partial packet is in the queue.')
-        }
-        breakLoop = true
-    } else
+//    if (bufferToProcess.length % 16 == 0)
+//    {
+//        //this logic is here because many of the longer Intellitouch controller status packets come through in chunks of 32 bits
+//        //eg  
+//        //[255,255,255,255,255,255,255,255,0,255,165,16,15,16,2,29,5,50,0,64,0,0,0,0,0,0,3,0,64,4,86,86]
+//        //[32,0,61,58,0,0,6,0,0,126,138,0,13,4,15]
+//        //Instead of going through this logic twice, let's be proactive.
+//        //We can simply bypass this loop because next time we come here the bufferToProcess.concat will merge the packets
+//        //Is this the same on all O/S?  This is from a RasPi 3.
+//        if (logMessageDecoding) {
+//            console.log('\n\n')
+//            logger.debug('iOAOA: Packet analysis delayed because a partial packet is in the queue. bufferToProcess: %s', )
+//        }
+//        breakLoop = true
+//    } else
     {
         if (logMessageDecoding)
         {
@@ -719,7 +722,12 @@ function iterateOverArrayOfArrays() {
             //   0,   1,      2,      3,    4, 5,        6
             //(255,165,preambleByte,Dest,Src,cmd,chatterlen) and 2 for checksum)
 
-            if (chatterlen == undefined || ((bufferToProcess.length - chatterlen) <= 0)) {
+            if (chatterlen != undefined && chatterlen >= 50) //we should never get a packet greater than or equal to 50.  So if the chatterlen is greater than that let's shift the array and retry
+            {
+                logger.debug('Will shift first element out of bufferToProcess because it appears there is an invalid length packet (>=50) Lengeth: %s  Packet: %s', bufferToProcess[6], bufferToProcess)
+                bufferToProcess.shift() //remove the first byte so we look for the next [255,165] in the array. 
+
+            } else if (chatterlen == undefined || ((bufferToProcess.length - chatterlen) <= 0)) {
 
                 if (logMessageDecoding) {
                     if (logMessageDecoding)
@@ -956,9 +964,8 @@ function decode(data, counter, packetType) {
                         //logger.info('Msg# %s  Initial circuits status discovered', counter)
                         for (var i = 1; i <= 20; i++) {
                             if (circuitArrObj[i].name != undefined) {
-                                circuitStr+= circuitArrObj[i].name + " status: "
-                            }
-                            else
+                                circuitStr += circuitArrObj[i].name + " status: "
+                            } else
                             {
                                 circuitStr += "Circuit " + i + " <name not broadcast yet> status is: "
                             }
@@ -1239,28 +1246,30 @@ function decode(data, counter, packetType) {
                 //[165,x,15,16,8,13,75,75,64,87,101,11,0,  0 ,62 ,0 ,0 ,0 ,0 ,2,190]
                 //function heatObj(poolSetPoint, poolHeatMode, spaSetPoint, spaHeatMode)
 
-                var status = new heatObj(data[9], data[11] & 3, data[10], (data[11] & 12) >> 2)
+
+                var heat = new heatObj(data[9], data[11] & 3, data[10], (data[11] & 12) >> 2)
+
+
 
                 if (logConfigMessages) {
-                    logger.silly('heat status packet object: %s  data: %s  currentHeat: %s', JSON.stringify(status), data, currentHeat == undefined ? "Not set yet" : JSON.stringify(currentHeat));
-
+                    logger.silly('heat status packet object: %s  data: %s  currentHeat: %s', JSON.stringify(heat), data, currentHeat == undefined ? "Not set yet" : JSON.stringify(currentHeat));
                 }
 
                 if (currentHeat.poolSetPoint == undefined) {
-                    currentHeat = status;
                     if (logConfigMessages)
                         logger.info('Msg# %s   Pool/Spa heat set point discovered:  \n  Pool heat mode: %s @ %s degrees \n  Spa heat mode: %s at %s degrees', counter, heatModeStr[currentHeat.poolHeatMode], currentHeat.poolSetPoint, heatModeStr[currentHeat.spaHeatMode], currentHeat.spaSetPoint);
+                    currentHeat = JSON.parse(JSON.stringify(heat))
                     emit('heat');
                 } else {
 
-                    if (currentHeat.equals(status)) {
-                        logger.debug('Msg# %s   Pool/Spa heat set point HAS NOT CHANGED:  pool heat mode: %s @ %s degrees; spa heat mode %s at %s degrees', counter, heatModeStr[status.poolHeatMode], status.poolSetPoint, heatModeStr[status.spaHeatMode], status.spaSetPoint);
+                    if (currentHeat.equals(heat)) {
+                        logger.debug('Msg# %s   Pool/Spa heat set point HAS NOT CHANGED:  pool heat mode: %s @ %s degrees; spa heat mode %s at %s degrees', counter, heatModeStr[heat.poolHeatMode], heat.poolSetPoint, heatModeStr[heat.spaHeatMode], heat.spaSetPoint);
                     } else {
                         if (logConfigMessages) {
-                            logger.verbose('Msg# %s   Pool/Spa heat set point changed:  pool heat mode: %s @ %s degrees; spa heat mode %s at %s degrees', counter, heatModeStr[status.poolHeatMode], status.poolSetPoint, heatModeStr[status.spaHeatMode], status.spaSetPoint);
-                            logger.info('Msg# %s  Change in Pool/Spa Heat Mode:  %s', counter, currentHeat.whatsDifferent(status))
+                            logger.verbose('Msg# %s   Pool/Spa heat set point changed:  pool heat mode: %s @ %s degrees; spa heat mode %s at %s degrees', counter, heatModeStr[heat.poolHeatMode], heat.poolSetPoint, heatModeStr[heat.spaHeatMode], heat.spaSetPoint);
+                            logger.info('Msg# %s  Change in Pool/Spa Heat Mode:  %s', counter, currentHeat.whatsDifferent(heat))
                         }
-                        currentHeat = status;
+                        currentHeat = JSON.parse(JSON.stringify(heat))
                         emit('heat');
                     }
                 }
@@ -1269,25 +1278,7 @@ function decode(data, counter, packetType) {
                 break;
             }
 
-            /*            case 8: //Get Heat/Temp Setpoints
-             {
-             
-             var status = {};
-             
-             status.POOLSETPOINT = data[4];
-             status.SPASETPOINT = data[5];
-             status.POOLHEATMODE = 
-             status.SPAHEATMODE = (data[6] & 12) >> 2; //mask the data[6] with 1100 and shift right two places
-             logger.debug('Msg# %s   Pool/Spa heat set point HAS NOT CHANGED:  pool heat mode: %s @ %s degrees; spa heat mode %s at %s degrees', counter, status.POOLHEATMODE, status.POOLSETPOINT, status.SPAHEATMODE, status.SPASETPOINT);
-             if (currentHeat != status) {
-             currentHeat = status;
-             logger.verbose('Msg# %s   Pool/Spa heat set point changed:  pool heat mode: %s @ %s degrees; spa heat mode %s at %s degrees', counter, status.POOLHEATMODE, status.POOLSETPOINT, status.SPAHEATMODE, status.SPASETPOINT);
-             emit();
-             }
-             decoded = true;
-             break;
-             }
-             */
+
             case 10: //Get Custom Names
             {
                 var customName = '';
@@ -2647,6 +2638,10 @@ server.listen(port, function () {
 app.use(express.static(__dirname + expressDir));
 app.get('/status', function (req, res) {
     res.send(currentStatus)
+})
+
+app.get('/heat', function (req, res) {
+    res.send(currentHeat)
 })
 
 app.get('/circuit', function (req, res) {
