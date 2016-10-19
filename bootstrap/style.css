@@ -1,0 +1,27 @@
+.pnlSystem {
+	min-width: 230px;
+}
+
+.pnlPool {
+	min-width: 300px;
+}
+
+.pnlSpa {
+	min-width: 300px;
+}
+
+.pnlFeatures {
+	min-width: 210px;
+}
+
+.pnlPump {
+	min-width: 0px;
+}
+
+.pnlSchedule {
+	min-width: 570px;
+}
+
+.pnlEggtimer {
+	min-width: 0px;
+}
