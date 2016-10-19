@@ -10,7 +10,7 @@
         "numberOfPumps": 2
     },
     "Misc": {
-        "expressDir": "/public"
+        "expressDir": "/bootstrap"
     },
     "Network": {
         "netConnect": 1,
@@ -19,12 +19,12 @@
     },
     "Log": {
         "loglevel": 1,
-        "logType": "debug",
+        "logType": "info",
         "logPumpMessages": 0,
         "logDuplicateMessages": 0,
         "logConsoleNotDecoded": 0,
         "logConfigMessages": 1,
-        "logMessageDecoding": 1,
+        "logMessageDecoding": 0,
         "logChlorinator": 0
     },
     "ISY": {

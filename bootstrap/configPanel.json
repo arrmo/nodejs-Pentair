@@ -1,0 +1,11 @@
+{
+	"panelState" : {
+		"system": { "state": "visible" },
+		"pool": { "state": "visible" },
+		"spa": { "state": "visible" },
+		"features": { "state": "visible" },
+		"pump": { "state": "hidden" },
+		"schedule": { "state": "visible" },
+		"eggtimer": { "state": "hidden" }
+	}
+}
