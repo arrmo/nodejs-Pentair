@@ -5,7 +5,7 @@
         "pumpOnly": 0,
         "ISYController": 0,
 
-        "chlorinator": 0,
+        "chlorinator": 1,
 
         "numberOfPumps": 2
     },
@@ -18,14 +18,13 @@
         "netPort": "9801"
     },
     "Log": {
-        "loglevel": 1,
-        "logType": "info",
+        "logType": "debug",
         "logPumpMessages": 0,
         "logDuplicateMessages": 0,
         "logConsoleNotDecoded": 0,
         "logConfigMessages": 1,
         "logMessageDecoding": 0,
-        "logChlorinator": 0
+        "logChlorinator": 1
     },
     "ISY": {
         "username": "blank",
