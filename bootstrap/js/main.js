@@ -161,6 +161,7 @@ $(function () {
     }
 
     function showHeat(data) {
+        console.log('Received HEAT ' + JSON.stringify(data))
         $('#poolHeatSetPoint').html(data.poolSetPoint);
         $('#poolHeatMode').data('poolHeatMode', data.poolHeatMode)
 		$('#poolHeatModeStr').html(data.poolHeatModeStr);
@@ -197,6 +198,7 @@ $(function () {
     }
 
     function setEquipmentStatus(equipment) {
+        if (equipment != undefined)
         socket.emit('toggleCircuit', equipment)
     };
 
