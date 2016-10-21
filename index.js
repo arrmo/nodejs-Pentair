@@ -750,7 +750,7 @@ function iterateOverArrayOfArrays() {
                     preambleByte = chatter[1]; //not sure why we need this, but the 165,XX packet seems to change.  On my system it used to be 165,10 and then switched to 165,16.  Not sure why!  But we dynamically adjust it so it works for any value.  It is also different for the pumps (should always be 0 for pump messages)
                 }
                 if (logMessageDecoding)
-                    logger.info('Msg# %s  Found incoming %s packet: %s', msgCounter, packetType, chatter)
+                    logger.debug('Msg# %s  Found incoming %s packet: %s', msgCounter, packetType, chatter)
 
                 processChecksum(chatter, msgCounter, packetType);
             }
@@ -881,6 +881,18 @@ function decode(data, counter, packetType) {
 
 //logger.silly('Msg# %s  Packet info: dest %s   from %s', counter, data[packetFields.DEST], data[packetFields.FROM]);
         switch (data[packetFields.ACTION]) {
+            case 1: //Ack
+            {
+                //When we get an ACK from setting something, we'll want to request the new status so it is broadcast.
+                //  0 1  2  3 4 5   6 7  8
+                //165,1,34,16,1,1,136,1,98
+                getByte = data[6]+64
+                if (logConfigMessages) logger.info('Queueing messages to retrieve %s', strActions[getByte])
+                //get Heat Mode
+                queuePacket([165, preambleByte, 16, 34, getByte, 1, 0]);
+                decoded = true;
+                break;
+            }
             case 2: //Controller Status 
             {
                 //quick gut test to see if we have a duplicate packet
@@ -1136,9 +1148,10 @@ function decode(data, counter, packetType) {
                 if (heat.poolSetPoint != undefined) //invalid packet?
                 {
                     if (currentHeat.poolSetPoint == undefined) {
+                        currentHeat = JSON.parse(JSON.stringify(heat))
                         if (logConfigMessages)
                             logger.info('Msg# %s   Pool/Spa heat set point discovered:  \n  Pool heat mode: %s @ %s degrees \n  Spa heat mode: %s at %s degrees', counter, heatModeStr[currentHeat.poolHeatMode], currentHeat.poolSetPoint, heatModeStr[currentHeat.spaHeatMode], currentHeat.spaSetPoint);
-                        currentHeat = JSON.parse(JSON.stringify(heat))
+
                         emit('heat');
                     } else {
 
