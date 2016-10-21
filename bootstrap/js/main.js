@@ -39,6 +39,17 @@ function fmtScheduleTime(strInpStr) {
 	return strHours + ':' + strMins + ' ' + strAMPM;
 }
 
+function setStatusButton(btnID, btnState) {
+	if (btnState.toUpperCase() === 'ON') {
+		btnID.removeClass('btn-primary');
+		btnID.addClass('btn-success');
+	} else {
+		btnID.removeClass('btn-success');
+		btnID.addClass('btn-primary');
+	}
+	btnID.html(btnState.capitalizeFirstLetter());
+}
+
 function buildDaysButtons(strDays) {
 	var arrDays = Array(7).fill(false);
 	splitDays = strDays.split(" ");
@@ -163,12 +174,12 @@ $(function () {
             if (currCircuit.hasOwnProperty('name')) {
                 if (currCircuit.name != "NOT USED") {
 					if (document.getElementById(currCircuit.name)) {
-						$('#' + currCircuit.name).html(currCircuit.status.capitalizeFirstLetter());
+						setStatusButton($('#' + currCircuit.name), currCircuit.status);
 					} else if (document.getElementById(currCircuit.numberStr)) {
-						$('#' + currCircuit.numberStr).html(currCircuit.status.capitalizeFirstLetter());
+						setStatusButton($('#' + currCircuit.numberStr), currCircuit.status);
 					} else if (($hideAUX === false) || (currCircuit.name.indexOf("AUX") === -1)) {
 							$('#features tr:last').after('<tr><td>' + currCircuit.name.toLowerCase().toTitleCase() + '</td><td><button class="btn btn-primary btn-xs" name="' + currCircuit.numberStr + '" id="' + currCircuit.numberStr + '">---</button></td></tr>');
-							$('#' + currCircuit.numberStr).html(currCircuit.status.capitalizeFirstLetter());
+							setStatusButton($('#' + currCircuit.numberStr), currCircuit.status);
 							$('#' + currCircuit.numberStr).data(currCircuit.numberStr, currCircuit.number)															
 					}
                 }
