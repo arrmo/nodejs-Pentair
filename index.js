@@ -6,7 +6,7 @@ console.log('\033[2J'); //clear the console
 
 var dateFormat = require('dateformat');
 var Dequeue = require('dequeue')
-var decodeHelper = require('./lib/decode.js');
+
 var version = '1.0.0 alpha 9'
 
 const events = require('events')
@@ -21,6 +21,7 @@ var currentPumpStatus; //persistent variable to hold pump information
 var currentHeat; //persistent variable to heald heat set points
 var currentSchedule = ["blank"]; //schedules
 var queuePacketsArr = []; //array to hold messages to send
+var writeQueueActive = false //flag to tell us if we are currently processing the write queue or note
 
 var processingBuffer = false; //flag to tell us if we are processing the buffer currently
 var msgCounter = 0; //log counter to help match messages with buffer in log
@@ -285,6 +286,7 @@ const strActions = {
     157: 'Set Valves',
     162: 'Set Solar/Heat Pump',
     163: 'Set Delay',
+    194: 'Get Status',
     197: 'Get Date/Time',
     200: 'Get Heat/Temperature',
     202: 'Get Custom Name',
@@ -390,12 +392,17 @@ var numberOfPumps; //this is only used with pumpOnly=1.  It will query 1 (or 2) 
 //-------  MISC SETUP -----------
 // Setup for Miscellaneous items
 var netConnect; //set this to 1 to use a remote (net) connection, 0 for direct serial connection;
+var netPort; //port for the SOCAT communications
+var netHost; //host for the SOCAT communications
+
 //-------  END MISC SETUP -----------
 
 
 //-------  NETWORK SETUP -----------
 // Setup for Network Connection (socat or nc)
 var expressDir; //set this to the default directory for the web interface (either "/bootstrap" or "/public")
+var expressPort; //port for the Express App Server
+var expressTransport; //http, https, or both
 //-------  END NETWORK SETUP -----------
 
 //-------  LOG SETUP -----------
@@ -419,6 +426,7 @@ ISYController = configFile.Equipment.ISYController;
 chlorinator = configFile.Equipment.chlorinator;
 numberOfPumps = configFile.Equipment.numberOfPumps;
 expressDir = configFile.Misc.expressDir;
+expressPort = configFile.Misc.expressPort;
 netConnect = configFile.Network.netConnect;
 netPort = configFile.Network.netPort;
 netHost = configFile.Network.netHost;
@@ -463,6 +471,7 @@ var logger = new(winston.Logger)({
         })
     ]
 });
+var decodeHelper = require('./lib/decode.js');
 
 if (netConnect === 0) {
     const serialport = require("serialport");
@@ -612,12 +621,18 @@ settingsStr += '\n var numberOfPumps = ' + numberOfPumps;
 settingsStr += '\n var ISYController = ' + ISYController;
 settingsStr += '\n //-------  END EQUIPMENT SETUP -----------';
 settingsStr += '\n ';
-settingsStr += '\n //-------  MISC NETWORK SETUP -----------';
+settingsStr += '\n //-------  MISC SETUP -----------';
+settingsStr += '\n var expressDir = ' + expressDir;
+settingsStr += '\n var expressPort = ' + expressPort;
+settingsStr += '\n var expressTransport = ' + expressTransport;
+settingsStr += '\n //-------  END MISC SETUP -----------';
+settingsStr += '\n ';
+settingsStr += '\n //-------  NETWORK SETUP -----------';
 settingsStr += '\n // Setup for Network Connection (socat or nc)';
 settingsStr += '\n var netConnect = ' + netConnect;
 settingsStr += '\n var netHost = ' + netHost;
 settingsStr += '\n var netPort = ' + netPort;
-settingsStr += '\n //-------  END MISC NETWORK SETUP -----------';
+settingsStr += '\n //-------  END NETWORK SETUP -----------';
 settingsStr += '\n ';
 settingsStr += '\n //-------  LOG SETUP -----------';
 settingsStr += '\n var logType = ' + logType;
@@ -807,8 +822,11 @@ function processChecksum(chatter, counter, packetType) {
 
     //call new function to process message; if it isn't valid, we noted above so just don't continue
     if (decodeHelper.checksum(chatter, counter, packetType, logMessageDecoding, logger, countChecksumMismatch)) {
+
+
         if (queuePacketsArr.length > 0) {
             if (decodeHelper.isResponse(chatter, counter, packetType, logger, packetFields, queuePacketsArr)) {
+
                 successfulAck(chatter, counter, true);
             } else {
                 successfulAck(chatter, counter, false);
@@ -1168,6 +1186,7 @@ function decode(data, counter, packetType) {
                     if (checkForChange[0]) {
                         if (customNameArr[data[6]] !== customName) {
                             logger.info('Msg# %s  Custom Circuit name %s changed to %s', customNameArr[data[6]], customName)
+                            emit('circuit');
                         }
                     }
 
@@ -1176,9 +1195,10 @@ function decode(data, counter, packetType) {
                     if (data[6] == 9 && checkForChange[0] === 0) {
                         logger.info('\n  Custom Circuit Names retrieved from configuration: ', customNameArr)
                         checkForChange[0] = 1
+                        emit('circuit');
                     }
 
-                    emit('circuit');
+
                     decoded = true;
                     break;
                 }
@@ -1215,19 +1235,21 @@ function decode(data, counter, packetType) {
                         if (checkForChange[1]) {
                             if (!(circuit.equals(currentCircuitArrObj[circuitNumber]))) {
                                 results = currentCircuitArrObj[i].whatsDifferent(circuit);
-                                if (!(results == "Nothing!" || currentCircuitArrObj[i].name == undefined)) {
+                                if (!(results == "Nothing!" || currentCircuitArrObj[i].name === 'NOT USED')) {
                                     logger.verbose('Msg# %s   Circuit %s change:  %s', counter, circuit.name, results)
-                                }
-                                if (logConfigMessages) {
-                                    logger.silly('Msg# %s  Circuit Info  %s', counter, JSON.stringify(data))
-                                        //logger.debug('currentCircuitArrObj[%s]: %s ', circuitNumber, JSON.stringify(currentCircuitArrObj[circuitNumber]))
-                                        //logger.verbose('Msg# %s  Circuit %s:   Name: %s  Function: %s  Status: %s  Freeze Protection: %s', counter, circuitNumber, strCircuitName[data[namePacketFields.NAME]], strCircuitFunction[data[namePacketFields.CIRCUITFUNCTION] & 63], freezeProtection)
-                                    if (circuit.status == undefined) {
-                                        logger.debug('Msg# %s  Circuit %s:   Name: %s  Function: %s  Status: (not received yet)  Freeze Protection: %s', counter, currentCircuitArrObj[circuitNumber].number, currentCircuitArrObj[circuitNumber].name, currentCircuitArrObj[circuitNumber].circuitFunction, currentCircuitArrObj[circuitNumber].freeze)
-                                    } else {
-                                        logger.debug('Msg# %s  Circuit %s:   Name: %s  Function: %s  Status: %s  Freeze Protection: %s', counter, currentCircuitArrObj[circuitNumber].number, currentCircuitArrObj[circuitNumber].name, currentCircuitArrObj[circuitNumber].circuitFunction, currentCircuitArrObj[circuitNumber].status, currentCircuitArrObj[circuitNumber].freeze)
 
+                                    if (logConfigMessages) {
+                                        logger.silly('Msg# %s  Circuit Info  %s', counter, JSON.stringify(data))
+                                            //logger.debug('currentCircuitArrObj[%s]: %s ', circuitNumber, JSON.stringify(currentCircuitArrObj[circuitNumber]))
+                                            //logger.verbose('Msg# %s  Circuit %s:   Name: %s  Function: %s  Status: %s  Freeze Protection: %s', counter, circuitNumber, strCircuitName[data[namePacketFields.NAME]], strCircuitFunction[data[namePacketFields.CIRCUITFUNCTION] & 63], freezeProtection)
+                                        if (circuit.status == undefined) {
+                                            logger.debug('Msg# %s  Circuit %s:   Name: %s  Function: %s  Status: (not received yet)  Freeze Protection: %s', counter, currentCircuitArrObj[circuitNumber].number, currentCircuitArrObj[circuitNumber].name, currentCircuitArrObj[circuitNumber].circuitFunction, currentCircuitArrObj[circuitNumber].freeze)
+                                        } else {
+                                            logger.debug('Msg# %s  Circuit %s:   Name: %s  Function: %s  Status: %s  Freeze Protection: %s', counter, currentCircuitArrObj[circuitNumber].number, currentCircuitArrObj[circuitNumber].name, currentCircuitArrObj[circuitNumber].circuitFunction, currentCircuitArrObj[circuitNumber].status, currentCircuitArrObj[circuitNumber].freeze)
+
+                                        }
                                     }
+                                    emit('circuit');
                                 }
                             } else {
                                 logger.debug('Msg# %s  No change in circuit %s', counter, circuit.number)
@@ -1251,10 +1273,11 @@ function decode(data, counter, packetType) {
                                 circuitStr += '\n'
                             }
                             logger.info('\n  Circuit Array Discovered from configuration: \n%s \n', circuitStr)
+                            emit('circuit');
                             checkForChange[1] = 1
                         }
                     }
-                    emit('circuit');
+
                     decoded = true;
                     break;
                 }
@@ -1310,7 +1333,7 @@ function decode(data, counter, packetType) {
                         if (logConfigMessages)
                             logger.debug('Msg# %s:  Schedule %s has not changed.', counter, schedule.ID)
                     } else {
-                        if (currentSchedule[schedule.ID] == undefined && schedule.ID === 12 && checkForChange[2]===0) {
+                        if (currentSchedule[schedule.ID] == undefined && schedule.ID === 12 && checkForChange[2] === 0) {
                             currentSchedule[schedule.ID] = schedule; //should only be called here for schedule.ID === 12.
                             var scheduleStr = 'Msg# ' + counter + '  Schedules discovered:'
                             for (var i = 1; i <= 12; i++) {
@@ -1324,9 +1347,8 @@ function decode(data, counter, packetType) {
                                 }
                             }
                             logger.info('%s\n\n', scheduleStr)
-                            checkForChange[2]=1
-                        } else if (checkForChange[2]===1)
-                        {
+                            checkForChange[2] = 1
+                        } else if (checkForChange[2] === 1) {
                             //Explicitly writing out the old/new packets because if we call .whatsDifferent and the schedule switches from an egg timer to schedule (or vice versa) it will throw an error)
 
                             var scheduleChgStr = 'Msg# ' + counter + '  Schedule ' + 'ID:' + schedule.ID + ' changed from:\n'
@@ -1353,8 +1375,9 @@ function decode(data, counter, packetType) {
                         }
 
                         currentSchedule[schedule.ID] = schedule;
-                        emit('schedule')
-
+                        if (schedule.ID === 12) {
+                            emit('schedule')
+                        }
                     }
                     decoded = true;
                     break;
@@ -2096,6 +2119,7 @@ function queuePacket(message) {
 
 
     var packet;
+    var requestGet = 0;
     if (message[0] == 16 && message[1] == ctrl.CHLORINATOR) {
         message.push(checksum)
         message.push(16)
@@ -2110,16 +2134,11 @@ function queuePacket(message) {
         packet = [255, 0, 255];
         Array.prototype.push.apply(packet, message);
 
-        //if we request to "SET" a variable, let's broadcast the entire controller configuration again
-        if (packet[8] >= 125 && packet[8] <= 170 && intellichlor) {
-            getControllerConfiguration()
+        //if we request to "SET" a variable on the HEAT STATUS
+        if (packet[7] === 136  && intellitouch) {
+            requestGet = 1;
         }
     }
-
-
-
-
-
 
     //-------Internally validate checksum
 
@@ -2152,13 +2171,22 @@ function queuePacket(message) {
         logger.error('Asking to queue malformed packet: %s', packet)
     } else {
         queuePacketsArr.push(packet);
-        logger.verbose('Just Queued Message to send: %s', packet)
+        logger.verbose('Just Queued Message \'%s\' to send: %s', strActions[packet[packetFields.ACTION+3]],packet)
     }
 
 
     //-------End Internally validate checksum
 
+    if (requestGet) {
+      //request the GET version of the SET packet
+      var getPacket = [165, preambleByte, 16, 34, packet[packetFields.ACTION+3]+64, 1, 0]
+      logger.debug('Queueing messages to retrieve \'%s\'', strActions[getPacket[packetFields.ACTION]])
+      queuePacket(getPacket);
 
+      var statusPacket = [165, preambleByte, 16, 34, 194, 1, 0]
+      logger.debug('Queueing messages to retrieve \'%s\'', strActions[statusPacket[packetFields.ACTION]])
+      queuePacket(statusPacket);
+    }
 
 
 
@@ -2166,7 +2194,7 @@ function queuePacket(message) {
     logger.silly('after push packet: %s  Message: %s', packet, message)
 
     //if length > 0 then we will loop through from isResponse
-    if (queuePacketsArr.length == 1)
+    if (!writeQueueActive)
         writePacket();
 }
 
@@ -2176,56 +2204,57 @@ function writePacket() {
     if (queuePacketsArr.length == 0) // need this because the correct packet might come back during the writePacketTimer.timeout.
     {
         logger.silly('Exiting write queue because last message was successfully received.')
+        writeQueueActive = false
     } else {
+        writeQueueActive = true
         logger.silly('Entering Write Queue')
         logger.silly('Queue = %s', JSON.stringify(queuePacketsArr))
 
         if (netConnect === 0) {
             sp.write(queuePacketsArr[0], function(err) {
-                sp.drain(function() {
-                    if (err) {
-                        logger.error('Error writing packet: ' + err.message)
-                    }
-                    if (queuePacketsArr[0].equals(msgWriteCounter.msgWrote)) //msgWriteCounter will store the message that is being written.  If it doesn't match the 1st msg in the queue, then we have received the ACK for the message and can move on.  If it is the same message, then we are retrying the same message again so increment the counter.
-                    {
-                        msgWriteCounter.counter++;
-                    } else {
-                        msgWriteCounter.msgWrote = queuePacketsArr[0].slice(0);
-                        msgWriteCounter.counter = 1;
-                    }
-                    logger.verbose('Sent Packet ' + queuePacketsArr[0] + ' Try: ' + msgWriteCounter.counter)
-                    if (msgWriteCounter.counter >= 10) //if we get to 10 retries, then throw an Error.
-                    {
-                        logger.error('Error writing packet to serial bus.  Tried %s times to write %s', msgWriteCounter.counter, msgWriteCounter.msgWrote)
-                        if (logType == "info" || logType == "warn" || logType == "error") {
-                            logger.warn('Setting logging level to Debug')
-                            logType = 'debug'
-                            logger.transports.console.level = 'debug';
-                        }
-                        if (msgWriteCounter.counter >= 20) //if we get to 20 retries, then abort this packet.
-                        {
-                            msgWriteCounter.msgWrote = queuePacketsArr[0].slice(0);
-                            msgWriteCounter.counter = 1;
-                        }
-
-
-
-                    }
-                });
+                if (err) {
+                    logger.error('Error writing packet: ' + err.message)
+                }
             })
         } else {
-            sp.write(new Buffer(queuePacketsArr[0]), 'binary');
+            sp.write(new Buffer(queuePacketsArr[0]), 'binary', function(err) {
+                if (err) {
+                    logger.error('Error writing packet: ' + err.message)
+                }
+            })
         }
         packetWrittenAt = msgCounter;
-        if (queuePacketsArr.length > 0) {
-            writePacketTimer.setTimeout(writePacket, '', '250m')
-        }
+        writePacketHelper()
     }
-
-
-
 }
 
+function writePacketHelper() {
+    if (queuePacketsArr[0] == msgWriteCounter.msgWrote) //msgWriteCounter will store the message that is being written.  If it doesn't match the 1st msg in the queue, then we have received the ACK for the message and can move on.  If it is the same message, then we are retrying the same message again so increment the counter.
+    {
+        msgWriteCounter.counter++;
+    } else {
+        msgWriteCounter.msgWrote = queuePacketsArr[0].slice(0);
+        msgWriteCounter.counter = 1;
+    }
+    logger.verbose('Sent Packet ' + queuePacketsArr[0] + ' Try: ' + msgWriteCounter.counter)
+    if (msgWriteCounter.counter >= 10) //if we get to 10 retries, then throw an Error.
+    {
+        logger.error('Error writing packet to serial bus.  Tried %s times to write %s', msgWriteCounter.counter, msgWriteCounter.msgWrote)
+        if (logType == "info" || logType == "warn" || logType == "error") {
+            logger.warn('Setting logging level to Debug')
+            logType = 'debug'
+            logger.transports.console.level = 'debug';
+        }
+        if (msgWriteCounter.counter >= 20) //if we get to 20 retries, then abort this packet.
+        {
+            msgWriteCounter.msgWrote = queuePacketsArr[0].slice(0);
+            msgWriteCounter.counter = 1;
+        }
+    }
+    if (queuePacketsArr.length > 0) {
+        writePacketTimer.setTimeout(writePacket, '', '250m')
+    }
+}
 
 if (pumpOnly) {
 
@@ -2398,14 +2427,13 @@ function getControllerConfiguration(dest, src) {
         //get Heat Mode
     queuePacket([165, preambleByte, 16, 34, 253, 1, 0]);
 
-    logger.verbose('Queueing messages to retrieve settings(?)')
-        //get Heat Mode
-    queuePacket([165, preambleByte, 16, 34, 232, 1, 0]);
-
-
     logger.verbose('Queueing messages to retrieve Pool/Spa Heat Mode')
         //get Heat Mode
     queuePacket([165, preambleByte, 16, 34, 200, 1, 0]);
+
+    logger.verbose('Queueing messages to retrieve settings(?)')
+        //get Heat Mode
+    queuePacket([165, preambleByte, 16, 34, 232, 1, 0]);
 
     logger.verbose('Queueing messages to retrieve Custom Names')
     var i = 0;
@@ -2577,7 +2605,79 @@ function emit(outputType) {
 }
 
 
+
+function changeHeatMode(equip, heatmode, src) {
+
+    //pool
+    if (equip === 'pool') {
+        var updateHeatMode = (currentHeat.spaHeatMode << 2) | heatmode;
+        var updateHeat = [165, preambleByte, 16, 34, 136, 4, currentHeat.poolSetPoint, currentHeat.spaSetPoint, updateHeatMode, 0]
+        queuePacket(updateHeat);
+        logger.info('User request to update pool heat mode to %s', heatmode)
+    } else {
+        //spaSetPoint
+        var updateHeatMode = (parseInt(heatmode) << 2) | currentHeat.poolHeatMode;
+        var updateHeat = [165, preambleByte, 16, 34, 136, 4, currentHeat.poolSetPoint, currentHeat.spaSetPoint, updateHeatMode, 0]
+        queuePacket(updateHeat);
+        logger.info('User request to update spa heat mode to %s', heatmode)
+    }
+}
+
+function changeHeatSetPoint(equip, change, src) {
+//TODO: There should be a function for a relative (+1, -1, etc) change as well as direct (98 degrees) method
+    //ex spa-->103
+    //255,0,255,165,16,16,34,136,4,95,104,7,0,2,65
+
+    /*
+    FROM SCREENLOGIC
+
+    20:49:39.032 DEBUG iOAOA: Packet being analyzed: 255,0,255,165,16,16,34,136,4,95,102,7,0,2,63
+    20:49:39.032 DEBUG Msg# 153  Found incoming controller packet: 165,16,16,34,136,4,95,102,7,0,2,63
+    20:49:39.032 INFO Msg# 153   Wireless asking Main to change pool heat mode to Solar Only (@ 95 degrees) & spa heat mode to Heater (at 102 degrees): [165,16,16,34,136,4,95,102,7,0,2,63]
+    #1 - request
+
+    20:49:39.126 DEBUG iOAOA: Packet being analyzed: 255,255,255,255,255,255,255,255,0,255,165,16,34,16,1,1,136,1,113
+    20:49:39.127 DEBUG Msg# 154  Found incoming controller packet: 165,16,34,16,1,1,136,1,113
+    #2 - ACK
+
+    20:49:41.241 DEBUG iOAOA: Packet being analyzed: 255,255,255,255,255,255,255,255,0,255,165,16,15,16,2,29,20,57,0,0,0,0,0,0,0,0,3,0,64,4,68,68,32,0,61,59,0,0,7,0,0,152,242,0,13,4,69
+    20:49:41.241 DEBUG Msg# 155  Found incoming controller packet: 165,16,15,16,2,29,20,57,0,0,0,0,0,0,0,0,3,0,64,4,68,68,32,0,61,59,0,0,7,0,0,152,242,0,13,4,69
+    20:49:41.241 VERBOSE -->EQUIPMENT Msg# 155  .....
+    #3 - Controller responds with status
+    */
+
+
+    logger.debug('cHSP: setHeatPoint called with %s %s from %s', equip, change, src)
+    var updateHeatMode = (currentHeat.spaHeatMode << 2) | currentHeat.poolHeatMode;
+    if (equip === 'pool') {
+        var updateHeat = [165, preambleByte, 16, 34, 136, 4, currentHeat.poolSetPoint + parseInt(change), currentHeat.spaSetPoint, updateHeatMode, 0]
+        logger.info('User request to update %s set point to %s', equip, currentHeat.poolSetPoint + change)
+    } else {
+        var updateHeat = [165, preambleByte, 16, 34, 136, 4, currentHeat.poolSetPoint, currentHeat.spaSetPoint + parseInt(change), updateHeatMode, 0]
+        logger.info('User request to update %s set point to %s', equip, currentHeat.spaSetPoint + change)
+    }
+    queuePacket(updateHeat);
+}
+
 //<----  START SERVER CODE
+
+
+/*HTTPS???
+// Setup basic express server
+var express = require('express');
+var app = express();
+var http = require('http')
+var https = require('https')
+var port = process.env.PORT || expressPort;
+http.createServer(app).listen(port)
+//, function() {
+//    logger.verbose('Express Server listening at port %d', port);
+//}).listen(port);
+/*https.createServer(app, function() {
+    logger.verbose('Express Server listening at port %d', port);
+}).listen(443);
+var io = require('socket.io')(http);
+*/
 
 // Setup basic express server
 var express = require('express');
@@ -2588,6 +2688,10 @@ var port = process.env.PORT || 3000;
 server.listen(port, function() {
     logger.verbose('Express Server listening at port %d', port);
 });
+
+
+
+
 // Routing
 app.use(express.static(__dirname + expressDir));
 app.get('/status', function(req, res) {
@@ -2618,7 +2722,6 @@ app.get('/circuit/:circuit', function(req, res) {
 })
 
 app.get('/circuit/:circuit/toggle', function(req, res) {
-
     var desiredStatus = currentCircuitArrObj[req.params.circuit].status == "on" ? 0 : 1;
     var toggleCircuitPacket = [165, preambleByte, 16, 34, 134, 2, Number(req.params.circuit), desiredStatus];
     queuePacket(toggleCircuitPacket);
@@ -2782,57 +2885,36 @@ io.on('connection', function(socket, error) {
     })
 
     socket.on('spasetpoint', function(spasetpoint) {
-        var updateHeatMode = (currentHeat.spaHeatMode << 2) | currentHeat.poolHeatMode;
-        var updateHeat = [165, preambleByte, 16, 34, 136, 4, currentHeat.poolSetPoint, parseInt(spasetpoint), updateHeatMode, 0]
-        logger.info('User request to update spa set point to %s', spasetpoint, updateHeat)
-        queuePacket(updateHeat);
-        //var response = 'Request to set spa heat setpoint to ' + req.params.temp + ' sent to controller'
-        //res.send(response)
+        changeHeatSetPoint('spa', spasetpoint, ' socket.io spasetpoint')
     })
 
     socket.on('spaheatmode', function(spaheatmode) {
-        var updateHeatMode = (parseInt(spaheatmode) << 2) | currentHeat.poolHeatMode;
-        var updateHeat = [165, preambleByte, 16, 34, 136, 4, currentHeat.poolSetPoint, currentHeat.spaSetPoint, updateHeatMode, 0]
-        queuePacket(updateHeat);
-        logger.info('User request to update spa heat mode to %s', spaheatmode)
+        changeHeatMode('spa', spaheatmode, 'socket.io spaheatmode')
 
     })
 
     socket.on('poolsetpoint', function(poolsetpoint) {
-        var updateHeatMode = (currentHeat.spaHeatMode << 2) | currentHeat.poolHeatMode;
-        var updateHeat = [165, preambleByte, 16, 34, 136, 4, parseInt(poolsetpoint), currentHeat.spaSetPoint, updateHeatMode, 0]
-        queuePacket(updateHeat);
-        logger.info('User request to update pool set point to %s', poolsetpoint)
-            //var response = 'Request to set pool heat setpoint to ' + req.params.temp + ' sent to controller'
-
+        changeHeatSetPoint('pool', change, 'socket.io poolsetpoint')
     })
 
     socket.on('poolheatmode', function(poolheatmode) {
-        var updateHeatMode = (currentHeat.spaHeatMode << 2) | poolheatmode;
-        var updateHeat = [165, preambleByte, 16, 34, 136, 4, currentHeat.poolSetPoint, currentHeat.spaSetPoint, updateHeatMode, 0]
-        queuePacket(updateHeat);
-        logger.info('User request to update pool heat mode to %s', poolheatmode)
+        changeHeatMode('pool', poolheatmode, 'socket.io poolheatmode')
     })
 
     socket.on('setHeatSetPoint', function(equip, change) {
-        logger.info('setHeatPoint called with %s %s', equip, change)
-        var updateHeatMode = (currentHeat.spaHeatMode << 2) | currentHeat.poolHeatMode;
-        if (equip == "pool") {
-            var updateHeat = [165, preambleByte, 16, 34, 136, 4, currentHeat.poolSetPoint + change, currentHeat.spaSetPoint, updateHeatMode, 0]
-            logger.info('User request to update %s set point to %s', equip, currentHeat.poolSetPoint + change)
+        if (equip != null && change != null) {
+            changeHeatSetPoint(equip, change, 'socket.io setHeatSetPoint')
         } else {
-            var updateHeat = [165, preambleByte, 16, 34, 136, 4, currentHeat.poolSetPoint, currentHeat.spaSetPoint + parseInt(change), updateHeatMode, 0]
-            logger.info('User request to update %s set point to %s', equip, currentHeat.spaSetPoint + change)
+            logger.warn('setHeatPoint called with invalid values: %s %s', equip, change)
         }
-        queuePacket(updateHeat);
     })
 
     socket.on('setHeatMode', function(equip, change) {
         if (equip == "pool") {
-            io.sockets.emit('poolheatmode', change)
+            changeHeatMode('pool', change, 'socket.io setHeatMode ' + equip + ' ' + change)
 
         } else {
-            io.sockets.emit('spaheatmode', change)
+            changeHeatMode('spa', change, 'socket.io setHeatMode ' + equip + ' ' + change)
         }
     })
 
