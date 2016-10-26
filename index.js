@@ -451,9 +451,24 @@ logChlorinator = configFile.Log.logChlorinator;
  }
  }*/
 
+// Setup express server
+var express = require('express');
+var app = express();
+var server = require('http').createServer(app);
+var io = require('socket.io')(server);
+var port = process.env.PORT || 3000;
+server.listen(port, function() {
+    logger.verbose('Express Server listening at port %d', port);
+});
+
+
+
 
 
 var winston = require('winston');
+var winsocketio = require('./lib/winston-socketio.js').SocketIO
+
+
 var logger = new(winston.Logger)({
     transports: [
         new(winston.transports.Console)({
@@ -471,6 +486,21 @@ var logger = new(winston.Logger)({
         })
     ]
 });
+var winsocketOptions = {
+  server: server,
+   level: 'info',
+   SocketIO: io,
+
+        customFormatter: function(level, message, meta) {
+        // Return string will be passed to logger.
+        return dateFormat(Date.now(), "HH:MM:ss.l") + ' ' + level.toUpperCase() + ' ' + (undefined !== message ? message.split('\n').join('<br \>') : '') +
+            (meta && Object.keys(meta).length ? '\n\t' + JSON.stringify(meta, null, '<br \>') : '');
+    }
+  }
+
+logger.add(winsocketio, winsocketOptions)
+
+
 var decodeHelper = require('./lib/decode.js');
 
 if (netConnect === 0) {
@@ -2135,7 +2165,7 @@ function queuePacket(message) {
         Array.prototype.push.apply(packet, message);
 
         //if we request to "SET" a variable on the HEAT STATUS
-        if (packet[7] === 136  && intellitouch) {
+        if (packet[7] === 136 && intellitouch) {
             requestGet = 1;
         }
     }
@@ -2171,21 +2201,21 @@ function queuePacket(message) {
         logger.error('Asking to queue malformed packet: %s', packet)
     } else {
         queuePacketsArr.push(packet);
-        logger.verbose('Just Queued Message \'%s\' to send: %s', strActions[packet[packetFields.ACTION+3]],packet)
+        logger.verbose('Just Queued Message \'%s\' to send: %s', strActions[packet[packetFields.ACTION + 3]], packet)
     }
 
 
     //-------End Internally validate checksum
 
     if (requestGet) {
-      //request the GET version of the SET packet
-      var getPacket = [165, preambleByte, 16, 34, packet[packetFields.ACTION+3]+64, 1, 0]
-      logger.debug('Queueing messages to retrieve \'%s\'', strActions[getPacket[packetFields.ACTION]])
-      queuePacket(getPacket);
+        //request the GET version of the SET packet
+        var getPacket = [165, preambleByte, 16, 34, packet[packetFields.ACTION + 3] + 64, 1, 0]
+        logger.debug('Queueing messages to retrieve \'%s\'', strActions[getPacket[packetFields.ACTION]])
+        queuePacket(getPacket);
 
-      var statusPacket = [165, preambleByte, 16, 34, 194, 1, 0]
-      logger.debug('Queueing messages to retrieve \'%s\'', strActions[statusPacket[packetFields.ACTION]])
-      queuePacket(statusPacket);
+        var statusPacket = [165, preambleByte, 16, 34, 194, 1, 0]
+        logger.debug('Queueing messages to retrieve \'%s\'', strActions[statusPacket[packetFields.ACTION]])
+        queuePacket(statusPacket);
     }
 
 
@@ -2624,7 +2654,7 @@ function changeHeatMode(equip, heatmode, src) {
 }
 
 function changeHeatSetPoint(equip, change, src) {
-//TODO: There should be a function for a relative (+1, -1, etc) change as well as direct (98 degrees) method
+    //TODO: There should be a function for a relative (+1, -1, etc) change as well as direct (98 degrees) method
     //ex spa-->103
     //255,0,255,165,16,16,34,136,4,95,104,7,0,2,65
 
@@ -2678,17 +2708,6 @@ http.createServer(app).listen(port)
 }).listen(443);
 var io = require('socket.io')(http);
 */
-
-// Setup basic express server
-var express = require('express');
-var app = express();
-var server = require('http').createServer(app);
-var io = require('socket.io')(server);
-var port = process.env.PORT || 3000;
-server.listen(port, function() {
-    logger.verbose('Express Server listening at port %d', port);
-});
-
 
 
 
