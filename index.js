@@ -2213,9 +2213,9 @@ function queuePacket(message) {
         logger.debug('Queueing messages to retrieve \'%s\'', strActions[getPacket[packetFields.ACTION]])
         queuePacket(getPacket);
 
-        var statusPacket = [165, preambleByte, 16, 34, 194, 1, 0]
-        logger.debug('Queueing messages to retrieve \'%s\'', strActions[statusPacket[packetFields.ACTION]])
-        queuePacket(statusPacket);
+        //var statusPacket = [165, preambleByte, 16, 34, 194, 1, 0]
+        //logger.debug('Queueing messages to retrieve \'%s\'', strActions[statusPacket[packetFields.ACTION]])
+        //queuePacket(statusPacket);
     }
 
 
