@@ -1,18 +1,18 @@
 <!DOCTYPE html>
 <html lang="en">
-
 <head>
     <title>Pentair Pool System</title>
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
 	<link rel="icon" href="favicon.png">
     <link type="text/css" rel="stylesheet" href="bootstrap-3.3.7-dist/css/bootstrap.min.css">
-    <link type="text/css" rel="stylesheet" href="bootswatch/bootstrap.min.css">
     <link type="text/css" rel="stylesheet" href="style.css">
     <script src="js/jquery-3.1.1.min.js"></script>
+    <script src="js/jquery-ui-1.12.1.min.js"></script>
     <script src="bootstrap-3.3.7-dist/js/bootstrap.min.js"></script>
+	<script src="socket.io/socket.io.js"></script>
+	<script src="js/main.js"></script>
 </head>
-
 <body>
 <nav class="navbar navbar-default">
 	<div class="container-fluid">
@@ -21,8 +21,7 @@
 		</div>
 	</div>
 </nav>
-
-<div class="container-fluid row-content">
+<div id="draggablePanelList">
 	<div id="system" class="col-md-2 pnlSystem">
 	  <div class="panel panel-primary">
 			<div class="panel-heading">System Information</div>
@@ -60,91 +59,89 @@
 			</div>
 		</div>
 	</div>
-	<div id="circuit">
-        <div id="pool" class="col-md-3 pnlPool">
-          <div class="panel panel-primary">
-                <div class="panel-heading">Pool Details</div>
-                <div class="panel-body">
-                    <table class="table table-hover">
-                        <thead>
-                            <tr>
-                                <th>Circuit</th>
-                                <th>Status</th>
-                            </tr>
-                        </thead>
-                        <tbody>
-                            <tr>
-                                <td>Pool State</td>
-								<td>
-									<button class="btn btn-primary btn-xs" id="POOL">---</button>
-                                </td>
-                            </tr>
-                            <tr>
-                                <td>Temperature</td>
-                                <td id="poolCurrentTemp">---</td>
-                            </tr>
-                            <tr>
-                                <td>SetPoint</td>
-                                <td>
-									<button class="btn btn-primary btn-xs" id="poolsetpointminusone"><span style="font-weight:bold; font-size:12px;">&#x21E9;</span></button>
-									<span id="poolHeatSetPoint">---</span>
-									<button class="btn btn-primary btn-xs" id="poolsetpointplusone"><span style="font-weight:bold; font-size:12px;">&#x21E7;</span></button>
-								</td>
-                            </tr>
-                            <tr id="poolHeatMode">
-                                <td>Heater Mode</td>
-                                <td>
-									<button class="btn btn-primary btn-xs" id="poolHeatModeDown"><span style="font-weight:bold; font-size:12px;">&#x21E9;</span></button>
-									<button class="btn btn-default btn-xs" style="width: 70px;"><span id="poolHeatModeStr">Off</span></button>
-									<button class="btn btn-primary btn-xs" id="poolHeatModeUp"><span style="font-weight:bold; font-size:12px;">&#x21E7;</span></button>
-								</td>
-                            </tr>
-                        </tbody>
-                    </table>
-                </div>
-            </div>
+	<div id="pool" class="col-md-3 pnlPool">
+	  <div class="panel panel-primary">
+			<div class="panel-heading">Pool Details</div>
+			<div class="panel-body">
+				<table class="table table-hover">
+					<thead>
+						<tr>
+							<th>Circuit</th>
+							<th>Status</th>
+						</tr>
+					</thead>
+					<tbody>
+						<tr>
+							<td>Pool State</td>
+							<td>
+								<button class="btn btn-primary btn-xs" id="POOL">---</button>
+							</td>
+						</tr>
+						<tr>
+							<td>Temperature</td>
+							<td id="poolCurrentTemp">---</td>
+						</tr>
+						<tr>
+							<td>SetPoint</td>
+							<td>
+								<button class="btn btn-primary btn-xs" id="poolsetpointminusone"><span style="font-weight:bold; font-size:12px;">&#x21E9;</span></button>
+								<span id="poolHeatSetPoint">---</span>
+								<button class="btn btn-primary btn-xs" id="poolsetpointplusone"><span style="font-weight:bold; font-size:12px;">&#x21E7;</span></button>
+							</td>
+						</tr>
+						<tr id="poolHeatMode">
+							<td>Heater Mode</td>
+							<td>
+								<button class="btn btn-primary btn-xs" id="poolHeatModeDown"><span style="font-weight:bold; font-size:12px;">&#x21E9;</span></button>
+								<button class="btn btn-default btn-xs" style="width: 70px;"><span id="poolHeatModeStr">Off</span></button>
+								<button class="btn btn-primary btn-xs" id="poolHeatModeUp"><span style="font-weight:bold; font-size:12px;">&#x21E7;</span></button>
+							</td>
+						</tr>
+					</tbody>
+				</table>
+			</div>
 		</div>
-		<div id="spa" class="col-md-3 pnlSpa">
-			<div class="panel panel-primary">
-				<div class="panel-heading">Spa Details</div>
-				<div class="panel-body">
-					<table class="table table-hover">
-						<thead>
-							<tr>
-								<th>Circuit</th>
-								<th>Status</th>
-							</tr>
-						</thead>
-						<tbody>
-                            <tr>
-                                <td>Spa State</td>
-								<td>
-									<button class="btn btn-primary btn-xs" id="SPA">---</button>
-                                </td>
-                            </tr>
-							<tr>
-								<td>Temperature</td>
-								<td id="spaCurrentTemp">---</td>
-							</tr>
-							<tr>
-                                <td>SetPoint</td>
-                                <td>
-									<button class="btn btn-primary btn-xs" id="spasetpointminusone"><span style="font-weight:bold; font-size:12px;">&#x21E9;</span></button>
-									<span id="spaHeatSetPoint">---</span>
-									<button class="btn btn-primary btn-xs" id="spasetpointplusone"><span style="font-weight:bold; font-size:12px;">&#x21E7;</span></button>
-								</td>
-							</tr>
-                            <tr id="spaHeatMode">
-                                <td>Heater Mode</td>
-                                <td>
-									<button class="btn btn-primary btn-xs" id="spaHeatModeDown"><span style="font-weight:bold; font-size:12px;">&#x21E9;</span></button>
-									<button class="btn btn-default btn-xs" style="width: 70px;"><span id="spaHeatModeStr">Off</span></button>
-									<button class="btn btn-primary btn-xs" id="spaHeatModeUp"><span style="font-weight:bold; font-size:12px;">&#x21E7;</span></button>
-								</td>
-							</tr>
-						</tbody>
-					</table>
-				</div>
+	</div>
+	<div id="spa" class="col-md-3 pnlSpa">
+		<div class="panel panel-primary">
+			<div class="panel-heading">Spa Details</div>
+			<div class="panel-body">
+				<table class="table table-hover">
+					<thead>
+						<tr>
+							<th>Circuit</th>
+							<th>Status</th>
+						</tr>
+					</thead>
+					<tbody>
+						<tr>
+							<td>Spa State</td>
+							<td>
+								<button class="btn btn-primary btn-xs" id="SPA">---</button>
+							</td>
+						</tr>
+						<tr>
+							<td>Temperature</td>
+							<td id="spaCurrentTemp">---</td>
+						</tr>
+						<tr>
+							<td>SetPoint</td>
+							<td>
+								<button class="btn btn-primary btn-xs" id="spasetpointminusone"><span style="font-weight:bold; font-size:12px;">&#x21E9;</span></button>
+								<span id="spaHeatSetPoint">---</span>
+								<button class="btn btn-primary btn-xs" id="spasetpointplusone"><span style="font-weight:bold; font-size:12px;">&#x21E7;</span></button>
+							</td>
+						</tr>
+						<tr id="spaHeatMode">
+							<td>Heater Mode</td>
+							<td>
+								<button class="btn btn-primary btn-xs" id="spaHeatModeDown"><span style="font-weight:bold; font-size:12px;">&#x21E9;</span></button>
+								<button class="btn btn-default btn-xs" style="width: 70px;"><span id="spaHeatModeStr">Off</span></button>
+								<button class="btn btn-primary btn-xs" id="spaHeatModeUp"><span style="font-weight:bold; font-size:12px;">&#x21E7;</span></button>
+							</td>
+						</tr>
+					</tbody>
+				</table>
 			</div>
 		</div>
 	</div>
@@ -152,7 +149,7 @@
 		<div class="panel panel-primary">
 			<div class="panel-heading">Lighting / Features</div>
 			<div class="panel-body">
-				<table class="table table-hover" id="features">
+				<table class="table table-hover">
 					<thead>
 						<tr>
 							<th>Feature</th>
@@ -205,16 +202,23 @@
 			</div>
 		</div>
 	</div>
+	<div id="debug" class="col-md-12 pnlDebug">
+		<div class="panel panel-primary">
+			<div class="panel-heading">Debug Log</div>
+			<div class="panel-body">
+				<div id="txtDebug" style="height:250px;width:100%;border:1px solid #ccc;font:12px Courier, Serif;white-space: nowrap;overflow:auto;">
+				<b>DEBUG LOG ... <br />
+				</div>			
+			</div>
+		</div>
+	</div>	
 </div>
- 
+<div class="container row-content">
+</div>
 <footer class="breadcrumb">
   nodejs-Pentair<br>
   <a href="https://github.com/tagyoureit/nodejs-Pentair">Github Repository</a>
 </footer>
-
-<script src="socket.io/socket.io.js"></script>
-<script src="js/main.js"></script>
-	
 </body>
 </html>
 

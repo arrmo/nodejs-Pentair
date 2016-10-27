@@ -25,3 +25,12 @@
 .pnlEggtimer {
 	min-width: 0px;
 }
+
+.pnlDebug {
+	min-width: 0px;
+}
+
+/* Show the move cursor as the user moves the mouse over the panel header */
+#draggablePanelList .panel-heading {
+	cursor: move;
+}

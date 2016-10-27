@@ -6,6 +6,7 @@
 		"features": { "state": "visible" },
 		"pump": { "state": "hidden" },
 		"schedule": { "state": "visible" },
-		"eggtimer": { "state": "hidden" }
+		"eggtimer": { "state": "hidden" },
+		"debug": { "state": "visible" }
 	}
 }
