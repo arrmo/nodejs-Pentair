@@ -21,6 +21,7 @@
   },
   "homepage": "https://github.com/tagyoureit/nodejs-Pentair#readme",
   "dependencies": {
+    "bootstrap": "^3.3.7",
     "dateformat": "^1.0.12",
     "dequeue": "^1.0.5",
     "express": "^4.14.0",

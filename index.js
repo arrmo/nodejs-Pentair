@@ -7,7 +7,7 @@ console.log('\033[2J'); //clear the console
 var dateFormat = require('dateformat');
 var Dequeue = require('dequeue')
 
-var version = '1.0.0 alpha 11'
+var version = '1.0.0 alpha 12'
 
 const events = require('events')
 
@@ -531,38 +531,8 @@ if (ISYController) {
     ISYConfig = JSON.parse(JSON.stringify(configFile.ISY))
 }
 
-
-//New Objects to replace arrays
-function circuit(number, numberStr, name, circuitFunction, status, freeze) {
-    this.number = number; //1
-    this.numberStr = numberStr; //circuit1
-    this.name = name; //Pool
-    this.circuitFunction = circuitFunction; //Generic, Light, etc
-    this.status = status; //On, Off
-    this.freeze = freeze; //On, Off
-}
-var circuit1 = new circuit();
-var circuit2 = new circuit();
-var circuit3 = new circuit();
-var circuit4 = new circuit();
-var circuit5 = new circuit();
-var circuit6 = new circuit();
-var circuit7 = new circuit();
-var circuit8 = new circuit();
-var circuit9 = new circuit();
-var circuit10 = new circuit();
-var circuit11 = new circuit();
-var circuit12 = new circuit();
-var circuit13 = new circuit();
-var circuit14 = new circuit();
-var circuit15 = new circuit();
-var circuit16 = new circuit();
-var circuit17 = new circuit();
-var circuit18 = new circuit();
-var circuit19 = new circuit();
-var circuit20 = new circuit();
-//array of circuit objects.  Since Pentair uses 1-20, we'll just use a placeholder for the 1st [0] element in the array
-var currentCircuitArrObj = ['blank', circuit1, circuit2, circuit3, circuit4, circuit5, circuit6, circuit7, circuit8, circuit9, circuit10, circuit11, circuit12, circuit13, circuit14, circuit15, circuit16, circuit17, circuit18, circuit19, circuit20];
+var Circuit = require('./lib/circuit.js')
+var currentCircuitArrObj = (new Circuit()).circuitArrObj()
 
 function heatObj(poolSetPoint, poolHeatMode, spaSetPoint, spaHeatMode) {
     this.poolSetPoint = poolSetPoint;
@@ -2713,6 +2683,7 @@ var io = require('socket.io')(http);
 
 // Routing
 app.use(express.static(__dirname + expressDir));
+app.use('/scripts', express.static(__dirname + '/node_modules/bootstrap/dist/'));
 app.get('/status', function(req, res) {
     res.send(currentStatus)
 })
