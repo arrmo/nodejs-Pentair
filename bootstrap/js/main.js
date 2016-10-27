@@ -70,6 +70,8 @@ function buildDaysButtons(strDays) {
 	return strHTML;
 }
 
+// From http://api.jquery.com/jquery/#jQuery3
+// JQuery(callback), Description: Binds a function to be executed when the DOM has finished loading
 $(function () {
 	$.getJSON('configPanel.json', function(json) {
 		// enable / disable panels as configured (in json file)
@@ -80,7 +82,45 @@ $(function () {
 				$('#' + currPanel).hide();				
 		}
 	});
+	
+	// Set up draggable options => allow to move panels around
+	var panelList = $('#draggablePanelList');
+	panelList.sortable({
+		// Only make the .panel-heading child elements support dragging.
+		// Omit this to make then entire <li>...</li> draggable.
+		handle: '.panel-heading', 
+		update: function() {
+			var panelIndices = [];
+			panelList.children().each(function() {
+				panelIndices[$(this).index()] = $(this).attr('id');
+			});	
+			localStorage.setItem('panelIndices', JSON.stringify(panelIndices));
+		}
+	});	
 
+	// Load Panel Configuration from Storage (so saved from last update -> stored above)
+	if (typeof(Storage) !== "undefined") {
+		var panelIndices = JSON.parse(localStorage.getItem('panelIndices'));
+		// Make sure list loaded from Storage is not empty => if so, just go with default as in index.html
+		if (panelIndices) {
+			var panelList = $('#draggablePanelList');
+			var panelListItems = panelList.children();
+			// And, only reorder if no missing / extra items => or items added, removed ... so "reset" to index.html
+			if (panelIndices.length == panelListItems.length) {
+				panelListItems.detach();
+				$.each(panelIndices, function() {
+					var currPanel = this.toString();
+					var result = $.grep(panelListItems, function(e){ 
+						return e.id == currPanel;
+					});
+					panelList.append(result);
+				});
+			}
+		}
+	} else {
+		$('#txtDebug').append('Sorry, your browser does not support Web Storage.' + '<br>');
+	}
+	
 	$.getJSON('configData.json', function(json) {
 		// configData loaded -> call routine to recursively parse the file, setting associated data for DOM elements 
 		dataAssociate("base", json);
@@ -90,15 +130,16 @@ $(function () {
 	var $hideAUX = true;
     var socket = io();
 
-    $('body').on('click', 'button', function () {
+    $('#pool, #spa').on('click', 'button', function () {
+        if (!($(this).attr('id').includes('HeatMode'))) {
+			setHeatSetPoint($(this).data('equip'), $(this).data('adjust'));
+		}
+    })
+
+    $('#features').on('click', 'button', function () {
         if (!($(this).attr('id').includes('HeatMode'))) {
             setEquipmentStatus($(this).data($(this).attr('id')));
         }
-    })
-
-    //listen for temp adjustments.
-    $('#circuit').on('click', 'button', function () {
-        setHeatSetPoint($(this).data('equip'), $(this).data('adjust'));
     })
 
     $('#spaHeatMode').on('click', 'button', function () {
@@ -143,7 +184,7 @@ $(function () {
 			} else {
 				if (currSchedule.MODE === "Schedule") {
 					// Schedule Event
-					if (typeof currSchedule.CIRCUIT !== 'undefined') {
+					if (currSchedule.CIRCUIT !== 'NOT USED') {
 						schName = 'schItem' + currSchedule.ID;
 						schHTML = '<tr name="' + schName + '" id="' + schName +'"><td>' + currSchedule.ID + '</td>' + '<td>' + currSchedule.CIRCUIT.capitalizeFirstLetter() + '</td>' +
 							'<td>' + fmtScheduleTime(currSchedule.START_TIME) + '</td>' + '<td>' + fmtScheduleTime(currSchedule.END_TIME) + '</td>' + '<td>' + buildDaysButtons(currSchedule.DAYS) + '</td></tr>'
@@ -161,7 +202,6 @@ $(function () {
     }
 
     function showHeat(data) {
-        console.log('Received HEAT ' + JSON.stringify(data))
         $('#poolHeatSetPoint').html(data.poolSetPoint);
         $('#poolHeatMode').data('poolHeatMode', data.poolHeatMode)
 		$('#poolHeatModeStr').html(data.poolHeatModeStr);
@@ -221,4 +261,10 @@ $(function () {
     socket.on('schedule', function (data) {
         showSchedule(data);
     })
+	
+    socket.on('outputLog', function (data) {
+		$('#txtDebug').append(data + '<br>');
+		$("#txtDebug").scrollTop($("#txtDebug")[0].scrollHeight);
+    })	
+
 });
