@@ -7,7 +7,7 @@ console.log('\033[2J'); //clear the console
 var dateFormat = require('dateformat');
 var Dequeue = require('dequeue')
 
-var version = '1.0.0 alpha 12'
+var version = '1.0.0 alpha 13'
 
 const events = require('events')
 
@@ -40,21 +40,6 @@ var searchSrc = '';
 var searchDest = '';
 var searchAction = '';
 var customNameArr = [];
-const state = {
-    OFF: 0,
-    ON: 1,
-}
-
-const stateStr = {
-    'off': state.OFF,
-    'on': state.ON
-}
-
-const strState = {
-    0: "Off",
-    1: "On"
-}
-
 
 // this first four bytes of ANY packet are the same
 const packetFields = {
@@ -487,16 +472,16 @@ var logger = new(winston.Logger)({
     ]
 });
 var winsocketOptions = {
-  server: server,
-   level: 'info',
-   SocketIO: io,
+    server: server,
+    level: 'info',
+    SocketIO: io,
 
-        customFormatter: function(level, message, meta) {
+    customFormatter: function(level, message, meta) {
         // Return string will be passed to logger.
         return dateFormat(Date.now(), "HH:MM:ss.l") + ' ' + level.toUpperCase() + ' ' + (undefined !== message ? message.split('\n').join('<br \>') : '') +
             (meta && Object.keys(meta).length ? '\n\t' + JSON.stringify(meta, null, '<br \>') : '');
     }
-  }
+}
 
 logger.add(winsocketio, winsocketOptions)
 
@@ -534,15 +519,8 @@ if (ISYController) {
 var Circuit = require('./lib/circuit.js')
 var currentCircuitArrObj = (new Circuit()).circuitArrObj()
 
-function heatObj(poolSetPoint, poolHeatMode, spaSetPoint, spaHeatMode) {
-    this.poolSetPoint = poolSetPoint;
-    this.poolHeatMode = poolHeatMode;
-    this.poolHeatModeStr = heatModeStr[poolHeatMode]
-    this.spaSetPoint = spaSetPoint;
-    this.spaHeatMode = spaHeatMode;
-    this.spaHeatModeStr = heatModeStr[spaHeatMode]
-}
-var currentHeat = new heatObj;
+var Heat = require('./lib/heat.js')
+var currentHeat = new Heat();
 
 function chlorinatorObj(saltPPM, outputPercent, outputSpaPercent, outputLevel, superChlorinate, version, name, status) {
 
@@ -821,6 +799,7 @@ function iterateOverArrayOfArrays() {
 function processChecksum(chatter, counter, packetType) {
 
     //call new function to process message; if it isn't valid, we noted above so just don't continue
+    //TODO: countChecksumMismatch is not incrementing properly
     if (decodeHelper.checksum(chatter, counter, packetType, logMessageDecoding, logger, countChecksumMismatch)) {
 
 
@@ -1106,16 +1085,31 @@ function decode(data, counter, packetType) {
                                 if (logPumpMessages)
                                     logger.debug('Msg# %s   Pump %s status has not changed: ', counter, status.pump, data)
                             } else {
+                                var moreThanFive = 0
+                                if (logPumpMessages) {
+                                    if ((Math.abs((pumpStatus.watts - currentPumpStatus[pumpNum].watts) / pumpStatus.watts)) > .05) {
+                                        //logger.error('pumpnum.watts:', JSON.stringify(currentPumpStatus), currentPumpStatus[pumpNum].watts)
+                                        logger.info('Msg# %s   Pump %s watts changed >5%: %s --> %s \n', counter, pumpStatus.pump, currentPumpStatus[pumpNum].watts, pumpStatus.watts)
+                                        moreThanFive = 1;
+                                    }
+                                    //logger.error('2 what\'s different: \n %s \n %s', JSON.stringify(pumpStatus), JSON.stringify(currentPumpStatus))
+                                    if (logPumpMessages)
+                                        logger.verbose('Msg# %s   Pump %s status changed: %s \n', counter, pumpStatus.pump, currentPumpStatus[pumpNum].whatsDifferent(pumpStatus));
+                                }
 
-                                if (logPumpMessages)
+                                currentPumpStatus[pumpNum] = pumpStatus;
+                                if (moreThanFive){
+                                  emit('pump');
+                                }
+                                /*
+                                if (logPumpMessages) {
                                     logger.silly('currentPumpStatus: ', currentPumpStatus[status.pump], 'status: ', status)
 
-
-                                if (logPumpMessages)
                                     logger.verbose('Msg# %s   Pump %s status changed: ', counter, status.pump, currentPumpStatus[pumpNum].whatsDifferent(status));
-                                currentPumpStatus[pumpNum] = pumpStatus;
+                                }*/
+
                                 //currentPumpStatusPacket[status.pump] = data;
-                                emit('pump')
+                                //  emit('pump')
                             }
                             //}
                         }
@@ -1133,7 +1127,7 @@ function decode(data, counter, packetType) {
                     //function heatObj(poolSetPoint, poolHeatMode, spaSetPoint, spaHeatMode)
 
 
-                    var heat = new heatObj(data[9], data[11] & 3, data[10], (data[11] & 12) >> 2)
+                    var heat = new Heat(data[9], data[11] & 3, data[10], (data[11] & 12) >> 2)
 
 
 
@@ -1209,9 +1203,9 @@ function decode(data, counter, packetType) {
                     logger.silly('get circuit names packet: %s', data)
                     var freezeProtection;
                     if ((data[namePacketFields.CIRCUITFUNCTION] & 64) == 64) {
-                        freezeProtection = 'on'
+                        freezeProtection = 1
                     } else {
-                        freezeProtection = 'off'
+                        freezeProtection = 0
                     }
                     //The &63 masks to 00111111 because 01000000 is freeze protection bit
 
@@ -1695,10 +1689,10 @@ function decode(data, counter, packetType) {
 
                     if (data[pumpPacketFields.CMD] == 255) //Set pump control panel off (Main panel control only)
                     {
-                        pumpStatus.remotecontol = 'on';
+                        pumpStatus.remotecontol = 1;
                     } else //0 = Set pump control panel on
                     {
-                        pumpStatus.remotecontol = 'off';
+                        pumpStatus.remotecontol = 0;
                     }
 
 
@@ -1813,9 +1807,9 @@ function decode(data, counter, packetType) {
 
                     var power;
                     if (data[6] == 10)
-                        power = "on"
+                        power = 1
                     else if (data[6] == 4)
-                        power = "off";
+                        power = 0;
                     pumpStatus.power = power;
                     //if (!responseBool) {
                     if (data[packetFields.DEST] == 96 || data[packetFields.DEST] == 97) //Command to the pump
@@ -1843,7 +1837,7 @@ function decode(data, counter, packetType) {
 
 
                         pumpStatus.time = data[pumpPacketFields.HOUR] + ':' + data[pumpPacketFields.MIN];
-                        pumpStatus.run = data[pumpPacketFields.CMD] == 10 ? "On" : "Off" //10=On, 4=Off
+                        pumpStatus.run = data[pumpPacketFields.CMD] == 10 ? 1 : 0 //10=On, 4=Off
 
                         pumpStatus.mode = data[pumpPacketFields.MODE]
                         pumpStatus.drivestate = data[pumpPacketFields.DRIVESTATE]
@@ -1903,14 +1897,15 @@ function decode(data, counter, packetType) {
                         if ((Math.abs((pumpStatus.watts - currentPumpStatus[pumpNum].watts) / pumpStatus.watts)) > .05) {
                             //logger.error('pumpnum.watts:', JSON.stringify(currentPumpStatus), currentPumpStatus[pumpNum].watts)
                             logger.info('Msg# %s   Pump %s watts changed >5%: %s --> %s \n', counter, pumpStatus.pump, currentPumpStatus[pumpNum].watts, pumpStatus.watts)
+                            emit('pump');
                         }
                         //logger.error('2 what\'s different: \n %s \n %s', JSON.stringify(pumpStatus), JSON.stringify(currentPumpStatus))
                         if (logPumpMessages)
-                            logger.info('Msg# %s   Pump %s status changed: %s \n', counter, pumpStatus.pump, currentPumpStatus[pumpNum].whatsDifferent(pumpStatus));
+                            logger.verbose('Msg# %s   Pump %s status changed: %s \n', counter, pumpStatus.pump, currentPumpStatus[pumpNum].whatsDifferent(pumpStatus));
                     }
 
                     currentPumpStatus[pumpStatus.pump] = JSON.parse(JSON.stringify(pumpStatus));
-                    emit('pump');
+
                 }
 
 
@@ -1982,9 +1977,9 @@ function decode(data, counter, packetType) {
                     {
                         chlorinatorStatus.outputPercent = data[4];
                         if (data[4] == 101) {
-                            chlorinatorStatus.superChlorinate = 'On'
+                            chlorinatorStatus.superChlorinate = 1
                         } else {
-                            chlorinatorStatus.superChlorinate = 'Off'
+                            chlorinatorStatus.superChlorinate = 0
                         }
                         if (logChlorinator)
                             logger.verbose('Msg# %s   %s --> %s: Set current output to %s %: %s', counter, from, destination, chlorinatorStatus.superChlorinate == 'On' ? 'Super Chlorinate' : chlorinatorStatus.outputPercent, data);
@@ -2272,6 +2267,10 @@ if (pumpOnly) {
         pumpInitialRequestConfigDelay.setTimeout(pumpStatusCheck, [1, 2], '3500m'); //must give a short delay to allow the port to open
     }
 
+    if (!intellitouch && !intellicom) {
+        var chlorinatorTimer = new NanoTimer();
+        chlorinatorTimer.setInterval(chlorinatorStatusCheck, '', '3500m')
+    }
 }
 
 //Credit to this function http://stackoverflow.com/questions/7837456/how-to-compare-arrays-in-javascript  Changed it to be enumerable:false for SerialPort compatibility.
@@ -2538,10 +2537,15 @@ function pump2SafePumpModeDelay() {
     pump2Timer.setTimeout(pump2SafePumpMode, '', '50s')
 }
 
+function chlorinatorStatusCheck() {
+    queuePacket([16, 2, 80, 0, 0, 98, 16, 3]) //request status
+    chlorinatorTimer.clearInterval();
+    chlorinatorTimer.setInterval(chlorinatorStatusCheck, '', '1800s') //30 minutes
+
+}
+
+
 function emit(outputType) {
-
-
-
     if (outputType == 'circuit' || outputType == 'all') {
         io.sockets.emit('circuit',
             currentCircuitArrObj
