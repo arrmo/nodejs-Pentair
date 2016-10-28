@@ -158,7 +158,7 @@ $(function () {
 
 	// Button Handling: Pool, Spa => On/Off
     $('#poolState, #spaState').on('click', 'button', function () {
-        setEquipmentStatus($(this).attr('id'));
+        setEquipmentStatus($(this).data($(this).attr('id')));
     })
 	
 	// Button Handling: Pool / Spa, Temperature SetPoint
@@ -193,8 +193,10 @@ $(function () {
 
     function setEquipmentStatus(equipment) {
         if (equipment != undefined)
-        socket.emit('toggleCircuit', equipment)
-    };
+			socket.emit('toggleCircuit', equipment)
+		else
+			formatLog('ERROR: Client, equipment = undefined')
+	};
 
     // Socket Events (Receive)
     socket.on('circuit', function (data) {
@@ -278,12 +280,14 @@ $(function () {
                 if (currCircuit.name != "NOT USED") {
 					if (document.getElementById(currCircuit.name)) {
 						setStatusButton($('#' + currCircuit.name), currCircuit.status);
+						$('#' + currCircuit.name).data(currCircuit.name, currCircuit.number)															
 					} else if (document.getElementById(currCircuit.numberStr)) {
 						setStatusButton($('#' + currCircuit.numberStr), currCircuit.status);
+						$('#' + currCircuit.numberStr).data(currCircuit.numberStr, currCircuit.number)															
 					} else if (($hideAUX === false) || (currCircuit.name.indexOf("AUX") === -1)) {
-							$('#features tr:last').after('<tr><td>' + currCircuit.name.toLowerCase().toTitleCase() + '</td><td><button class="btn btn-primary btn-xs" name="' + currCircuit.numberStr + '" id="' + currCircuit.numberStr + '">---</button></td></tr>');
-							setStatusButton($('#' + currCircuit.numberStr), currCircuit.status);
-							$('#' + currCircuit.numberStr).data(currCircuit.numberStr, currCircuit.number)															
+						$('#features tr:last').after('<tr><td>' + currCircuit.name.toLowerCase().toTitleCase() + '</td><td><button class="btn btn-primary btn-xs" name="' + currCircuit.numberStr + '" id="' + currCircuit.numberStr + '">---</button></td></tr>');
+						setStatusButton($('#' + currCircuit.numberStr), currCircuit.status);
+						$('#' + currCircuit.numberStr).data(currCircuit.numberStr, currCircuit.number)															
 					}
                 }
             }
