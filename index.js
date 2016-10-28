@@ -7,7 +7,7 @@ console.log('\033[2J'); //clear the console
 var dateFormat = require('dateformat');
 var Dequeue = require('dequeue')
 
-var version = '1.0.0 alpha 13'
+var version = '1.0.0 alpha 14'
 
 
 const events = require('events')
@@ -2688,7 +2688,10 @@ var io = require('socket.io')(http);
 
 // Routing
 app.use(express.static(__dirname + expressDir));
-app.use('/scripts', express.static(__dirname + '/node_modules/bootstrap/dist/'));
+app.use('/bootstrap', express.static(__dirname + '/node_modules/bootstrap/dist/'));
+app.use('/jquery', express.static(__dirname + '/node_modules/jquery-ui-dist/'));
+
+
 app.get('/status', function(req, res) {
     res.send(currentStatus)
 })
