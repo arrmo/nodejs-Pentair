@@ -1,15 +1,15 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-    <title>Pentair Pool System</title>
-    <meta charset="utf-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1">
+	<title>Pentair Pool System</title>
+	<meta charset="utf-8">
+	<meta name="viewport" content="width=device-width, initial-scale=1">
 	<link rel="icon" href="favicon.png">
-    <link type="text/css" rel="stylesheet" href="bootstrap-3.3.7-dist/css/bootstrap.min.css">
-    <link type="text/css" rel="stylesheet" href="style.css">
-    <script src="js/jquery-3.1.1.min.js"></script>
-    <script src="js/jquery-ui-1.12.1.min.js"></script>
-    <script src="bootstrap-3.3.7-dist/js/bootstrap.min.js"></script>
+	<link type="text/css" rel="stylesheet" href="/scripts/css/bootstrap.min.css">
+	<link type="text/css" rel="stylesheet" href="style.css">
+	<script src="js/jquery-3.1.1.min.js"></script>
+	<script src="js/jquery-ui-1.12.1.min.js"></script>
+	<script src="/scripts/js/bootstrap.min.js"></script>
 	<script src="socket.io/socket.io.js"></script>
 	<script src="js/main.js"></script>
 </head>
@@ -71,7 +71,7 @@
 						</tr>
 					</thead>
 					<tbody>
-						<tr>
+						<tr id="poolState">
 							<td>Pool State</td>
 							<td>
 								<button class="btn btn-primary btn-xs" id="POOL">---</button>
@@ -81,12 +81,12 @@
 							<td>Temperature</td>
 							<td id="poolCurrentTemp">---</td>
 						</tr>
-						<tr>
+						<tr id="poolSetpoint">
 							<td>SetPoint</td>
 							<td>
-								<button class="btn btn-primary btn-xs" id="poolsetpointminusone"><span style="font-weight:bold; font-size:12px;">&#x21E9;</span></button>
+								<button class="btn btn-primary btn-xs" id="poolSetpointMinusOne"><span style="font-weight:bold; font-size:12px;">&#x21E9;</span></button>
 								<span id="poolHeatSetPoint">---</span>
-								<button class="btn btn-primary btn-xs" id="poolsetpointplusone"><span style="font-weight:bold; font-size:12px;">&#x21E7;</span></button>
+								<button class="btn btn-primary btn-xs" id="poolSetpointPlusOne"><span style="font-weight:bold; font-size:12px;">&#x21E7;</span></button>
 							</td>
 						</tr>
 						<tr id="poolHeatMode">
@@ -114,7 +114,7 @@
 						</tr>
 					</thead>
 					<tbody>
-						<tr>
+						<tr id="spaState">
 							<td>Spa State</td>
 							<td>
 								<button class="btn btn-primary btn-xs" id="SPA">---</button>
@@ -124,12 +124,12 @@
 							<td>Temperature</td>
 							<td id="spaCurrentTemp">---</td>
 						</tr>
-						<tr>
+						<tr id="spaSetpoint">
 							<td>SetPoint</td>
 							<td>
-								<button class="btn btn-primary btn-xs" id="spasetpointminusone"><span style="font-weight:bold; font-size:12px;">&#x21E9;</span></button>
+								<button class="btn btn-primary btn-xs" id="spaSetpointMinusOne"><span style="font-weight:bold; font-size:12px;">&#x21E9;</span></button>
 								<span id="spaHeatSetPoint">---</span>
-								<button class="btn btn-primary btn-xs" id="spasetpointplusone"><span style="font-weight:bold; font-size:12px;">&#x21E7;</span></button>
+								<button class="btn btn-primary btn-xs" id="spaSetpointPlusOne"><span style="font-weight:bold; font-size:12px;">&#x21E7;</span></button>
 							</td>
 						</tr>
 						<tr id="spaHeatMode">
