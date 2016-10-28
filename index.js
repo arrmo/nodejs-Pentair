@@ -1936,7 +1936,8 @@ function decode(data, counter, packetType) {
             //var chlorinatorStatus = clone(currentChlorinatorStatus);
             //not sure why the above line failed...?  Implementing the following instead.
             var chlorinatorStatus = JSON.parse(JSON.stringify(currentChlorinatorStatus));
-            if (currentChlorinatorStatus.name == '' && chlorinator)
+            //TODO: better check besides pump power for asking for the chlorinator name
+            if (currentChlorinatorStatus.name == '' && chlorinator  && currentPumpStatus[1].power==1)
             //If we see a chlorinator status packet, then request the name.  Not sure when the name would be automatically sent over otherwise.
             {
                 logger.verbose('Queueing messages to retrieve Salt Cell Name (AquaRite or OEM)')
@@ -2267,9 +2268,9 @@ if (pumpOnly) {
         pumpInitialRequestConfigDelay.setTimeout(pumpStatusCheck, [1, 2], '3500m'); //must give a short delay to allow the port to open
     }
 
-    if (!intellitouch && !intellicom) {
+    if (!intellitouch) {
         var chlorinatorTimer = new NanoTimer();
-        chlorinatorTimer.setInterval(chlorinatorStatusCheck, '', '3500m')
+        chlorinatorTimer.setTimeout(chlorinatorStatusCheck, '', '3500m')
     }
 }
 
@@ -2538,8 +2539,8 @@ function pump2SafePumpModeDelay() {
 }
 
 function chlorinatorStatusCheck() {
-    queuePacket([16, 2, 80, 0, 0, 98, 16, 3]) //request status
-    chlorinatorTimer.clearInterval();
+    queuePacket([16,2,80,17,75,204]) //request status
+    chlorinatorTimer.clearTimeout();
     chlorinatorTimer.setInterval(chlorinatorStatusCheck, '', '1800s') //30 minutes
 
 }
