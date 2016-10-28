@@ -1,19 +1,44 @@
-String.prototype.capitalizeFirstLetter = function() {
-	return this.charAt(0).toUpperCase() + this.toLowerCase().slice(1);
-}
+/*
+Configure Bootstrap Panels, in 2 steps ...
+   1) Enable / Disable panels as configured (in json file)
+   2) Load Panel Sequence from Storage (as saved from last update)
+*/
+function configPanels(jsonPanel) {
+	//Enable / Disable panels as configured (in json file)
+	for (var currPanel in jsonPanel) {
+		if (jsonPanel[currPanel]["state"] === "visible")		
+			$('#' + currPanel).show();
+		else
+			$('#' + currPanel).hide();				
+	}
 
-String.prototype.toTitleCase = function() {
-	return this.replace(/\w\S*/g, function(txt){return txt.charAt(0).toUpperCase() + txt.substr(1).toLowerCase();});
-}
+	// Load Panel Sequence from Storage (as saved from last update)
+	if (typeof(Storage) !== "undefined") {
+		var panelIndices = JSON.parse(localStorage.getItem('panelIndices'));
+		// Make sure list loaded from Storage is not empty => if so, just go with default as in index.html
+		if (panelIndices) {
+			var panelList = $('#draggablePanelList');
+			var panelListItems = panelList.children();
+			// And, only reorder if no missing / extra items => or items added, removed ... so "reset" to index.html
+			if (panelIndices.length == panelListItems.length) {
+				panelListItems.detach();
+				$.each(panelIndices, function() {
+					var currPanel = this.toString();
+					var result = $.grep(panelListItems, function(e){ 
+						return e.id == currPanel;
+					});
+					panelList.append(result);
+				});
+			}
+		}
+	} else {
+		$('#txtDebug').append('Sorry, your browser does not support Web Storage.' + '<br>');
+	}	
+};
 
-function dayOfWeekAsInteger(strDay) {
-  return ["Sunday","Monday","Tuesday","Wednesday","Thursday","Friday","Saturday"].indexOf(strDay.capitalizeFirstLetter(strDay));
-}
-
-function dayOfWeekAsString(indDay) {
-  return ["Sun","Mon","Tue","Wed","Thu","Fri","Sat"][indDay];
-}
-
+/*
+Routine to recursively parse Equipment Configuration, setting associated data for DOM elements 
+*/
 function dataAssociate(strControl, varJSON) {
 	for (var currProperty in varJSON) {
 		if (typeof varJSON[currProperty] !== "object") {
@@ -26,6 +51,14 @@ function dataAssociate(strControl, varJSON) {
 			}
 		}
 	}
+}
+
+function dayOfWeekAsInteger(strDay) {
+  return ["Sunday","Monday","Tuesday","Wednesday","Thursday","Friday","Saturday"].indexOf(strDay.capitalizeFirstLetter(strDay));
+}
+
+function dayOfWeekAsString(indDay) {
+  return ["Sun","Mon","Tue","Wed","Thu","Fri","Sat"][indDay];
 }
 
 function fmtScheduleTime(strInpStr) {
@@ -70,19 +103,34 @@ function buildDaysButtons(strDays) {
 	return strHTML;
 }
 
+function formatLog(strMessage) {
+	// Colorize Message, in HTML format
+	var strSplit = strMessage.split(' ');
+	var strColor = logColors[strSplit[1].toLowerCase()];
+	if (strColor) {
+		strSplit[1] = strSplit[1].fontcolor(strColor).bold();
+	}
+	
+	// And output colorized string to Debug Log (Panel)
+	$('#txtDebug').append(strSplit.join(' ') + '<br>');
+	$("#txtDebug").scrollTop($("#txtDebug")[0].scrollHeight);
+}
+
+String.prototype.capitalizeFirstLetter = function() {
+	return this.charAt(0).toUpperCase() + this.toLowerCase().slice(1);
+}
+
+String.prototype.toTitleCase = function() {
+	return this.replace(/\w\S*/g, function(txt){return txt.charAt(0).toUpperCase() + txt.substr(1).toLowerCase();});
+}
+
 // From http://api.jquery.com/jquery/#jQuery3
 // JQuery(callback), Description: Binds a function to be executed when the DOM has finished loading
 $(function () {
-	$.getJSON('configPanel.json', function(json) {
-		// enable / disable panels as configured (in json file)
-		for (var currPanel in json.panelState) {
-			if (json.panelState[currPanel]["state"] === "visible")		
-				$('#' + currPanel).show();
-			else
-				$('#' + currPanel).hide();				
-		}
-	});
-	
+    // Initialize variables
+	var $hideAUX = true;
+    var socket = io();
+
 	// Set up draggable options => allow to move panels around
 	var panelList = $('#draggablePanelList');
 	panelList.sortable({
@@ -98,68 +146,82 @@ $(function () {
 		}
 	});	
 
-	// Load Panel Configuration from Storage (so saved from last update -> stored above)
-	if (typeof(Storage) !== "undefined") {
-		var panelIndices = JSON.parse(localStorage.getItem('panelIndices'));
-		// Make sure list loaded from Storage is not empty => if so, just go with default as in index.html
-		if (panelIndices) {
-			var panelList = $('#draggablePanelList');
-			var panelListItems = panelList.children();
-			// And, only reorder if no missing / extra items => or items added, removed ... so "reset" to index.html
-			if (panelIndices.length == panelListItems.length) {
-				panelListItems.detach();
-				$.each(panelIndices, function() {
-					var currPanel = this.toString();
-					var result = $.grep(panelListItems, function(e){ 
-						return e.id == currPanel;
-					});
-					panelList.append(result);
-				});
-			}
-		}
-	} else {
-		$('#txtDebug').append('Sorry, your browser does not support Web Storage.' + '<br>');
-	}
-	
-	$.getJSON('configData.json', function(json) {
-		// configData loaded -> call routine to recursively parse the file, setting associated data for DOM elements 
-		dataAssociate("base", json);
+	// Load configuration (from json), process once data ready
+	$.getJSON('configClient.json', function(json) {
+		// Configure panels (visible / hidden, sequence)
+		configPanels(json.panelState);
+		// Call routine to recursively parse Equipment Configuration, setting associated data for DOM elements 
+		dataAssociate("base", json.equipConfig);
+		// Log test colorization => no var in front, so global
+		logColors = json.logLevels;
 	});
+
+	// Button Handling: Pool, Spa => On/Off
+    $('#poolState, #spaState').on('click', 'button', function () {
+        setEquipmentStatus($(this).attr('id'));
+    })
 	
-    // Initialize variables
-	var $hideAUX = true;
-    var socket = io();
+	// Button Handling: Pool / Spa, Temperature SetPoint
+    $('#poolSetpoint, #spaSetpoint').on('click', 'button', function () {
+		setHeatSetPoint($(this).data('equip'), $(this).data('adjust'));
+    })
 
-    $('#pool, #spa').on('click', 'button', function () {
-        if (!($(this).attr('id').includes('HeatMode'))) {
-			setHeatSetPoint($(this).data('equip'), $(this).data('adjust'));
+	// Button Handling: Pool / Spa, Heater Mode
+    $('#poolHeatMode, #spaHeatMode').on('click', 'button', function () {
+		var currButtonPressed = $(this).attr('id');
+        if (currButtonPressed.includes('HeatMode')) {
+			var strHeatMode = currButtonPressed.slice(0, currButtonPressed.indexOf('HeatMode')) + 'HeatMode';
+			var currHeatMode = $('#' + strHeatMode).data(strHeatMode);
+			var newHeatMode = (currHeatMode + 4 + $(this).data('heatModeDirn')) % 4;
+			setHeatMode($('#' + strHeatMode).data('equip'), newHeatMode)
 		}
     })
 
+	// Button Handling: Features => On/Off
     $('#features').on('click', 'button', function () {
-        if (!($(this).attr('id').includes('HeatMode'))) {
-            setEquipmentStatus($(this).data($(this).attr('id')));
-        }
+        setEquipmentStatus($(this).data($(this).attr('id')));
+    })
+	
+    // Socket Events (Emit)
+    function setHeatSetPoint(equip, change) {
+        socket.emit('setHeatSetPoint', equip, change)
+    }
+
+    function setHeatMode(equip, change) {
+        socket.emit('setHeatMode', equip, change)
+    }
+
+    function setEquipmentStatus(equipment) {
+        if (equipment != undefined)
+        socket.emit('toggleCircuit', equipment)
+    };
+
+    // Socket Events (Receive)
+    socket.on('circuit', function (data) {
+        showCircuit(data);
+    });
+
+    socket.on('config', function (data) {
+        showConfig(data);
+    });
+
+    socket.on('pump', function (data) {
+        showPump(data);
     })
 
-    $('#spaHeatMode').on('click', 'button', function () {
-		var currButtonPressed = $(this).attr('id');
-		if ((currButtonPressed === 'spaHeatModeUp') || (currButtonPressed === 'spaHeatModeDown')) {
-			var spaHeatModeCurr = $('#spaHeatMode').data('spaHeatMode');
-			var newSpaHeatMode = (spaHeatModeCurr + 4 + $(this).data('heatModeDirn')) % 4;
-			setHeatMode($('#spaHeatMode').data('equip'), newSpaHeatMode)			
-		}
+    socket.on('heat', function (data) {
+        showHeat(data);
     })
 
-    $('#poolHeatMode').on('click', 'button', function () {
-		var currButtonPressed = $(this).attr('id');
-		if ((currButtonPressed === 'poolHeatModeUp') || (currButtonPressed === 'poolHeatModeDown')) {
-			var poolHeatModeCurr = $('#poolHeatMode').data('poolHeatMode');
-			var newPoolHeatMode = (poolHeatModeCurr + 4 + $(this).data('heatModeDirn')) % 4;
-			setHeatMode($('#poolHeatMode').data('equip'), newPoolHeatMode)			
-		}
+    socket.on('schedule', function (data) {
+        showSchedule(data);
     })
+	
+    socket.on('outputLog', function (data) {
+		formatLog(data);
+    })	
 
+	// Show Information (from received socket.io)
     function showPump(data) {
         $('#pump1').html(data[1].name + '<br>Watts: ' + data[1].watts + '<br>RPM: ' + data[1].rpm + '<br>Error: ' + data[1].err + '<br>Mode: ' + data[1].mode + '<br>Drive state: ' + data[1].drivestate + '<br>Run Mode: ' + data[1].run)
         $('#pump2').html(data[1].name + '<br>Watts: ' + data[2].watts + '<br>RPM: ' + data[2].rpm + '<br>Error: ' + data[2].err + '<br>Mode: ' + data[2].mode + '<br>Drive state: ' + data[2].drivestate + '<br>Run Mode: ' + data[2].run)
@@ -211,7 +273,7 @@ $(function () {
     }
 
     function showCircuit(data) {
-		for (var currCircuit of data) {
+	for (var currCircuit of data) {
             if (currCircuit.hasOwnProperty('name')) {
                 if (currCircuit.name != "NOT USED") {
 					if (document.getElementById(currCircuit.name)) {
@@ -226,45 +288,5 @@ $(function () {
                 }
             }
         }
-    }
-
-    // Socket events
-    function setHeatSetPoint(equip, change) {
-        socket.emit('setHeatSetPoint', equip, change)
-    }
-
-    function setHeatMode(equip, change) {
-        socket.emit('setHeatMode', equip, change)
-    }
-
-    function setEquipmentStatus(equipment) {
-        if (equipment != undefined)
-        socket.emit('toggleCircuit', equipment)
-    };
-
-    socket.on('circuit', function (data) {
-        showCircuit(data);
-    });
-
-    socket.on('config', function (data) {
-        showConfig(data);
-    });
-
-    socket.on('pump', function (data) {
-        showPump(data);
-    })
-
-    socket.on('heat', function (data) {
-        showHeat(data);
-    })
-
-    socket.on('schedule', function (data) {
-        showSchedule(data);
-    })
-	
-    socket.on('outputLog', function (data) {
-		$('#txtDebug').append(data + '<br>');
-		$("#txtDebug").scrollTop($("#txtDebug")[0].scrollHeight);
-    })	
-
+    }		
 });
