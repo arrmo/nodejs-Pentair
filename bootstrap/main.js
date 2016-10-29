@@ -134,9 +134,9 @@ String.prototype.toTitleCase = function() {
 // From http://api.jquery.com/jquery/#jQuery3
 // JQuery(callback), Description: Binds a function to be executed when the DOM has finished loading
 $(function () {
-    // Initialize variables
+	// Initialize variables
 	var $hideAUX = true;
-    var socket = io();
+	var socket = io();
 
 	// Set up draggable options => allow to move panels around
 	var panelList = $('#draggablePanelList');
@@ -164,33 +164,33 @@ $(function () {
 	});
 
 	// Button Handling: Pool, Spa => On/Off
-    $('#poolState, #spaState').on('click', 'button', function () {
-        setEquipmentStatus($(this).data($(this).attr('id')));
-    })
+	$('#poolState, #spaState').on('click', 'button', function () {
+		setEquipmentStatus($(this).data($(this).attr('id')));
+	})
 	
 	// Button Handling: Pool / Spa, Temperature SetPoint
-    $('#poolSetpoint, #spaSetpoint').on('click', 'button', function () {
+	$('#poolSetpoint, #spaSetpoint').on('click', 'button', function () {
 		setHeatSetPoint($(this).data('equip'), $(this).data('adjust'));
-    })
+	})
 
 	// Button Handling: Pool / Spa, Heater Mode
-    $('#poolHeatMode, #spaHeatMode').on('click', 'button', function () {
+	$('#poolHeatMode, #spaHeatMode').on('click', 'button', function () {
 		var currButtonPressed = $(this).attr('id');
-        if (currButtonPressed.includes('HeatMode')) {
+		if (currButtonPressed.includes('HeatMode')) {
 			var strHeatMode = currButtonPressed.slice(0, currButtonPressed.indexOf('HeatMode')) + 'HeatMode';
 			var currHeatMode = $('#' + strHeatMode).data(strHeatMode);
 			var newHeatMode = (currHeatMode + 4 + $(this).data('heatModeDirn')) % 4;
 			setHeatMode($('#' + strHeatMode).data('equip'), newHeatMode)
 		}
-    })
+	})
 
 	// Button Handling: Features => On/Off
-    $('#features').on('click', 'button', function () {
-        setEquipmentStatus($(this).data($(this).attr('id')));
-    })
+	$('#features').on('click', 'button', function () {
+		setEquipmentStatus($(this).data($(this).attr('id')));
+	})
 	
 	// Button Handling: Debug Log => On/Off
-    $('#debugEnable').click(function () {
+	$('#debugEnable').click(function () {
 		if ($('#debug').is(":visible") == true) {
 			$('#debug').hide();
 			setStatusButton($('#debugEnable'), 'Debug Log: Off');
@@ -198,92 +198,86 @@ $(function () {
 			$('#debug').show();
 			setStatusButton($('#debugEnable'), 'Debug Log: On');
 		}
-    })
+	})
 	
-	// Debug Log, Double Click => Select All (for copy and paste). Reference, from https://www.sanwebe.com/2014/04/select-all-text-in-element-on-click
-	$('#txtDebug').on('mouseup', function() {
-		var sel, range;
-		var el = $(this)[0];
-		if (window.getSelection && document.createRange) { //Browser compatibility
-		  sel = window.getSelection();
-		  if(sel.toString() == ''){ //no text selection
-			 window.setTimeout(function(){
-				range = document.createRange(); //range object
-				range.selectNodeContents(el); //sets Range
-				sel.removeAllRanges(); //remove all ranges from selection
-				sel.addRange(range);//add Range to a Selection.
-			},1);
-		  }
-		}else if (document.selection) { //older ie
-			sel = document.selection.createRange();
-			if(sel.text == ''){ //no text selection
-				range = document.body.createTextRange();//Creates TextRange object
-				range.moveToElementText(el);//sets Range
-				range.select(); //make selection.
+	// Debug Log, KeyPress => Select All (for copy and paste, select log window, press SHFT-A)
+	// Reference, from https://www.sanwebe.com/2014/04/select-all-text-in-element-on-click => Remove "older ie".
+	$('#txtDebug').keypress(function(event) {
+		if (event.key === "A") {
+			var sel, range;
+			var el = $(this)[0];
+			sel = window.getSelection();
+			if(sel.toString() == ''){ //no text selection
+				window.setTimeout(function(){
+					range = document.createRange(); //range object
+					range.selectNodeContents(el); //sets Range
+					sel.removeAllRanges(); //remove all ranges from selection
+					sel.addRange(range);//add Range to a Selection.
+				},1);
 			}
 		}
 	});
 	
-    // Socket Events (Emit)
-    function setHeatSetPoint(equip, change) {
-        socket.emit('setHeatSetPoint', equip, change)
-    }
+	// Socket Events (Emit)
+	function setHeatSetPoint(equip, change) {
+		socket.emit('setHeatSetPoint', equip, change)
+	}
 
-    function setHeatMode(equip, change) {
-        socket.emit('setHeatMode', equip, change)
-    }
+	function setHeatMode(equip, change) {
+		socket.emit('setHeatMode', equip, change)
+	}
 
-    function setEquipmentStatus(equipment) {
-        if (equipment != undefined)
+	function setEquipmentStatus(equipment) {
+		if (equipment != undefined)
 			socket.emit('toggleCircuit', equipment)
 		else
 			formatLog('ERROR: Client, equipment = undefined')
 	};
 
-    // Socket Events (Receive)
-    socket.on('circuit', function (data) {
-        showCircuit(data);
-    });
+	// Socket Events (Receive)
+	socket.on('circuit', function (data) {
+		showCircuit(data);
+	});
 
-    socket.on('config', function (data) {
-        showConfig(data);
-    });
+	socket.on('config', function (data) {
+		showConfig(data);
+	});
 
-    socket.on('pump', function (data) {
-        showPump(data);
-    })
+	socket.on('pump', function (data) {
+		showPump(data);
+	})
 
-    socket.on('heat', function (data) {
-        showHeat(data);
-    })
+	socket.on('heat', function (data) {
+		showHeat(data);
+	})
 
-    socket.on('schedule', function (data) {
-        showSchedule(data);
-    })
+	socket.on('schedule', function (data) {
+		showSchedule(data);
+	})
 	
-    socket.on('outputLog', function (data) {
+	socket.on('outputLog', function (data) {
 		formatLog(data);
-    })	
+	})	
 
 	// Show Information (from received socket.io)
-    function showPump(data) {
-        $('#pump1').html(data[1].name + '<br>Watts: ' + data[1].watts + '<br>RPM: ' + data[1].rpm + '<br>Error: ' + data[1].err + '<br>Mode: ' + data[1].mode + '<br>Drive state: ' + data[1].drivestate + '<br>Run Mode: ' + data[1].run)
-        $('#pump2').html(data[1].name + '<br>Watts: ' + data[2].watts + '<br>RPM: ' + data[2].rpm + '<br>Error: ' + data[2].err + '<br>Mode: ' + data[2].mode + '<br>Drive state: ' + data[2].drivestate + '<br>Run Mode: ' + data[2].run)
-    }
+	function showPump(data) {
+		$('#pump1').html(data[1].name + '<br>Watts: ' + data[1].watts + '<br>RPM: ' + data[1].rpm + '<br>Error: ' + data[1].err + '<br>Mode: ' + data[1].mode + '<br>Drive state: ' + data[1].drivestate + '<br>Run Mode: ' + data[1].run)
+		$('#pump2').html(data[1].name + '<br>Watts: ' + data[2].watts + '<br>RPM: ' + data[2].rpm + '<br>Error: ' + data[2].err + '<br>Mode: ' + data[2].mode + '<br>Drive state: ' + data[2].drivestate + '<br>Run Mode: ' + data[2].run)
+	}
 
-    function showConfig(data) {
-        if (data != null) {
-            $('#currTime').html(data.time);
-            $('#airTemp').html(data.airTemp);
-            $('#solarTemp').html(data.solarTemp);
-            $('#runMode').html(data.runmode);
-            $('#stateHeater').html(data.HEATER_ACTIVE);
-            $('#poolCurrentTemp').html(data.poolTemp);
-            $('#spaCurrentTemp').html(data.spaTemp);
-        }
-    }
+	function showConfig(data) {
+		if (data != null) {
+			$('#currTime').html(data.time);
+			$('#airTemp').html(data.airTemp);
+			$('#solarTemp').html(data.solarTemp);
+			$('#runMode').html(data.runmode);
+			$('#stateHeater').html(data.HEATER_ACTIVE);
+			$('#poolCurrentTemp').html(data.poolTemp);
+			$('#spaCurrentTemp').html(data.spaTemp);
+		}
+	}
 
-    function showSchedule(data) {
+	function showSchedule(data) {
 		for (var currSchedule of data) {
 			if (currSchedule == null) {
 				//console.log("Schedule: Dataset empty.")
@@ -304,22 +298,22 @@ $(function () {
 					// EggTimer
 				}
 			}
-        }
-    }
+		}
+	}
 
-    function showHeat(data) {
-        $('#poolHeatSetPoint').html(data.poolSetPoint);
-        $('#poolHeatMode').data('poolHeatMode', data.poolHeatMode)
+	function showHeat(data) {
+		$('#poolHeatSetPoint').html(data.poolSetPoint);
+		$('#poolHeatMode').data('poolHeatMode', data.poolHeatMode)
 		$('#poolHeatModeStr').html(data.poolHeatModeStr);
-        $('#spaHeatSetPoint').html(data.spaSetPoint)
-        $('#spaHeatMode').data('spaHeatMode', data.spaHeatMode)
+		$('#spaHeatSetPoint').html(data.spaSetPoint)
+		$('#spaHeatMode').data('spaHeatMode', data.spaHeatMode)
 		$('#spaHeatModeStr').html(data.spaHeatModeStr);
-    }
+	}
 
-    function showCircuit(data) {
+	function showCircuit(data) {
 	for (var currCircuit of data) {
-            if (currCircuit.hasOwnProperty('name')) {
-                if (currCircuit.name != "NOT USED") {
+			if (currCircuit.hasOwnProperty('name')) {
+				if (currCircuit.name != "NOT USED") {
 					if (document.getElementById(currCircuit.name)) {
 						setStatusButton($('#' + currCircuit.name), currCircuit.status);
 						$('#' + currCircuit.name).data(currCircuit.name, currCircuit.number)															
@@ -331,8 +325,8 @@ $(function () {
 						setStatusButton($('#' + currCircuit.numberStr), currCircuit.status);
 						$('#' + currCircuit.numberStr).data(currCircuit.numberStr, currCircuit.number)															
 					}
-                }
-            }
-        }
-    }		
+				}
+			}
+		}
+	}		
 });
