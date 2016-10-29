@@ -9,7 +9,14 @@ function configPanels(jsonPanel) {
 		if (jsonPanel[currPanel]["state"] === "visible")		
 			$('#' + currPanel).show();
 		else
-			$('#' + currPanel).hide();				
+			$('#' + currPanel).hide();
+		// Debug Panel -> Update Debug Log Button
+		if (currPanel == "debug") {
+			if (jsonPanel[currPanel]["state"] === "visible")
+				setStatusButton($('#debugEnable'), 'Debug Log: On');
+			else
+				setStatusButton($('#debugEnable'), 'Debug Log: Off');
+		}
 	}
 
 	// Load Panel Sequence from Storage (as saved from last update)
@@ -73,7 +80,7 @@ function fmtScheduleTime(strInpStr) {
 }
 
 function setStatusButton(btnID, btnState) {
-	if (btnState.toUpperCase() === 'ON') {
+	if (btnState.toUpperCase().includes('ON')) {
 		btnID.removeClass('btn-primary');
 		btnID.addClass('btn-success');
 	} else {
@@ -180,6 +187,17 @@ $(function () {
 	// Button Handling: Features => On/Off
     $('#features').on('click', 'button', function () {
         setEquipmentStatus($(this).data($(this).attr('id')));
+    })
+	
+	// Button Handling: Debug Log => On/Off
+    $('#debugEnable').click(function () {
+		if ($('#debug').is(":visible") == true) {
+			$('#debug').hide();
+			setStatusButton($('#debugEnable'), 'Debug Log: Off');
+		} else {
+			$('#debug').show();
+			setStatusButton($('#debugEnable'), 'Debug Log: On');
+		}
     })
 	
     // Socket Events (Emit)
