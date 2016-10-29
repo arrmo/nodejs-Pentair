@@ -200,6 +200,30 @@ $(function () {
 		}
     })
 	
+	// Debug Log, Double Click => Select All (for copy and paste). Reference, from https://www.sanwebe.com/2014/04/select-all-text-in-element-on-click
+	$('#txtDebug').on('mouseup', function() {
+		var sel, range;
+		var el = $(this)[0];
+		if (window.getSelection && document.createRange) { //Browser compatibility
+		  sel = window.getSelection();
+		  if(sel.toString() == ''){ //no text selection
+			 window.setTimeout(function(){
+				range = document.createRange(); //range object
+				range.selectNodeContents(el); //sets Range
+				sel.removeAllRanges(); //remove all ranges from selection
+				sel.addRange(range);//add Range to a Selection.
+			},1);
+		  }
+		}else if (document.selection) { //older ie
+			sel = document.selection.createRange();
+			if(sel.text == ''){ //no text selection
+				range = document.body.createTextRange();//Creates TextRange object
+				range.moveToElementText(el);//sets Range
+				range.select(); //make selection.
+			}
+		}
+	});
+	
     // Socket Events (Emit)
     function setHeatSetPoint(equip, change) {
         socket.emit('setHeatSetPoint', equip, change)
