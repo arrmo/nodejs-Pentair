@@ -7,7 +7,7 @@ console.log('\033[2J'); //clear the console
 var dateFormat = require('dateformat');
 var Dequeue = require('dequeue')
 
-var version = '1.0.0 alpha 15'
+var version = '1.0.0 alpha 16'
 
 const events = require('events')
 
@@ -2074,7 +2074,7 @@ function successfulAck(chatter, counter, messageAck) {
         queuePacketsArr.shift();
         msgWriteCounter.msgWrote = []
         msgWriteCounter.counter=0
-        
+
     }
 
 }
@@ -2217,7 +2217,7 @@ function writePacketHelper() {
     else if (queuePacketsArr[0] !== msgWriteCounter.msgWrote) //msgWriteCounter will store the message that is being written.  If it doesn't match the 1st msg in the queue, then we have received the ACK for the message and can move on.  If it is the same message, then we are retrying the same message again so increment the counter.
     {
         msgWriteCounter.counter++;
-    } 
+    }
     logger.verbose('Sent Packet ' + queuePacketsArr[0] + ' Try: ' + msgWriteCounter.counter)
     if (msgWriteCounter.counter >= 10) //if we get to 10 retries, then throw an Error.
     {
