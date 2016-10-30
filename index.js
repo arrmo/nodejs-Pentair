@@ -2180,7 +2180,7 @@ function queuePacket(message) {
 var packetWrittenAt; //var to hold the message counter variable when the message was sent.  Used to keep track of how many messages passed without a successful counter.
 
 function writePacket() {
-    if (queuePacketsArr.length == 0) // need this because the correct packet might come back during the writePacketTimer.timeout.
+    if (queuePacketsArr.length === 0) // need this because the correct packet might come back during the writePacketTimer.timeout.
     {
         logger.silly('Exiting write queue because last message was successfully received.')
         writeQueueActive = false
@@ -2212,16 +2212,16 @@ function writePacketHelper() {
     if (msgWriteCounter.counter===0)
     {
         msgWriteCounter.msgWrote = queuePacketsArr[0].slice(0)
-        msgWriteCounter.counter=1
+        msgWriteCounter.counter++
     }
-    else if (queuePacketsArr[0] !== msgWriteCounter.msgWrote) //msgWriteCounter will store the message that is being written.  If it doesn't match the 1st msg in the queue, then we have received the ACK for the message and can move on.  If it is the same message, then we are retrying the same message again so increment the counter.
+    else //if (queuePacketsArr[0] === msgWriteCounter.msgWrote) //msgWriteCounter will store the message that is being written.  If it doesn't match the 1st msg in the queue, then we have received the ACK for the message and can move on.  If it is the same message, then we are retrying the same message again so increment the counter.
     {
         msgWriteCounter.counter++;
     }
     logger.verbose('Sent Packet ' + queuePacketsArr[0] + ' Try: ' + msgWriteCounter.counter)
     if (msgWriteCounter.counter >= 10) //if we get to 10 retries, then throw an Error.
     {
-        logger.error('Error writing packet to serial bus.  Tried %s times to write %s', msgWriteCounter.counter, msgWriteCounter.msgWrote)
+        logger.warn('Error writing packet to serial bus.  Tried %s times to write %s', msgWriteCounter.counter, msgWriteCounter.msgWrote)
         if (logType == "info" || logType == "warn" || logType == "error") {
             logger.warn('Setting logging level to Debug')
             logType = 'debug'
@@ -2229,8 +2229,11 @@ function writePacketHelper() {
         }
         if (msgWriteCounter.counter >= 20) //if we get to 20 retries, then abort this packet.
         {
-            msgWriteCounter.msgWrote = queuePacketsArr[0].slice(0);
-            msgWriteCounter.counter = 1;
+            logger.error('Aborting packet %s in write queue.', queuePacketsArr[0])
+            queuePacketsArr.shift();
+            logger.silly('Write queue now: %s', queuePacketsArr)
+            msgWriteCounter.counter = 0
+            msgWriteCounter.msgWrote = []
         }
     }
     if (queuePacketsArr.length > 0) {
