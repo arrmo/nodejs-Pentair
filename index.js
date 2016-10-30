@@ -7,7 +7,7 @@ console.log('\033[2J'); //clear the console
 var dateFormat = require('dateformat');
 var Dequeue = require('dequeue')
 
-var version = '1.0.0 alpha 16'
+var version = '1.0.0 alpha 17'
 
 const events = require('events')
 
@@ -2232,6 +2232,8 @@ function writePacketHelper() {
             logger.error('Aborting packet %s in write queue.', queuePacketsArr[0])
             queuePacketsArr.shift();
             logger.silly('Write queue now: %s', queuePacketsArr)
+            //TODO: Why do we need this next line in here to make it work?  Without it, the app seems to stop sending messages.  Not sure this is the right place for this.
+            writePacket()
             msgWriteCounter.counter = 0
             msgWriteCounter.msgWrote = []
         }
