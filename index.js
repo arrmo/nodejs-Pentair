@@ -7,7 +7,7 @@ console.log('\033[2J'); //clear the console
 var dateFormat = require('dateformat');
 var Dequeue = require('dequeue')
 
-var version = '1.0.0 alpha 14'
+var version = '1.0.0 alpha 15'
 
 const events = require('events')
 
@@ -33,6 +33,7 @@ var needConfiguration = 1; //variable to let the program know we need the config
 var checkForChange = [0, 0, 0]; //[custom names, circuit names, schedules] 0 if we have not logged the initial array; 1 if we will only log changes
 var preambleByte; //variable to hold the 2nd preamble byte... it used to by 10 for me.  Now it is 16.  Very strange.  So here is a variable to find it.
 var countChecksumMismatch = 0; //variable to count checksum mismatches
+var desiredChlorinatorOutput = 0; //variable for chlorinator output % (in pumpOnly mode; controllers take care of this otherwise).  0 = off.  1-100=% output; 101=superChlorinate
 
 //search placeholders for sockets.io Search
 var searchMode = 'stop'
@@ -1043,7 +1044,7 @@ function decode(data, counter, packetType) {
                     {
 
 
-
+                        //TODO: make this code the same (one function?) as coming from the controller
 
                         pumpStatus.pump = pumpNum;
                         var pumpname = (data[packetFields.FROM]).toString(); //returns 96 (pump1) or 97 (pump2)
@@ -1067,18 +1068,6 @@ function decode(data, counter, packetType) {
 
                         if (pumpNum == 1 || pumpNum == 2) {
 
-                            //pump status has not been copied to currentPumpStatus yet
-                            // if (currentPumpStatus[pumpStatus.pump].name == undefined) {
-                            //currentPumpStatus[pumpStatus.pump] = status;
-                            //currentPumpStatusPacket[status.pump] = data;
-                            //} else
-                            //if the packets are different
-                            //{
-
-                            //if (logPumpMessages) logger.silly('currentPumpPacket:  %s  \n Data:  %s', currentPumpStatusPacket[status.pump], data)
-                            //if (logPumpMessages) logger.silly('currentPumpStatusPacket[status.pump] == data', currentPumpStatusPacket[status.pump] == data)
-                            //if (logPumpMessages) logger.silly('JSON.stringify(currentPumpStatusPacket[status.pump]) == JSON.stringify(data)', JSON.stringify(currentPumpStatusPacket[status.pump]) == JSON.stringify(data))
-
                             //TODO - I don't think the following works...
                             if (JSON.stringify(currentPumpStatus[status.pump]).equals(JSON.stringify(status))) {
 
@@ -1097,25 +1086,17 @@ function decode(data, counter, packetType) {
                                         logger.verbose('Msg# %s   Pump %s status changed: %s \n', counter, pumpStatus.pump, currentPumpStatus[pumpNum].whatsDifferent(pumpStatus));
                                 }
 
-                                currentPumpStatus[pumpNum] = pumpStatus;
-                                if (moreThanFive){
-                                  emit('pump');
+                                //if we don't have a previous value for .watts than it should be the first time we are here and let's emit the pump status
+                                if ((currentPumpStatus[pumpNum].watts).toLowerCase.indexOf('notset') >= 0) {
+                                    emit('pump');
                                 }
-                                /*
-                                if (logPumpMessages) {
-                                    logger.silly('currentPumpStatus: ', currentPumpStatus[status.pump], 'status: ', status)
+                                currentPumpStatus[pumpNum] = pumpStatus;
+                                if (moreThanFive) {
+                                    emit('pump');
+                                }
 
-                                    logger.verbose('Msg# %s   Pump %s status changed: ', counter, status.pump, currentPumpStatus[pumpNum].whatsDifferent(status));
-                                }*/
-
-                                //currentPumpStatusPacket[status.pump] = data;
-                                //  emit('pump')
                             }
-                            //}
                         }
-
-
-
                     }
                     decoded = true;
                     break;
@@ -1558,12 +1539,6 @@ function decode(data, counter, packetType) {
         if (logPumpMessages)
             logger.silly('Msg# %s  Decoding pump packet %s', counter, data)
 
-        var updatePumpStatus = false; //true if it is a response from the pump (we are getting something back that can be updated), false if it is a request to the pump (nothing to update).
-        if (data[packetFields.FROM] == 96 || data[packetFields.FROM] == 97) {
-            updatePumpStatus = true;
-        }
-
-        //var ctrlType = data2;
         var pumpNum;
         if (data[packetFields.FROM] == 96 || data[packetFields.DEST] == 96) {
             pumpNum = 1
@@ -1596,8 +1571,6 @@ function decode(data, counter, packetType) {
                     var str1;
                     var str2;
                     var setAmount = data[8] * 256 + data[9];
-                    //if (data[packetFields.DEST] == 96 || data[packetFields.DEST] == 97) //Command to the pump.  Also think we know that if length = 4 than it is to the pump and length=2 is a response.
-                    //{
 
                     if (data[5] == 2) // Length==2 is a response.
                     {
@@ -1615,7 +1588,7 @@ function decode(data, counter, packetType) {
                                 {
                                     setAmount = setAmount / 8
                                     str1 = 'Set Current Program to ' + setAmount.toString();
-                                    pumpStatus.currentProgram = setAmount;
+                                    pumpStatus.currentprogram = setAmount;
                                     break;
                                 }
                             case 39: //0x27
@@ -1689,21 +1662,21 @@ function decode(data, counter, packetType) {
 
                     if (data[pumpPacketFields.CMD] == 255) //Set pump control panel off (Main panel control only)
                     {
-                        pumpStatus.remotecontol = 1;
+                        pumpStatus.remotecontrol = 1;
                     } else //0 = Set pump control panel on
                     {
-                        pumpStatus.remotecontol = 0;
+                        pumpStatus.remotecontrol = 0;
                     }
-
+                    var remoteControlStr = pumpStatus.remotecontrol===1?'on':'off'
 
 
                     if (data[packetFields.DEST] == 96 || data[packetFields.DEST] == 97) //Command to the pump
                     {
                         if (logPumpMessages)
-                            logger.verbose('Msg# %s   %s --> %s: Remote control (turn %s pump control panel): %s', counter, ctrlString[data[packetFields.FROM]], ctrlString[data[packetFields.DEST]], pumpStatus.remotecontol, JSON.stringify(data));
+                            logger.verbose('Msg# %s   %s --> %s: Remote control (turn %s pump control panel): %s', counter, ctrlString[data[packetFields.FROM]], ctrlString[data[packetFields.DEST]], remoteControlStr, JSON.stringify(data));
                     } else {
                         if (logPumpMessages)
-                            logger.verbose('Msg# %s   %s: Remote control %s: %s', counter, ctrlString[data[packetFields.FROM]], pumpStatus.remotecontol, JSON.stringify(data));
+                            logger.verbose('Msg# %s   %s: Remote control %s: %s', counter, ctrlString[data[packetFields.FROM]], remoteControlStr, JSON.stringify(data));
                     }
                     decoded = true;
                     break;
@@ -1713,7 +1686,6 @@ function decode(data, counter, packetType) {
 
             case 5: //Set pump mode
                 {
-                    //if (!responseBool){
                     if (data[packetFields.DEST] == 96 || data[packetFields.DEST] == 97) //Command to the pump
                     {
                         if (logPumpMessages)
@@ -1810,16 +1782,16 @@ function decode(data, counter, packetType) {
                         power = 1
                     else if (data[6] == 4)
                         power = 0;
+                    var powerStr = power===1?'on':'off'
                     pumpStatus.power = power;
-                    //if (!responseBool) {
                     if (data[packetFields.DEST] == 96 || data[packetFields.DEST] == 97) //Command to the pump
                     {
                         if (logPumpMessages)
-                            logger.verbose('Msg# %s   %s --> %s: Pump power to %s: %s', counter, ctrlString[data[packetFields.FROM]], ctrlString[data[packetFields.DEST]], power, JSON.stringify(data));
+                            logger.verbose('Msg# %s   %s --> %s: Pump power to %s: %s', counter, ctrlString[data[packetFields.FROM]], ctrlString[data[packetFields.DEST]], powerStr, JSON.stringify(data));
                         decoded = true;
                     } else {
                         if (logPumpMessages)
-                            logger.verbose('Msg# %s   %s: Pump power %s: %s', counter, ctrlString[data[packetFields.FROM]], power, JSON.stringify(data));
+                            logger.verbose('Msg# %s   %s: Pump power %s: %s', counter, ctrlString[data[packetFields.FROM]], powerStr, JSON.stringify(data));
                         decoded = true;
                     }
                     break;
@@ -1872,48 +1844,46 @@ function decode(data, counter, packetType) {
                     decoded = true;
                 }
         }
-
-        if (updatePumpStatus) {
             if (logPumpMessages)
                 logger.silly('\n Analyzing pump packets for pump ', pumpNum, ': \n currentPumpStatus: ', currentPumpStatus[pumpStatus.pump], '\n pumpStatus: ', JSON.stringify(pumpStatus), '\n equal?: ', JSON.stringify(currentPumpStatus[pumpNum]).equals(JSON.stringify(pumpStatus)))
 
-            if ((currentPumpStatus[pumpNum].time != 'timenotset')) {
-
-                if (JSON.stringify(currentPumpStatus[pumpNum]).equals(JSON.stringify(pumpStatus))) {
-
+            if ((currentPumpStatus[pumpNum].time === 'timenotset')) {
+                //we don't have status yet, but something changed
+                currentPumpStatus[pumpStatus.pump] = JSON.parse(JSON.stringify(pumpStatus));
+                emit('pump')
+            } else {
+                if (JSON.stringify(currentPumpStatus[pumpNum])==(JSON.stringify(pumpStatus))) {
                     if (logPumpMessages)
                         logger.debug('Msg# %s   Pump %s status has not changed: %s  \n', counter, pumpStatus.pump, data)
                 } else {
+                    var needToEmit = 0
+                        //  If the difference is less then (absolute) 5% and the watts is not the same as it previously was, then notify the user.
+                        //  Separate check just for watts.  If not watts, this check isn't applicable.
+                    if (pumpStatus.watts !== currentPumpStatus[pumpNum].watts) {
+                        if (logPumpMessages) {
+                            if ((Math.abs((pumpStatus.watts - currentPumpStatus[pumpNum].watts) / pumpStatus.watts)) > .05) {
+                                //logger.error('pumpnum.watts:', JSON.stringify(currentPumpStatus), currentPumpStatus[pumpNum].watts)
+                                logger.info('Msg# %s   Pump %s watts changed >5%: %s --> %s \n', counter, pumpStatus.pump, currentPumpStatus[pumpNum].watts, pumpStatus.watts)
+                                needToEmit = 1;
+                            }
+                            //logger.error('2 what\'s different: \n %s \n %s', JSON.stringify(pumpStatus), JSON.stringify(currentPumpStatus))
 
-
-
-                    //  If the difference is less then (absolute) 5% and the watts is not the same as it previously was, then notify the user.
-                    /*if (logPumpMessages & (Math.abs((status.watts-currentPumpStatus[status.pump].watts)/status.watts))<.05 & status.watts!=currentPumpStatus[status.pump].watts)
-                     {
-                     logger.info('Msg# %s   Pump %s WATTS CHANGED >5% changed: ', counter, status.pump, currentPumpStatus[status.pump].whatsDifferent(status));
-                     }*/
-
-                    if (logPumpMessages) {
-                        if ((Math.abs((pumpStatus.watts - currentPumpStatus[pumpNum].watts) / pumpStatus.watts)) > .05) {
-                            //logger.error('pumpnum.watts:', JSON.stringify(currentPumpStatus), currentPumpStatus[pumpNum].watts)
-                            logger.info('Msg# %s   Pump %s watts changed >5%: %s --> %s \n', counter, pumpStatus.pump, currentPumpStatus[pumpNum].watts, pumpStatus.watts)
-                            emit('pump');
-                        }
-                        //logger.error('2 what\'s different: \n %s \n %s', JSON.stringify(pumpStatus), JSON.stringify(currentPumpStatus))
-                        if (logPumpMessages)
                             logger.verbose('Msg# %s   Pump %s status changed: %s \n', counter, pumpStatus.pump, currentPumpStatus[pumpNum].whatsDifferent(pumpStatus));
+                        }
                     }
+                    //something besides watts changed
+                    else {
+                        logger.verbose('Msg# %s   Pump %s status changed: %s \n', counter, pumpStatus.pump, currentPumpStatus[pumpNum].whatsDifferent(pumpStatus));
+                        needToEmit = 1
+                    }
+                    //if we have 'notset' as part of the variable, then it's the first time we are here.
 
                     currentPumpStatus[pumpStatus.pump] = JSON.parse(JSON.stringify(pumpStatus));
-
+                    if (needToEmit) {
+                        emit('pump');
+                    }
                 }
-
-
-            } else //Not all pump packet info present yet
-            {
-                currentPumpStatus[pumpStatus.pump] = JSON.parse(JSON.stringify(pumpStatus));
             }
-        }
     }
     //End Pump Decode
     //Start Chlorinator Decode
@@ -1937,7 +1907,7 @@ function decode(data, counter, packetType) {
             //not sure why the above line failed...?  Implementing the following instead.
             var chlorinatorStatus = JSON.parse(JSON.stringify(currentChlorinatorStatus));
             //TODO: better check besides pump power for asking for the chlorinator name
-            if (currentChlorinatorStatus.name == '' && chlorinator  && currentPumpStatus[1].power==1)
+            if (currentChlorinatorStatus.name == '' && chlorinator && currentPumpStatus[1].power == 1)
             //If we see a chlorinator status packet, then request the name.  Not sure when the name would be automatically sent over otherwise.
             {
                 logger.verbose('Queueing messages to retrieve Salt Cell Name (AquaRite or OEM)')
@@ -2102,6 +2072,9 @@ function successfulAck(chatter, counter, messageAck) {
 
     if (messageAck == true) {
         queuePacketsArr.shift();
+        msgWriteCounter.msgWrote = []
+        msgWriteCounter.counter=0
+        
     }
 
 }
@@ -2167,6 +2140,16 @@ function queuePacket(message) {
         logger.error('Asking to queue malformed packet: %s', packet)
     } else {
         queuePacketsArr.push(packet);
+        //pump packet
+        if (packet[6]===96 || packet[6]===97){
+          logger.verbose('Just Queued Pump Message to send: %s', packet)
+        }
+        //chlorinator
+        else if (packet[0]===16){
+            logger.verbose('Just Queued Chlorinotor Message to send: %s', packet)
+        }
+        //controller packet
+        else
         logger.verbose('Just Queued Message \'%s\' to send: %s', strActions[packet[packetFields.ACTION + 3]], packet)
     }
 
@@ -2225,13 +2208,16 @@ function writePacket() {
 }
 
 function writePacketHelper() {
-    if (queuePacketsArr[0] == msgWriteCounter.msgWrote) //msgWriteCounter will store the message that is being written.  If it doesn't match the 1st msg in the queue, then we have received the ACK for the message and can move on.  If it is the same message, then we are retrying the same message again so increment the counter.
+    //if we are here because we wrote a packet, but it is the first time, then the counter will be 0 and we need to copy the message we just wrote
+    if (msgWriteCounter.counter===0)
+    {
+        msgWriteCounter.msgWrote = queuePacketsArr[0].slice(0)
+        msgWriteCounter.counter=1
+    }
+    else if (queuePacketsArr[0] !== msgWriteCounter.msgWrote) //msgWriteCounter will store the message that is being written.  If it doesn't match the 1st msg in the queue, then we have received the ACK for the message and can move on.  If it is the same message, then we are retrying the same message again so increment the counter.
     {
         msgWriteCounter.counter++;
-    } else {
-        msgWriteCounter.msgWrote = queuePacketsArr[0].slice(0);
-        msgWriteCounter.counter = 1;
-    }
+    } 
     logger.verbose('Sent Packet ' + queuePacketsArr[0] + ' Try: ' + msgWriteCounter.counter)
     if (msgWriteCounter.counter >= 10) //if we get to 10 retries, then throw an Error.
     {
@@ -2268,7 +2254,7 @@ if (pumpOnly) {
         pumpInitialRequestConfigDelay.setTimeout(pumpStatusCheck, [1, 2], '3500m'); //must give a short delay to allow the port to open
     }
 
-    if (!intellitouch) {
+    if (!intellitouch && chlorinator) {
         var chlorinatorTimer = new NanoTimer();
         chlorinatorTimer.setTimeout(chlorinatorStatusCheck, '', '3500m')
     }
@@ -2539,10 +2525,20 @@ function pump2SafePumpModeDelay() {
 }
 
 function chlorinatorStatusCheck() {
-    queuePacket([16,2,80,17,75,204]) //request status
-    chlorinatorTimer.clearTimeout();
-    chlorinatorTimer.setInterval(chlorinatorStatusCheck, '', '1800s') //30 minutes
+    if (desiredChlorinatorOutput >= 0 && desiredChlorinatorOutput <= 101) {
+        queuePacket([16, 2, 80, 17, desiredChlorinatorOutput])
 
+        //not 100% sure if we need this, but just in case we get here in the middle of the 1800s timeout, let's clear it out
+        //this would happen if the users sets the chlorinator from 0 to 1-100.
+        chlorinatorTimer.clearTimeout()
+
+        //if 0, then only check every 30 mins; else resend the packet every 4 seconds as a keep-alive
+        if (desiredChlorinatorOutput === 0) {
+            chlorinatorTimer.setTimeout(chlorinatorStatusCheck, '', '1800s') //30 minutes
+        } else {
+            chlorinatorTimer.setTimeout(chlorinatorStatusCheck, '', '4s') // every 4 seconds
+        }
+    }
 }
 
 
@@ -2712,6 +2708,29 @@ app.get('/pump', function(req, res) {
     res.send(currentPumpStatus)
 })
 
+app.get('/chlorinator/:chlorinateLevel', function(req, res) {
+    if (pumpOnly && chlorinator) {
+
+        var chlorLvl = parseInt(req.params.chlorinateLevel)
+        if (chlorLvl >= 0 && chlorLvl <= 101) {
+            desiredChlorinatorOutput = chlorLvl
+            var str
+            if (desiredChlorinatorOutput === 0) {
+                str = 'Chlorinator set to off.  Chlorinator will be queried every 30 mins for PPM'
+            } else if (desiredChlorinatorOutput >= 1 && desiredChlorinatorOutput <= 100) {
+                str = 'Chlorinator set to ' + desiredChlorinatorOutput + '%.'
+            } else if (desiredChlorinatorOutput === 101) {
+                str = 'Chlorinator set to super chlorinate'
+            }
+            chlorinatorStatusCheck()
+            res.send(str)
+        }
+    } else {
+        res.send('Method for chlorinator not implemented yet')
+    }
+    //TODO: implement for controller
+    //TODO: implement for Socket.IO
+})
 
 app.get('/circuit/:circuit', function(req, res) {
     if (req.params.circuit > 0 && req.params.circuit <= 20) {
