@@ -7,7 +7,7 @@ console.log('\033[2J'); //clear the console
 var dateFormat = require('dateformat');
 var Dequeue = require('dequeue')
 
-var version = '1.0.0 alpha 17'
+var version = '1.0.0 alpha 18'
 
 const events = require('events')
 
@@ -29,6 +29,9 @@ var msgWriteCounter = {
     counter: 0,
     msgWrote: []
 }; //How many times are we writing the same packet to the bus?
+var packetWrittenAt; //var to hold the message counter variable when the message was sent.  Used to keep track of how many messages passed without a successful counter.
+var skipPacketWrittenCount = 0  //keep track of how many times we skipped writing the packet
+
 var needConfiguration = 1; //variable to let the program know we need the configuration from the Intellitouch
 var checkForChange = [0, 0, 0]; //[custom names, circuit names, schedules] 0 if we have not logged the initial array; 1 if we will only log changes
 var preambleByte; //variable to hold the 2nd preamble byte... it used to by 10 for me.  Now it is 16.  Very strange.  So here is a variable to find it.
@@ -666,12 +669,20 @@ sp.on('open', function() {
 var interimBuffer = [];
 var bufferToProcess = [];
 var bufferArrayOfArrays = new Dequeue();
-//var bufferArrayOfArrays = []
+var testbufferArrayOfArrays = []
 sp.on('data', function(data) {
     //Push the incoming array onto the end of the dequeue array
     bufferArrayOfArrays.push(Array.prototype.slice.call(data));
+
+    //console.log('Input: ', JSON.stringify(data.toJSON().data) + '\n');
+    //testbufferArrayOfArrays.push(Array.prototype.slice.call(data));
+
     if (!processingBuffer)
-        iterateOverArrayOfArrays();
+    {
+        //console.log('Arrays being passed for processing: \n[[%s]]\n\n', testbufferArrayOfArrays.join('],\n['))
+        iterateOverArrayOfArrays()
+        //testbufferArrayOfArrays=[]
+      }
 });
 
 //TEST function:  This function should simply output whatever comes into the serialport.  Comment out the one above and use this one if you want to test what serialport logs.
@@ -721,9 +732,8 @@ function iterateOverArrayOfArrays() {
             var tempArr = bufferArrayOfArrays.shift()
             logger.silly('iOAOA: Next two packets in buffer: \n %s \n %s', tempArr, bufferArrayOfArrays.first())
             bufferArrayOfArrays.unshift(tempArr)
-        }
-        else {
-          logger.silly('iOAOA: No more packets in bufferArrayOfArrays')
+        } else {
+            logger.silly('iOAOA: No more packets in bufferArrayOfArrays')
 
         }
 
@@ -781,6 +791,32 @@ function iterateOverArrayOfArrays() {
              //byte  0  1   2   3  4    5   6  7
              //len                             8
              //     16  2  80  20  2  120  16  3*/
+
+/*TODO:  Why is this packet getting through and causing a stack overflow?
+
+22:10:58.493 DEBUG iOAOA: Packet being analyzed: 16,2,80,0,64,226,53,255
+
+<--- Last few GCs --->
+
+   38796 ms: Scavenge 947.8 (987.8) -> 947.8 (987.8) MB, 0.1 / 0 ms (+ 1.1 ms in 1 steps since last GC) [allocation failure] [incremental marking delaying mark-sweep].
+   39040 ms: Mark-sweep 947.8 (987.8) -> 572.8 (611.4) MB, 243.3 / 0 ms (+ 1.2 ms in 2 steps since start of marking, biggest step 1.1 ms) [last resort gc].
+   39240 ms: Mark-sweep 572.8 (611.4) -> 572.8 (611.4) MB, 200.3 / 0 ms [last resort gc].
+
+
+<--- JS stacktrace --->
+
+==== JS stack trace =========================================
+
+Security context: 0x1ecf768b4629 <JS Object>
+    2: iterateOverArrayOfArrays [/Users/rgoldin/Documents/nodejs-Pentair/index.js:~712] [pc=0x30811c1280a8] (this=0x31e01f076c1 <JS Global Object>)
+    3:  anonymous  [/Users/rgoldin/Documents/nodejs-Pentair/index.js:~673] [pc=0x30811c123dfe] (this=0x2922ead46b39 <a Socket with map 0x12740e7b60f9>,data=0x2922ead0f089 <an Uint8Array with map 0x12740e7b9851>)
+    4: emitOne(aka emitOne) [even...
+
+FATAL ERROR: CALL_AND_RETRY_LAST Allocation
+
+*/
+
+
 
             msgCounter += 1;
             chatter = [];
@@ -842,6 +878,7 @@ function processChecksum(chatter, counter, packetType) {
     } else {
         //TODO: we shouldn't need this.  Why is it not being increased with decodeHelper.checksum above?
         countChecksumMismatch++
+        skipPacketWrittenCount=5 //"cheat" to tell the writePacket function to send any packets in the queue again if we find a mismatch on inbound packets
     }
 }
 
@@ -1872,7 +1909,7 @@ function decode(data, counter, packetType) {
                 }
         }
         if (logPumpMessages)
-            logger.silly('\n Analyzing pump packets for pump ', pumpNum, ': \n currentPumpStatus: ', currentPumpStatus[pumpStatus.pump], '\n pumpStatus: ', JSON.stringify(pumpStatus), '\n equal?: ', JSON.stringify(currentPumpStatus[pumpNum]).equals(JSON.stringify(pumpStatus)))
+            logger.silly('\n Analyzing pump packets for pump ', pumpNum, ': \n currentPumpStatus: ', JSON.stringify(currentPumpStatus[pumpStatus.pump]), '\n pumpStatus: ', JSON.stringify(pumpStatus), '\n equal?: ', JSON.stringify(currentPumpStatus[pumpNum]).equals(JSON.stringify(pumpStatus)))
 
         if ((currentPumpStatus[pumpNum].time === 'timenotset')) {
             //we don't have status yet, but something changed
@@ -2204,33 +2241,40 @@ function queuePacket(message) {
         writePacket();
 }
 
-var packetWrittenAt; //var to hold the message counter variable when the message was sent.  Used to keep track of how many messages passed without a successful counter.
-
 function writePacket() {
-    if (queuePacketsArr.length === 0) // need this because the correct packet might come back during the writePacketTimer.timeout.
-    {
-        logger.silly('Exiting write queue because last message was successfully received.')
-        writeQueueActive = false
-    } else {
-        writeQueueActive = true
-        logger.silly('Entering Write Queue')
-        logger.silly('Queue = %s', JSON.stringify(queuePacketsArr))
-
-        if (netConnect === 0) {
-            sp.write(queuePacketsArr[0], function(err) {
-                if (err) {
-                    logger.error('Error writing packet: ' + err.message)
-                }
-            })
+    if (msgWriteCounter.counter === 0 || msgCounter-packetWrittenAt>=4 || skipPacketWrittenCount>=4) {
+        skipPacketWrittenCount = 0
+        if (queuePacketsArr.length === 0) // need this because the correct packet might come back during the writePacketTimer.timeout.
+        {
+            logger.silly('Exiting write queue because last message was successfully received.')
+            writeQueueActive = false
         } else {
-            sp.write(new Buffer(queuePacketsArr[0]), 'binary', function(err) {
-                if (err) {
-                    logger.error('Error writing packet: ' + err.message)
-                }
-            })
+            writeQueueActive = true
+            logger.silly('Entering Write Queue')
+            logger.silly('Queue = %s', JSON.stringify(queuePacketsArr))
+
+            if (netConnect === 0) {
+                sp.write(queuePacketsArr[0], function(err) {
+                    if (err) {
+                        logger.error('Error writing packet: ' + err.message)
+                    }
+                })
+            } else {
+                sp.write(new Buffer(queuePacketsArr[0]), 'binary', function(err) {
+                    if (err) {
+                        logger.error('Error writing packet: ' + err.message)
+                    }
+                })
+            }
+            packetWrittenAt = msgCounter;
+            writePacketHelper()
         }
-        packetWrittenAt = msgCounter;
-        writePacketHelper()
+    } else {
+        skipPacketWrittenCount++
+        if (logMessageDecoding) logger.silly('Delaying write packet by %s times due to \n1. msgWriteCounter.counter === 0: %s (%s) \n2. msgCounter-packetWrittenAt>=4:  %s (%s) \n3. skipPacketWrittenCount>=4: %s (%s)', skipPacketWrittenCount, msgWriteCounter.counter === 0, msgWriteCounter.counter,msgCounter-packetWrittenAt>=4, msgCounter-packetWrittenAt, skipPacketWrittenCount>=4, skipPacketWrittenCount)
+        if (queuePacketsArr.length > 0) {
+            writePacketTimer.setTimeout(writePacket, '', '150m')
+        }
     }
 }
 
@@ -2264,7 +2308,7 @@ function writePacketHelper() {
         }
     }
     if (queuePacketsArr.length > 0) {
-        writePacketTimer.setTimeout(writePacket, '', '250m')
+        writePacketTimer.setTimeout(writePacket, '', '150m')
     }
 }
 
