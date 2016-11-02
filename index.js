@@ -7,7 +7,7 @@ console.log('\033[2J'); //clear the console
 var dateFormat = require('dateformat');
 var Dequeue = require('dequeue')
 
-var version = '1.0.0 alpha 18'
+var version = '1.0.0 alpha 19'
 
 const events = require('events')
 
@@ -1686,7 +1686,9 @@ function decode(data, counter, packetType) {
                             case 43: //0x2B
                                 {
                                     str1 = 'Set Pump Timer for ';
-                                    pumpStatus.timer = setAmount;
+                                    //commented out the following line because we are not sure what the timer actually does
+                                    //leaving it in creates problems for ISY that might rely on this variable
+                                    //pumpStatus.timer = setAmount;
                                     str2 = setAmount.toString() + ' minutes'
                                     break;
                                 }
@@ -2243,6 +2245,7 @@ function queuePacket(message) {
 
 function writePacket() {
     if (msgWriteCounter.counter === 0 || msgCounter-packetWrittenAt>=4 || skipPacketWrittenCount>=4) {
+      if (logMessageDecoding) logger.silly('Executing write packet try #%s \n1. msgWriteCounter.counter === 0: %s (%s) \n2. msgCounter-packetWrittenAt>=4:  %s (%s) \n3. skipPacketWrittenCount>=4: %s (%s)', skipPacketWrittenCount+1, msgWriteCounter.counter === 0, msgWriteCounter.counter,msgCounter-packetWrittenAt>=4, msgCounter-packetWrittenAt, skipPacketWrittenCount>=4, skipPacketWrittenCount)
         skipPacketWrittenCount = 0
         if (queuePacketsArr.length === 0) // need this because the correct packet might come back during the writePacketTimer.timeout.
         {
@@ -2562,6 +2565,9 @@ function pump1SafePumpMode() {
         logger.info('Pump 1 Program Finished.   Pump will shut down in ~10 seconds.')
             //Timer = 0, we are done.  Pump should turn off automatically
         pump1Timer.clearTimeout();
+        //set program to 0
+        currentPumpStatus[1].currentprogram = 0;
+        emit('pump')
     }
 }
 
@@ -2587,6 +2593,9 @@ function pump2SafePumpMode() {
         logger.info('Pump 2 Program Finished.  Pump will shut down in ~10 seconds.')
             //Timer = 0, we are done.  Pump should turn off automatically
         pump2Timer.clearTimeout();
+        //set program to 0
+        currentPumpStatus[2].currentprogram = 0;
+        emit('pump')
     }
 }
 
