@@ -7,7 +7,7 @@ console.log('\033[2J'); //clear the console
 var dateFormat = require('dateformat');
 var Dequeue = require('dequeue')
 
-var version = '1.0.0 alpha 19'
+var version = '1.0.0 alpha 20'
 
 
 const events = require('events')
@@ -27,11 +27,11 @@ var writeQueueActive = false //flag to tell us if we are currently processing th
 var processingBuffer = false; //flag to tell us if we are processing the buffer currently
 var msgCounter = 0; //log counter to help match messages with buffer in log
 var msgWriteCounter = {
-    counter: 0,
+    counter: 0, //how many times the packet has been written to the bus
+    packetWrittenAt: 0, //var to hold the message counter variable when the message was sent.  Used to keep track of how many messages passed without a successful counter.
     msgWrote: []
 }; //How many times are we writing the same packet to the bus?
-var packetWrittenAt; //var to hold the message counter variable when the message was sent.  Used to keep track of how many messages passed without a successful counter.
-var skipPacketWrittenCount = 0  //keep track of how many times we skipped writing the packet
+var skipPacketWrittenCount = 0 //keep track of how many times we skipped writing the packet
 
 var needConfiguration = 1; //variable to let the program know we need the configuration from the Intellitouch
 var checkForChange = [0, 0, 0]; //[custom names, circuit names, schedules] 0 if we have not logged the initial array; 1 if we will only log changes
@@ -245,7 +245,25 @@ const strCircuitFunction = {
     64: 'Freeze protection on'
 }
 
-const strActions = {
+const strPumpActions = {
+    1: 'Pump set speed/program or run program',
+    4: 'Pump control panel',
+    5: 'Pump speed',
+    6: 'Pump power',
+    7: 'Pump Status'
+}
+
+const strChlorinatorActions = {
+    0: 'Get Status',
+    1: 'Response to Get Status',
+    3: 'Response to Get Version',
+    17: 'Set Salt %',
+    18: 'Response to Set Salt % & Salt PPM',
+    20: 'Get Version',
+    21: 'Set Salt Generate % / 10'
+}
+
+const strControllerActions = {
     1: 'Ack Message',
     2: 'Controller Status',
     5: 'Date/Time',
@@ -404,6 +422,7 @@ var logConsoleNotDecoded; //variable to hide any unknown messages
 var logConfigMessages; //variable to show/hide configuration messages
 var logMessageDecoding; //variable to show messages regarding the buffer, checksum calculation, etc.
 var logChlorinator; //variable to show messages from the chlorinator
+var logPacketWrites; //variable to log queueing/writing activities
 //-------  END EQUIPMENT SETUP -----------
 
 var configurationFile = 'config.json';
@@ -427,6 +446,7 @@ logConsoleNotDecoded = configFile.Log.logConsoleNotDecoded;
 logConfigMessages = configFile.Log.logConfigMessages;
 logMessageDecoding = configFile.Log.logMessageDecoding;
 logChlorinator = configFile.Log.logChlorinator;
+logPacketWrites = configFile.Log.logPacketWrites;
 /*
  for (var key in configFile.Equipment) {
  if (poolConfig.Pentair.hasOwnProperty(key)) {
@@ -625,7 +645,8 @@ settingsStr += '\n var logConsoleNotDecoded = ' + logConsoleNotDecoded;
 settingsStr += '\n var logConfigMessages = ' + logConfigMessages;
 settingsStr += '\n var logMessageDecoding = ' + logMessageDecoding;
 settingsStr += '\n var logChlorinator = ' + logChlorinator;
-settingsStr += '\n //-------  END EQUIPMENT SETUP -----------\n\n';
+settingsStr += '\n var logPacketWrites = ' + logPacketWrites;
+settingsStr += '\n //-------  END LOG SETUP -----------\n\n';
 //settingsStr += '\n*******************************';
 
 logger.debug(settingsStr);
@@ -678,12 +699,11 @@ sp.on('data', function(data) {
     //console.log('Input: ', JSON.stringify(data.toJSON().data) + '\n');
     //testbufferArrayOfArrays.push(Array.prototype.slice.call(data));
 
-    if (!processingBuffer)
-    {
+    if (!processingBuffer) {
         //console.log('Arrays being passed for processing: \n[[%s]]\n\n', testbufferArrayOfArrays.join('],\n['))
         iterateOverArrayOfArrays()
-        //testbufferArrayOfArrays=[]
-      }
+            //testbufferArrayOfArrays=[]
+    }
 });
 
 //TEST function:  This function should simply output whatever comes into the serialport.  Comment out the one above and use this one if you want to test what serialport logs.
@@ -752,7 +772,7 @@ function iterateOverArrayOfArrays() {
 
             if (chatterlen != undefined && chatterlen >= 50) //we should never get a packet greater than or equal to 50.  So if the chatterlen is greater than that let's shift the array and retry
             {
-                logger.debug('iOAOA: Will shift first element out of bufferToProcess because it appears there is an invalid length packet (>=50) Lengeth: %s  Packet: %s', bufferToProcess[6], bufferToProcess)
+                if (logMessageDecoding) logger.debug('iOAOA: Will shift first element out of bufferToProcess because it appears there is an invalid length packet (>=50) Lengeth: %s  Packet: %s', bufferToProcess[6], bufferToProcess)
                 bufferToProcess.shift() //remove the first byte so we look for the next [255,165] in the array.
 
             } else if (chatterlen == undefined || ((bufferToProcess.length - chatterlen) <= 0)) {
@@ -793,29 +813,29 @@ function iterateOverArrayOfArrays() {
              //len                             8
              //     16  2  80  20  2  120  16  3*/
 
-/*TODO:  Why is this packet getting through and causing a stack overflow?
+            /*TODO:  Why is this packet getting through and causing a stack overflow?
 
-22:10:58.493 DEBUG iOAOA: Packet being analyzed: 16,2,80,0,64,226,53,255
+            22:10:58.493 DEBUG iOAOA: Packet being analyzed: 16,2,80,0,64,226,53,255
 
-<--- Last few GCs --->
+            <--- Last few GCs --->
 
-   38796 ms: Scavenge 947.8 (987.8) -> 947.8 (987.8) MB, 0.1 / 0 ms (+ 1.1 ms in 1 steps since last GC) [allocation failure] [incremental marking delaying mark-sweep].
-   39040 ms: Mark-sweep 947.8 (987.8) -> 572.8 (611.4) MB, 243.3 / 0 ms (+ 1.2 ms in 2 steps since start of marking, biggest step 1.1 ms) [last resort gc].
-   39240 ms: Mark-sweep 572.8 (611.4) -> 572.8 (611.4) MB, 200.3 / 0 ms [last resort gc].
+               38796 ms: Scavenge 947.8 (987.8) -> 947.8 (987.8) MB, 0.1 / 0 ms (+ 1.1 ms in 1 steps since last GC) [allocation failure] [incremental marking delaying mark-sweep].
+               39040 ms: Mark-sweep 947.8 (987.8) -> 572.8 (611.4) MB, 243.3 / 0 ms (+ 1.2 ms in 2 steps since start of marking, biggest step 1.1 ms) [last resort gc].
+               39240 ms: Mark-sweep 572.8 (611.4) -> 572.8 (611.4) MB, 200.3 / 0 ms [last resort gc].
 
 
-<--- JS stacktrace --->
+            <--- JS stacktrace --->
 
-==== JS stack trace =========================================
+            ==== JS stack trace =========================================
 
-Security context: 0x1ecf768b4629 <JS Object>
-    2: iterateOverArrayOfArrays [/Users/rgoldin/Documents/nodejs-Pentair/index.js:~712] [pc=0x30811c1280a8] (this=0x31e01f076c1 <JS Global Object>)
-    3:  anonymous  [/Users/rgoldin/Documents/nodejs-Pentair/index.js:~673] [pc=0x30811c123dfe] (this=0x2922ead46b39 <a Socket with map 0x12740e7b60f9>,data=0x2922ead0f089 <an Uint8Array with map 0x12740e7b9851>)
-    4: emitOne(aka emitOne) [even...
+            Security context: 0x1ecf768b4629 <JS Object>
+                2: iterateOverArrayOfArrays [/Users/rgoldin/Documents/nodejs-Pentair/index.js:~712] [pc=0x30811c1280a8] (this=0x31e01f076c1 <JS Global Object>)
+                3:  anonymous  [/Users/rgoldin/Documents/nodejs-Pentair/index.js:~673] [pc=0x30811c123dfe] (this=0x2922ead46b39 <a Socket with map 0x12740e7b60f9>,data=0x2922ead0f089 <an Uint8Array with map 0x12740e7b9851>)
+                4: emitOne(aka emitOne) [even...
 
-FATAL ERROR: CALL_AND_RETRY_LAST Allocation
+            FATAL ERROR: CALL_AND_RETRY_LAST Allocation
 
-*/
+            */
 
 
 
@@ -866,20 +886,20 @@ function processChecksum(chatter, counter, packetType) {
 
 
         if (queuePacketsArr.length > 0) {
-            if (decodeHelper.isResponse(chatter, counter, packetType, logger, packetFields, queuePacketsArr)) {
+            if (decodeHelper.isResponse(chatter, counter, packetType, logger, logMessageDecoding, packetFields, queuePacketsArr)) {
 
-                successfulAck(chatter, counter, true);
+                successfulAck(chatter, counter, 1);
             } else {
-                successfulAck(chatter, counter, false);
+                successfulAck(chatter, counter, 0);
             }
 
 
         }
         decode(chatter, counter, packetType)
     } else {
-        //TODO: we shouldn't need this.  Why is it not being increased with decodeHelper.checksum above?
+        //TODO: we shouldn't need to increment the countChecksumMismatch.  Why is it not being increased with decodeHelper.checksum above?
         countChecksumMismatch++
-        skipPacketWrittenCount=5 //"cheat" to tell the writePacket function to send any packets in the queue again if we find a mismatch on inbound packets
+
     }
 }
 
@@ -1021,7 +1041,6 @@ function decode(data, counter, packetType) {
                                     circuitStr += circuitArrObj[i].status + '\n'
                                     logger.info('Msg# %s: Circuit states discovered: \n %s', counter, circuitStr)
                                 }
-
                             }*/
 
 
@@ -1578,7 +1597,7 @@ function decode(data, counter, packetType) {
             default:
                 {
 
-                    var currentAction = strActions[data[packetFields.ACTION]]
+                    var currentAction = strControllerActions[data[packetFields.ACTION]]
                     if (currentAction != undefined) {
                         if (logConsoleNotDecoded)
                             logger.verbose('Msg# %s   %s packet: %s', counter, currentAction, data)
@@ -1914,7 +1933,7 @@ function decode(data, counter, packetType) {
         if (logPumpMessages)
             logger.silly('\n Analyzing pump packets for pump ', pumpNum, ': \n currentPumpStatus: ', JSON.stringify(currentPumpStatus[pumpStatus.pump]), '\n pumpStatus: ', JSON.stringify(pumpStatus), '\n equal?: ', JSON.stringify(currentPumpStatus[pumpNum]).equals(JSON.stringify(pumpStatus)))
 
-        if ((currentPumpStatus[pumpNum].time === 'timenotset')) {
+        if ((currentPumpStatus[pumpNum].rpm === 'rpmnotset')) {
             //we don't have status yet, but something changed
             currentPumpStatus[pumpStatus.pump] = JSON.parse(JSON.stringify(pumpStatus));
             emit('pump')
@@ -1923,6 +1942,8 @@ function decode(data, counter, packetType) {
                 if (logPumpMessages)
                     logger.debug('Msg# %s   Pump %s status has not changed: %s  \n', counter, pumpStatus.pump, data)
             } else {
+
+
                 var needToEmit = 0
                     //  If the difference is less then (absolute) 5% and the watts is not the same as it previously was, then notify the user.
                     //  Separate check just for watts.  If not watts, this check isn't applicable.
@@ -1940,8 +1961,24 @@ function decode(data, counter, packetType) {
                 }
                 //something besides watts changed
                 else {
+
+
+                    //NOTE: Need to ignore TIME & remotecontrol so the packets aren't emitted every minute if there are no other changes.
+                    var tempPumpStatus = JSON.stringify(pumpStatus)
+                    var tempcurrentPumpStatus = JSON.stringify(currentPumpStatus[pumpNum])
+                    delete tempPumpStatus.time
+                    delete tempcurrentPumpStatus.time
+                    delete tempPumpStatus.remotecontrol
+                    delete tempcurrentPumpStatus.remotecontrol
+                    if (tempPumpStatus === tempcurrentPumpStatus) {
+                        //only time or remotecontrol has changed, so don't emit
+                        needToEmit = 0
+                    } else {
+                        needToEmit = 1
+                    }
+                    //We will still output any differences in verbose, including time
                     logger.verbose('Msg# %s   Pump %s status changed: %s \n', counter, pumpStatus.pump, currentPumpStatus[pumpNum].whatsDifferent(pumpStatus));
-                    needToEmit = 1
+
                 }
                 //if we have 'notset' as part of the variable, then it's the first time we are here.
 
@@ -1979,6 +2016,7 @@ function decode(data, counter, packetType) {
             {
                 logger.verbose('Queueing messages to retrieve Salt Cell Name (AquaRite or OEM)')
                     //get salt cell name
+                if (logPacketWrites) logger.debug('decode: Queueing packet to retrieve Chlorinator Salt Cell Name: [16, 2, 80, 20, 0]')
                 queuePacket([16, 2, 80, 20, 0]);
             }
 
@@ -2133,21 +2171,21 @@ function decode(data, counter, packetType) {
 
 
 function successfulAck(chatter, counter, messageAck) {
-    if (logMessageDecoding)
-        logger.silly('Msg#: %s in successfulAck  messageAck: %s counter: %s  packetWrittenAt: %s  queuePacketsArr.length: %s', counter, messageAck, counter, packetWrittenAt, queuePacketsArr.length)
-    logger.debug('Msg# %s  Msg received: %s \n                           Msg written: %s \n                           Match?: %s', counter, chatter, queuePacketsArr[0], messageAck)
 
-    if (messageAck == true) {
-        queuePacketsArr.shift();
-        msgWriteCounter.msgWrote = []
-        msgWriteCounter.counter = 0
-
+    //TODO: There is nothing to do with mesageAck===0 currently.  We only care about matching if we have written something, so we'll account for this in the writePacket() function
+    if (logMessageDecoding || logPacketWrites) {
+        logger.debug('Msg# %s  Msg received: %s \n                           Msg written: %s \n                           Match?: %s', counter, chatter, queuePacketsArr[0], messageAck)
     }
-
+    if (messageAck === 1) {
+        if (logPacketWrites) {
+            logger.debug('successfulAck: Incoming packet is a match. \nRemoving packet %s from queuePacketsArr and resetting msgWriteCounter variables', queuePacketsArr[0])
+        }
+        ejectPacketAndReset()
+    }
 }
 
 function queuePacket(message) {
-
+    if (logPacketWrites) logger.debug('queuePacket: Adding checksum and validating packet to be written %s', message)
     var checksum = 0;
     for (var j = 0; j < message.length; j++) {
         checksum += message[j]
@@ -2203,21 +2241,26 @@ function queuePacket(message) {
     }
 
     var validPacket = (packetchecksum == databytes);
+
     if (!validPacket) {
         logger.error('Asking to queue malformed packet: %s', packet)
     } else {
         queuePacketsArr.push(packet);
         //pump packet
-        if (packet[6] === 96 || packet[6] === 97) {
-            logger.verbose('Just Queued Pump Message to send: %s', packet)
+        if (packet[packetFields.DEST + 3] === 96 || packet[packetFields.DEST + 3] === 97) {
+            if (logPacketWrites) logger.verbose('Just Queued Pump Message \'%s\' to send: %s', strPumpActions[packet[packetFields.ACTION + 3]], packet)
+
         }
         //chlorinator
         else if (packet[0] === 16) {
-            logger.verbose('Just Queued Chlorinotor Message to send: %s', packet)
+            if (logPacketWrites) logger.verbose('Just Queued Chlorinator Message \'%s\' to send: %s', strChlorinatorActions[packet[3]], packet)
+
         }
         //controller packet
-        else
-            logger.verbose('Just Queued Message \'%s\' to send: %s', strActions[packet[packetFields.ACTION + 3]], packet)
+        else {
+            if (logPacketWrites) logger.verbose('Just Queued Message \'%s\' to send: %s', strControllerActions[packet[packetFields.ACTION + 3]], packet)
+
+        }
     }
 
 
@@ -2226,94 +2269,146 @@ function queuePacket(message) {
     if (requestGet) {
         //request the GET version of the SET packet
         var getPacket = [165, preambleByte, 16, 34, packet[packetFields.ACTION + 3] + 64, 1, 0]
-        logger.debug('Queueing messages to retrieve \'%s\'', strActions[getPacket[packetFields.ACTION]])
+        if (logPacketWrites) logger.debug('Queueing message %s to retrieve \'%s\'', getPacket, strControllerActions[getPacket[packetFields.ACTION]])
         queuePacket(getPacket);
 
         //var statusPacket = [165, preambleByte, 16, 34, 194, 1, 0]
-        //logger.debug('Queueing messages to retrieve \'%s\'', strActions[statusPacket[packetFields.ACTION]])
+        //logger.debug('Queueing messages to retrieve \'%s\'', strControllerActions[statusPacket[packetFields.ACTION]])
         //queuePacket(statusPacket);
     }
 
 
 
-
-    logger.silly('after push packet: %s  Message: %s', packet, message)
+    if (logPacketWrites) logger.silly('queuePacket: Message: %s now has checksum added: %s', message, packet)
 
     //if length > 0 then we will loop through from isResponse
     if (!writeQueueActive)
-        writePacket();
+        preWritePacketHelper();
+}
+
+var writePacketFlag = 0 //1 = ok to write packet.  0 = skip
+function preWritePacketHelper() {
+    if (queuePacketsArr.length === 0) // need this because the correct packet might come back during the writePacketTimer.timeout.
+    {
+        if (logPacketWrites) logger.silly('preWritePacketHelper: Setting writeQueueActive=false because last message was successfully received and there is no message to send. %s', queuePacketsArr)
+        writeQueueActive = false
+    } else {
+        //msgWriteCounter===0;  this means no packet has been written yet (queuePacketsArr.shift() was called and msgWriteCounter reset)
+        if (msgWriteCounter.counter === 0) {
+            if (logPacketWrites) logger.silly('preWritePacketHelper: Ok to write message %s because it has not been written yet', queuePacketsArr[0])
+            writePacketFlag = 1
+        }
+        //if we have already processed more than 2 messages from the inbound queue, write the packet
+        else if (msgCounter - msgWriteCounter.packetWrittenAt >= 2) {
+            if (logPacketWrites) logger.silly('preWritePacketHelper: Ok to write message %s because we have processed two incoming messages since the last write', queuePacketsArr[0])
+            writePacketFlag = 1
+        }
+        //if the incoming buffer (bufferArrayOfArrays)>=2
+        //OR
+        //part of buffer current processing (bufferToProcess)>=50 bytes, let's skip writing the packet twice
+        else if (bufferArrayOfArrays.length >= 2 || bufferToProcess.length >= 50) {
+            //skipPacketWrittenCount>=2;  we've skipped writting it twice already, so write it now.
+            if (skipPacketWrittenCount >= 2) {
+                if (logPacketWrites) logger.silly('preWritePacketHelper: Ok to write message %s because it has been skipped twice', queuePacketsArr[0])
+                skipPacketWrittenCount = 0
+                writePacketFlag = 1
+            } else {
+                skipPacketWrittenCount++
+                writePacketFlag = 0
+                if (logPacketWrites) logger.silly('preWritePacketHelper: Skipping write packet %s time(s) due to \n1. bufferArrayOfArrays.length>=2: %s (%s) \n2. bufferToProcess.length>=50:  %s (%s)', skipPacketWrittenCount, bufferArrayOfArrays.length >= 2, bufferArrayOfArrays.length, bufferToProcess.length >= 50, bufferToProcess.length)
+                if (queuePacketsArr.length > 0) {
+                    writePacketTimer.setTimeout(preWritePacketHelper, '', '150m')
+                }
+            }
+        } else
+        //if none of the conditions above are met, let's write the packet
+        {
+            if (logPacketWrites) logger.silly('preWritePacketHelper: Ok to write message %s because no other conditions have been met', queuePacketsArr[0])
+            writePacketFlag = 1
+        }
+
+        if (writePacketFlag === 1) {
+            writePacket()
+        }
+    }
 }
 
 function writePacket() {
-    if (msgWriteCounter.counter === 0 || msgCounter-packetWrittenAt>=4 || skipPacketWrittenCount>=4) {
-      if (logMessageDecoding) logger.silly('Executing write packet try #%s \n1. msgWriteCounter.counter === 0: %s (%s) \n2. msgCounter-packetWrittenAt>=4:  %s (%s) \n3. skipPacketWrittenCount>=4: %s (%s)', skipPacketWrittenCount+1, msgWriteCounter.counter === 0, msgWriteCounter.counter,msgCounter-packetWrittenAt>=4, msgCounter-packetWrittenAt, skipPacketWrittenCount>=4, skipPacketWrittenCount)
-        skipPacketWrittenCount = 0
-        if (queuePacketsArr.length === 0) // need this because the correct packet might come back during the writePacketTimer.timeout.
-        {
-            logger.silly('Exiting write queue because last message was successfully received.')
-            writeQueueActive = false
-        } else {
-            writeQueueActive = true
-            logger.silly('Entering Write Queue')
-            logger.silly('Queue = %s', JSON.stringify(queuePacketsArr))
+    if (logPacketWrites) logger.silly('writePacket: Entering writePacket() to write: %s\nFull queue: [[%s]]', queuePacketsArr[0], queuePacketsArr.join('],\n['))
 
-            if (netConnect === 0) {
-                sp.write(queuePacketsArr[0], function(err) {
-                    if (err) {
-                        logger.error('Error writing packet: ' + err.message)
-                    }
-                })
+    writeQueueActive = true
+    if (netConnect === 0) {
+        sp.write(queuePacketsArr[0], function(err) {
+            if (err) {
+                logger.error('Error writing packet: ' + err.message)
             } else {
-                sp.write(new Buffer(queuePacketsArr[0]), 'binary', function(err) {
-                    if (err) {
-                        logger.error('Error writing packet: ' + err.message)
-                    }
-                })
+                //if (logPacketWrites) logger.silly('Packet written: ', queuePacketsArr[0])
+                postWritePacketHelper()
             }
-            packetWrittenAt = msgCounter;
-            writePacketHelper()
-        }
+        })
     } else {
-        skipPacketWrittenCount++
-        if (logMessageDecoding) logger.silly('Delaying write packet by %s times due to \n1. msgWriteCounter.counter === 0: %s (%s) \n2. msgCounter-packetWrittenAt>=4:  %s (%s) \n3. skipPacketWrittenCount>=4: %s (%s)', skipPacketWrittenCount, msgWriteCounter.counter === 0, msgWriteCounter.counter,msgCounter-packetWrittenAt>=4, msgCounter-packetWrittenAt, skipPacketWrittenCount>=4, skipPacketWrittenCount)
-        if (queuePacketsArr.length > 0) {
-            writePacketTimer.setTimeout(writePacket, '', '150m')
-        }
+        sp.write(new Buffer(queuePacketsArr[0]), 'binary', function(err) {
+            if (err) {
+                logger.error('Error writing packet: ' + err.message)
+            } else {
+                //if (logPacketWrites) logger.silly('Packet written: ', queuePacketsArr[0])
+                postWritePacketHelper()
+            }
+        })
+    }
+
+
+}
+
+function postWritePacketHelper() {
+
+    if (msgWriteCounter.counter === 0) {
+        //if we are here because we wrote a packet, but it is the first time, then the counter will be 0 and we need to set the variables for later comparison
+        msgWriteCounter.packetWrittenAt = msgCounter;
+        msgWriteCounter.msgWrote = queuePacketsArr[0].slice(0)
+        msgWriteCounter.counter++
+            if (logPacketWrites) logger.debug('postWritePacketHelper: First time writing packet.', msgWriteCounter)
+    } else
+    if (msgWriteCounter.counter === 5) //if we get to 5 retries, then throw an Error.
+    {
+
+        logger.warn('Error writing packet to serial bus.  Tried %s times to write %s', msgWriteCounter.counter, msgWriteCounter.msgWrote)
+        if (logPacketWrites) logger.silly('postWritePacketHelper: msgWriteCounter: ', msgWriteCounter)
+        msgWriteCounter.counter++;
+    } else
+    if (msgWriteCounter.counter === 10) //if we get to 10 retries, then abort this packet.
+    {
+        logger.error('Aborting packet %s in write queue after 10 tries.', queuePacketsArr[0])
+        ejectPacketAndReset()
+        if (logPacketWrites) logger.silly('postWritePacketHelper: Tries===10.  Shifted queuePacketsArr.  \nWrite queue now: %s\nmsgWriteCounter:', queuePacketsArr, msgWriteCounter)
+            //let's reconsider if we want to change the logging levels, or just fail silently/gracefully?
+            /*if (logType == "info" || logType == "warn" || logType == "error") {
+                logger.warn('Setting logging level to Debug')
+                logType = 'debug'
+                logger.transports.console.level = 'debug';
+            }*/
+    } else //we should get here between 1-4 packet writes
+    {
+        msgWriteCounter.counter++;
+        if (logPacketWrites) logger.debug('postWritePacketHelper: Try %s.  Wrote: %s ', msgWriteCounter.counter, queuePacketsArr[0])
+    }
+
+    if (queuePacketsArr.length === 0) {
+        if (logPacketWrites) logger.debug('postWritePacketHelper: Write queue empty.  writeQueueActive=false')
+        writeQueueActive = false
+    } else {
+        if (logPacketWrites) logger.debug('writePacketHelper: Setting timeout to write next packet (will call preWritePacketHelper())\n')
+        writePacketTimer.setTimeout(preWritePacketHelper, '', '175m')
     }
 }
 
-function writePacketHelper() {
-    //if we are here because we wrote a packet, but it is the first time, then the counter will be 0 and we need to copy the message we just wrote
-    if (msgWriteCounter.counter === 0) {
-        msgWriteCounter.msgWrote = queuePacketsArr[0].slice(0)
-        msgWriteCounter.counter++
-    } else //if (queuePacketsArr[0] === msgWriteCounter.msgWrote) //msgWriteCounter will store the message that is being written.  If it doesn't match the 1st msg in the queue, then we have received the ACK for the message and can move on.  If it is the same message, then we are retrying the same message again so increment the counter.
-    {
-        msgWriteCounter.counter++;
-    }
-    logger.verbose('Sent Packet ' + queuePacketsArr[0] + ' Try: ' + msgWriteCounter.counter)
-    if (msgWriteCounter.counter >= 10) //if we get to 10 retries, then throw an Error.
-    {
-        logger.warn('Error writing packet to serial bus.  Tried %s times to write %s', msgWriteCounter.counter, msgWriteCounter.msgWrote)
-        if (logType == "info" || logType == "warn" || logType == "error") {
-            logger.warn('Setting logging level to Debug')
-            logType = 'debug'
-            logger.transports.console.level = 'debug';
-        }
-        if (msgWriteCounter.counter >= 20) //if we get to 20 retries, then abort this packet.
-        {
-            logger.error('Aborting packet %s in write queue.', queuePacketsArr[0])
-            queuePacketsArr.shift();
-            logger.silly('Write queue now: %s', queuePacketsArr)
-                //TODO: Why do we need this next line in here to make it work?  Without it, the app seems to stop sending messages.  Not sure this is the right place for this.
-                //writePacket()
-            msgWriteCounter.counter = 0
-            msgWriteCounter.msgWrote = []
-        }
-    }
+function ejectPacketAndReset() {
     if (queuePacketsArr.length > 0) {
-        writePacketTimer.setTimeout(writePacket, '', '150m')
+        queuePacketsArr.shift();
     }
+    msgWriteCounter.counter = 0
+    msgWriteCounter.msgWrote = []
+    msgWriteCounter.packetWrittenAt = 0
 }
 
 if (pumpOnly) {
@@ -2532,15 +2627,13 @@ function pumpStatusCheck(pump1, pump2) {
     queuePacket(statusPacket);
     //queuePacket([165, 0, 96, 16, 4, 1, 0]);
 
-    if (pump2 == 2) {
-        setTimeout(function() {
-            //request pump status
-            var statusPacket = [165, 0, 97, 16, 7, 0];
-            logger.verbose('Sending Request Pump 2 Status: %s', statusPacket)
-            queuePacket([165, 0, 97, 16, 4, 1, 255]);
-            queuePacket(statusPacket);
-            //queuePacket([165, 0, 97, 16, 4, 1, 0]);
-        }, 500)
+    if (pump2 === 2) {
+        //request pump status
+        var statusPacket = [165, 0, 97, 16, 7, 0];
+        logger.verbose('Sending Request Pump 2 Status: %s', statusPacket)
+        queuePacket([165, 0, 97, 16, 4, 1, 255]);
+        queuePacket(statusPacket);
+        //queuePacket([165, 0, 97, 16, 4, 1, 0]);
     }
 }
 
