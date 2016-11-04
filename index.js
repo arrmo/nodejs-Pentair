@@ -7,7 +7,7 @@ console.log('\033[2J'); //clear the console
 var dateFormat = require('dateformat');
 var Dequeue = require('dequeue')
 
-var version = '1.0.0 alpha 24'
+var version = '1.0.0 alpha 25'
 
 const events = require('events')
 
@@ -776,24 +776,33 @@ function iterateOverArrayOfArrays() {
             //   0,   1,      2,      3,    4, 5,        6
             //(255,165,preambleByte,Dest,Src,cmd,chatterlen) and 2 for checksum)
 
-            if (chatterlen != undefined && chatterlen >= 50) //we should never get a packet greater than or equal to 50.  So if the chatterlen is greater than that let's shift the array and retry
+            if (chatterlen >= 50) //we should never get a packet greater than or equal to 50.  So if the chatterlen is greater than that let's shift the array and retry
             {
                 if (logMessageDecoding) logger.debug('iOAOA: Will shift first element out of bufferToProcess because it appears there is an invalid length packet (>=50) Lengeth: %s  Packet: %s', bufferToProcess[6], bufferToProcess)
                 bufferToProcess.shift() //remove the first byte so we look for the next [255,165] in the array.
 
-            } else if (chatterlen == undefined || ((bufferToProcess.length - chatterlen) <= 0)) {
-
-                if (logMessageDecoding) {
-                    if (logMessageDecoding)
-                        logger.silly('Msg#  n/a   Incomplete message in bufferToProcess.')
-                    if (bufferArrayOfArrays.length > 0) {
-                        pushBufferToArray()
-                    } else {
-                      if (logMessageDecoding) logger.silly('iOAOA: Setting breakLoop=true because \nchatterlen(%s) == undefined || (bufferToProcess.length(%s) - chatterlen) <= 0(%s): %s',chatterlen,bufferToProcess.length,chatterlen == undefined || ((bufferToProcess.length - chatterlen),chatterlen == undefined || (bufferToProcess.length - chatterlen) <= 0))
-                        breakLoop = true //do nothing, but exit until we get a second buffer to concat
-                    }
+            } else if ((bufferToProcess.length - chatterlen) <= 0) {
+                if (logMessageDecoding)
+                    logger.silly('Msg#  n/a   Incomplete message in bufferToProcess. %s', bufferToProcess)
+                if (bufferArrayOfArrays.length > 0) {
+                    pushBufferToArray()
+                } else {
+                    if (logMessageDecoding) logger.silly('iOAOA: Setting breakLoop=true because (bufferToProcess.length(%s) - chatterlen) <= 0(%s): %s', bufferToProcess.length, chatterlen == undefined || ((bufferToProcess.length - chatterlen), chatterlen == undefined || (bufferToProcess.length - chatterlen) <= 0))
+                    breakLoop = true //do nothing, but exit until we get a second buffer to concat
+                }
+            } else
+            if (chatterlen==undefined || isNaN(chatterlen)) {
+                if (logMessageDecoding)
+                    logger.silly('Msg#  n/a   chatterlen NaN: %s.', bufferToProcess)
+                if (bufferArrayOfArrays.length > 0) {
+                    pushBufferToArray()
+                }else {
+                    if (logMessageDecoding) logger.silly('iOAOA: Setting breakLoop=true because isNan(chatterlen) is %s.  bufferToProcess:', chatterlen, bufferToProcess)
+                    breakLoop = true //do nothing, but exit until we get a second buffer to concat
                 }
             } else {
+              if (logMessageDecoding)
+                logger.silly('iOAOA: Think we have a packet. bufferToProcess: %s  chatterlen: %s', bufferToProcess, chatterlen)
                 msgCounter += 1;
                 bufferToProcess.shift() //remove the 255 byte
                 chatter = bufferToProcess.splice(0, chatterlen); //splice modifies the existing buffer.  We remove chatter from the bufferarray.
