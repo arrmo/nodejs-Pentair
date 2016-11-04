@@ -7,7 +7,7 @@ console.log('\033[2J'); //clear the console
 var dateFormat = require('dateformat');
 var Dequeue = require('dequeue')
 
-var version = '1.0.0 alpha 23'
+var version = '1.0.0 alpha 24'
 
 const events = require('events')
 
@@ -789,6 +789,7 @@ function iterateOverArrayOfArrays() {
                     if (bufferArrayOfArrays.length > 0) {
                         pushBufferToArray()
                     } else {
+                      if (logMessageDecoding) logger.silly('iOAOA: Setting breakLoop=true because \nchatterlen(%s) == undefined || (bufferToProcess.length(%s) - chatterlen) <= 0(%s): %s',chatterlen,bufferToProcess.length,chatterlen == undefined || ((bufferToProcess.length - chatterlen),chatterlen == undefined || (bufferToProcess.length - chatterlen) <= 0))
                         breakLoop = true //do nothing, but exit until we get a second buffer to concat
                     }
                 }
@@ -808,7 +809,7 @@ function iterateOverArrayOfArrays() {
 
                 processChecksum(chatter, msgCounter, packetType);
             }
-            breakLoop = true;
+            //breakLoop = true;
         } else if (preambleChlorinator[0] == bufferToProcess[0] && preambleChlorinator[1] == bufferToProcess[1] &&
             (bufferToProcess[2] == 0 || bufferToProcess[2] == 80)) {
             /*Match on chlorinator packet
@@ -850,15 +851,25 @@ function iterateOverArrayOfArrays() {
 
     }
 
-
-    if ((bufferArrayOfArrays.length === 0 && bufferToProcess.length === 0) || breakLoop) {
+    logger.silly('iOAOA: Criteria for recursing/exting.  \nbreakLoop: %s\nbufferArrayOfArrays.length(%s) === 0 && bufferToProcess.length(%s) > 0: %s', breakLoop, bufferArrayOfArrays.length, bufferToProcess.length, bufferArrayOfArrays.length === 0 && bufferToProcess.length > 0)
+    if (breakLoop) {
         processingBuffer = false;
         if (logMessageDecoding)
-            logger.silly('iOAOA: Exiting out of loop because:\nbufferArrayOfArrays.length(%s) === 0 && bufferToProcess.length(%s) > 0: %s\nbreakLoop: %s', bufferArrayOfArrays.length, bufferToProcess.length, bufferArrayOfArrays.length === 0 && bufferToProcess.length > 0, breakLoop)
+            logger.silly('iOAOA: Exiting because breakLoop: %s', breakLoop)
+    } else
+    if (bufferToProcess.length > 0) {
+        if (logMessageDecoding)
+            logger.silly('iOAOA: Recursing back into iOAOA because no bufferToProcess.length > 0: %s', bufferToProcess.length > 0)
+        iterateOverArrayOfArrays()
+    } else
+    if (bufferArrayOfArrays.length === 0) {
+        processingBuffer = false;
+        if (logMessageDecoding)
+            logger.silly('iOAOA: Exiting out of loop because no further incoming buffers to append. bufferArrayOfArrays.length === 0 (%s) ', bufferArrayOfArrays.length === 0)
 
     } else {
         if (logMessageDecoding)
-            logger.silly('iOAOA: Recursing back into iOAOA.')
+            logger.silly('iOAOA: Recursing back into iOAOA because no other conditions met.')
         iterateOverArrayOfArrays()
     }
 }
@@ -2353,21 +2364,21 @@ function postWritePacketHelper() {
     } else
     if (msgWriteCounter.counter === 5) //if we get to 5 retries, then throw an Error.
     {
-      //TODO: Move the packet type and retrieve string logic to the module
-      if (queuePacketsArr[0][packetFields.DEST + 3] === 96 || queuePacketsArr[0][packetFields.DEST + 3] === 97) {
-          logger.warn('Error writing pump packet \'%s\' to serial bus.  Tried %s times to write %s', strPumpActions[queuePacketsArr[0][packetFields.ACTION + 3]], msgWriteCounter.counter, msgWriteCounter.msgWrote)
+        //TODO: Move the packet type and retrieve string logic to the module
+        if (queuePacketsArr[0][packetFields.DEST + 3] === 96 || queuePacketsArr[0][packetFields.DEST + 3] === 97) {
+            logger.warn('Error writing pump packet \'%s\' to serial bus.  Tried %s times to write %s', strPumpActions[queuePacketsArr[0][packetFields.ACTION + 3]], msgWriteCounter.counter, msgWriteCounter.msgWrote)
 
-      }
-      //chlorinator
-      else if (queuePacketsArr[0][0] === 16) {
-          logger.warn('Error writing chlorinator packet \'%s\' to serial bus.  Tried %s times to write %s', strChlorinatorActions[queuePacketsArr[0][3]], msgWriteCounter.counter, msgWriteCounter.msgWrote)
+        }
+        //chlorinator
+        else if (queuePacketsArr[0][0] === 16) {
+            logger.warn('Error writing chlorinator packet \'%s\' to serial bus.  Tried %s times to write %s', strChlorinatorActions[queuePacketsArr[0][3]], msgWriteCounter.counter, msgWriteCounter.msgWrote)
 
-      }
-      //controller packet
-      else {
-          logger.warn('Error writing controller packet \'%s\' to serial bus.  Tried %s times to write %s', strControllerActions[queuePacketsArr[0][packetFields.ACTION + 3]], msgWriteCounter.counter, msgWriteCounter.msgWrote)
+        }
+        //controller packet
+        else {
+            logger.warn('Error writing controller packet \'%s\' to serial bus.  Tried %s times to write %s', strControllerActions[queuePacketsArr[0][packetFields.ACTION + 3]], msgWriteCounter.counter, msgWriteCounter.msgWrote)
 
-      }
+        }
 
         if (logPacketWrites) logger.silly('postWritePacketHelper: msgWriteCounter: ', msgWriteCounter)
         msgWriteCounter.counter++;
@@ -2375,21 +2386,21 @@ function postWritePacketHelper() {
     if (msgWriteCounter.counter === 10) //if we get to 10 retries, then abort this packet.
     {
 
-      //TODO: Move the packet type and retrieve string logic to the module
-      if (queuePacketsArr[0][packetFields.DEST + 3] === 96 || queuePacketsArr[0][packetFields.DEST + 3] === 97) {
-          logger.error('Aborting pump packet \'%s\'.  Tried %s times to write %s', strPumpActions[queuePacketsArr[0][packetFields.ACTION + 3]], msgWriteCounter.counter, msgWriteCounter.msgWrote)
+        //TODO: Move the packet type and retrieve string logic to the module
+        if (queuePacketsArr[0][packetFields.DEST + 3] === 96 || queuePacketsArr[0][packetFields.DEST + 3] === 97) {
+            logger.error('Aborting pump packet \'%s\'.  Tried %s times to write %s', strPumpActions[queuePacketsArr[0][packetFields.ACTION + 3]], msgWriteCounter.counter, msgWriteCounter.msgWrote)
 
-      }
-      //chlorinator
-      else if (queuePacketsArr[0][0] === 16) {
-          logger.error('Aborting chlorinator packet \'%s\'.  Tried %s times to write %s', strChlorinatorActions[queuePacketsArr[0][3]], msgWriteCounter.counter, msgWriteCounter.msgWrote)
+        }
+        //chlorinator
+        else if (queuePacketsArr[0][0] === 16) {
+            logger.error('Aborting chlorinator packet \'%s\'.  Tried %s times to write %s', strChlorinatorActions[queuePacketsArr[0][3]], msgWriteCounter.counter, msgWriteCounter.msgWrote)
 
-      }
-      //controller packet
-      else {
-          logger.error('Aborting controller packet \'%s\'.  Tried %s times to write %s', strControllerActions[queuePacketsArr[0][packetFields.ACTION + 3]], msgWriteCounter.counter, msgWriteCounter.msgWrote)
+        }
+        //controller packet
+        else {
+            logger.error('Aborting controller packet \'%s\'.  Tried %s times to write %s', strControllerActions[queuePacketsArr[0][packetFields.ACTION + 3]], msgWriteCounter.counter, msgWriteCounter.msgWrote)
 
-      }
+        }
         ejectPacketAndReset()
         if (logPacketWrites) logger.silly('postWritePacketHelper: Tries===10.  Shifted queuePacketsArr.  \nWrite queue now: %s\nmsgWriteCounter:', queuePacketsArr, msgWriteCounter)
             //let's reconsider if we want to change the logging levels, or just fail silently/gracefully?
