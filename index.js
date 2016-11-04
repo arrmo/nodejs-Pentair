@@ -7,7 +7,7 @@ console.log('\033[2J'); //clear the console
 var dateFormat = require('dateformat');
 var Dequeue = require('dequeue')
 
-var version = '1.0.0 alpha 20'
+var version = '1.0.0 alpha 23'
 
 
 const events = require('events')
@@ -377,9 +377,10 @@ const ctrlString = {
     15: 'Broadcast',
     16: 'Main',
     32: 'Remote',
-    34: 'Wireless', //GUESS
+    34: 'Wireless',
     96: 'Pump1',
-    97: 'Pump2'
+    97: 'Pump2',
+    appAddress: 'nodejs-Pentair Server'
 }
 
 //-------  EQUIPMENT SETUP -----------
@@ -395,6 +396,7 @@ var chlorinator; //set this to 1 if you have a chlorinator, otherwise 0.
 
 //only relevant if pumpOnly=1
 var numberOfPumps; //this is only used with pumpOnly=1.  It will query 1 (or 2) pumps every 30 seconds for their status
+var appAddress; //address the app should emulate/use on the serial bus
 //-------  END EQUIPMENT SETUP -----------
 
 //-------  MISC SETUP -----------
@@ -423,6 +425,7 @@ var logConfigMessages; //variable to show/hide configuration messages
 var logMessageDecoding; //variable to show messages regarding the buffer, checksum calculation, etc.
 var logChlorinator; //variable to show messages from the chlorinator
 var logPacketWrites; //variable to log queueing/writing activities
+var logPumpTimers; //variable to output timer debug messages for the pumps
 //-------  END EQUIPMENT SETUP -----------
 
 var configurationFile = 'config.json';
@@ -434,6 +437,7 @@ pumpOnly = configFile.Equipment.pumpOnly;
 ISYController = configFile.Equipment.ISYController;
 chlorinator = configFile.Equipment.chlorinator;
 numberOfPumps = configFile.Equipment.numberOfPumps;
+appAddress = configFile.Equipment.appAddress;
 expressDir = configFile.Misc.expressDir;
 expressPort = configFile.Misc.expressPort;
 netConnect = configFile.Network.netConnect;
@@ -447,6 +451,7 @@ logConfigMessages = configFile.Log.logConfigMessages;
 logMessageDecoding = configFile.Log.logMessageDecoding;
 logChlorinator = configFile.Log.logChlorinator;
 logPacketWrites = configFile.Log.logPacketWrites;
+logPumpTimers = configFile.Log.logPumpTimers;
 /*
  for (var key in configFile.Equipment) {
  if (poolConfig.Pentair.hasOwnProperty(key)) {
@@ -622,6 +627,7 @@ settingsStr += '\n var chlorinator = ' + chlorinator;
 settingsStr += '\n var pumpOnly = ' + pumpOnly;
 settingsStr += '\n var numberOfPumps = ' + numberOfPumps;
 settingsStr += '\n var ISYController = ' + ISYController;
+settingsStr += '\n var appAddress = ' + appAddress;
 settingsStr += '\n //-------  END EQUIPMENT SETUP -----------';
 settingsStr += '\n ';
 settingsStr += '\n //-------  MISC SETUP -----------';
@@ -646,6 +652,7 @@ settingsStr += '\n var logConfigMessages = ' + logConfigMessages;
 settingsStr += '\n var logMessageDecoding = ' + logMessageDecoding;
 settingsStr += '\n var logChlorinator = ' + logChlorinator;
 settingsStr += '\n var logPacketWrites = ' + logPacketWrites;
+settingsStr += '\n var logPumpTimers = ' + logPumpTimers;
 settingsStr += '\n //-------  END LOG SETUP -----------\n\n';
 //settingsStr += '\n*******************************';
 
@@ -813,46 +820,27 @@ function iterateOverArrayOfArrays() {
              //len                             8
              //     16  2  80  20  2  120  16  3*/
 
-            /*TODO:  Why is this packet getting through and causing a stack overflow?
-
-            22:10:58.493 DEBUG iOAOA: Packet being analyzed: 16,2,80,0,64,226,53,255
-
-            <--- Last few GCs --->
-
-               38796 ms: Scavenge 947.8 (987.8) -> 947.8 (987.8) MB, 0.1 / 0 ms (+ 1.1 ms in 1 steps since last GC) [allocation failure] [incremental marking delaying mark-sweep].
-               39040 ms: Mark-sweep 947.8 (987.8) -> 572.8 (611.4) MB, 243.3 / 0 ms (+ 1.2 ms in 2 steps since start of marking, biggest step 1.1 ms) [last resort gc].
-               39240 ms: Mark-sweep 572.8 (611.4) -> 572.8 (611.4) MB, 200.3 / 0 ms [last resort gc].
-
-
-            <--- JS stacktrace --->
-
-            ==== JS stack trace =========================================
-
-            Security context: 0x1ecf768b4629 <JS Object>
-                2: iterateOverArrayOfArrays [/Users/rgoldin/Documents/nodejs-Pentair/index.js:~712] [pc=0x30811c1280a8] (this=0x31e01f076c1 <JS Global Object>)
-                3:  anonymous  [/Users/rgoldin/Documents/nodejs-Pentair/index.js:~673] [pc=0x30811c123dfe] (this=0x2922ead46b39 <a Socket with map 0x12740e7b60f9>,data=0x2922ead0f089 <an Uint8Array with map 0x12740e7b9851>)
-                4: emitOne(aka emitOne) [even...
-
-            FATAL ERROR: CALL_AND_RETRY_LAST Allocation
-
-            */
-
-
-
             msgCounter += 1;
             chatter = [];
             var i = 0;
             //Looking for the Chlorinator preamble 16,2
             while (!(bufferToProcess[i] == 16 && bufferToProcess[i + 1] == 3) && !breakLoop) {
-                chatter.push(bufferToProcess[i]);
-                i++;
-                if (bufferToProcess[i] == 16 && bufferToProcess[i + 1] == 3) {
+                //check to make sure we aren't reaching the end of the buffer.
+                if ((i + 1) === bufferToProcess.length) {
+                    //if we get here, just silently abort
+                    breakLoop = true
+                    if (logMessageDecoding) logger.silly('Msg# %s  Aborting chlorinator packet because we reached the end of the buffer.', msgCounter, bufferToProcess)
+                } else {
                     chatter.push(bufferToProcess[i]);
-                    chatter.push(bufferToProcess[i + 1]);
-                    i += 2;
-                    processChecksum(chatter, msgCounter, 'chlorinator');
-                    bufferToProcess.splice(0, i)
-                    breakLoop = true;
+                    i++;
+                    if (bufferToProcess[i] == 16 && bufferToProcess[i + 1] == 3) {
+                        chatter.push(bufferToProcess[i]);
+                        chatter.push(bufferToProcess[i + 1]);
+                        i += 2;
+                        processChecksum(chatter, msgCounter, 'chlorinator');
+                        bufferToProcess.splice(0, i)
+                        breakLoop = true;
+                    }
                 }
 
             }
@@ -864,10 +852,10 @@ function iterateOverArrayOfArrays() {
     }
 
 
-    if (bufferArrayOfArrays.length === 0 && bufferToProcess.length <= 50) {
+    if ((bufferArrayOfArrays.length === 0 && bufferToProcess.length === 0) || breakLoop) {
         processingBuffer = false;
         if (logMessageDecoding)
-            logger.silly('iOAOA: BUFFERARRAYOFARRAY===0  && bufferToProcess.length <= 50.  Processing=FALSE')
+            logger.silly('iOAOA: Exiting out of loop because:\nbufferArrayOfArrays.length(%s) === 0 && bufferToProcess.length(%s) > 0: %s\nbreakLoop: %s', bufferArrayOfArrays.length, bufferToProcess.length, bufferArrayOfArrays.length === 0 && bufferToProcess.length > 0, breakLoop)
 
     } else {
         if (logMessageDecoding)
@@ -1671,7 +1659,8 @@ function decode(data, counter, packetType) {
                             case 33: //0x21
                                 {
                                     setAmount = setAmount / 8
-                                    str1 = 'Set Current Program to ' + setAmount.toString();
+                                    str1 = 'Set Current Program to '
+                                    str2 = setAmount.toString();
                                     pumpStatus.currentprogram = setAmount;
                                     break;
                                 }
@@ -2268,7 +2257,7 @@ function queuePacket(message) {
 
     if (requestGet) {
         //request the GET version of the SET packet
-        var getPacket = [165, preambleByte, 16, 34, packet[packetFields.ACTION + 3] + 64, 1, 0]
+        var getPacket = [165, preambleByte, 16, appAddress, packet[packetFields.ACTION + 3] + 64, 1, 0]
         if (logPacketWrites) logger.debug('Queueing message %s to retrieve \'%s\'', getPacket, strControllerActions[getPacket[packetFields.ACTION]])
         queuePacket(getPacket);
 
@@ -2286,7 +2275,7 @@ function queuePacket(message) {
         preWritePacketHelper();
 }
 
-var writePacketFlag = 0 //1 = ok to write packet.  0 = skip
+
 function preWritePacketHelper() {
     if (queuePacketsArr.length === 0) // need this because the correct packet might come back during the writePacketTimer.timeout.
     {
@@ -2296,38 +2285,32 @@ function preWritePacketHelper() {
         //msgWriteCounter===0;  this means no packet has been written yet (queuePacketsArr.shift() was called and msgWriteCounter reset)
         if (msgWriteCounter.counter === 0) {
             if (logPacketWrites) logger.silly('preWritePacketHelper: Ok to write message %s because it has not been written yet', queuePacketsArr[0])
-            writePacketFlag = 1
+            skipPacketWrittenCount = 0
+            writePacket()
+        } else if (skipPacketWrittenCount === 2) {
+            if (logPacketWrites) logger.silly('preWritePacketHelper: Ok to write message %s because it has been skipped twice', queuePacketsArr[0])
+            skipPacketWrittenCount = 0
+            writePacket()
         }
-        //if we have already processed more than 2 messages from the inbound queue, write the packet
-        else if (msgCounter - msgWriteCounter.packetWrittenAt >= 2) {
-            if (logPacketWrites) logger.silly('preWritePacketHelper: Ok to write message %s because we have processed two incoming messages since the last write', queuePacketsArr[0])
-            writePacketFlag = 1
+        //if we have not processed more than 4 messages, let's delay again.  However, if we do this twice, then skipPacketWrittenCount >= 2 will be processed and we will write the message no matter what
+        else if (msgCounter - msgWriteCounter.packetWrittenAt <= 4) {
+            if (logPacketWrites) logger.silly('preWritePacketHelper: Skipping write packet %s time(s) because we have not processed four incoming messages since the last write. Packet: %s', skipPacketWrittenCount, queuePacketsArr[0])
+            skipPacketWrittenCount++
+            writePacketTimer.setTimeout(preWritePacketHelper, '', '150m')
         }
         //if the incoming buffer (bufferArrayOfArrays)>=2
         //OR
         //part of buffer current processing (bufferToProcess)>=50 bytes, let's skip writing the packet twice
         else if (bufferArrayOfArrays.length >= 2 || bufferToProcess.length >= 50) {
             //skipPacketWrittenCount>=2;  we've skipped writting it twice already, so write it now.
-            if (skipPacketWrittenCount >= 2) {
-                if (logPacketWrites) logger.silly('preWritePacketHelper: Ok to write message %s because it has been skipped twice', queuePacketsArr[0])
-                skipPacketWrittenCount = 0
-                writePacketFlag = 1
-            } else {
-                skipPacketWrittenCount++
-                writePacketFlag = 0
-                if (logPacketWrites) logger.silly('preWritePacketHelper: Skipping write packet %s time(s) due to \n1. bufferArrayOfArrays.length>=2: %s (%s) \n2. bufferToProcess.length>=50:  %s (%s)', skipPacketWrittenCount, bufferArrayOfArrays.length >= 2, bufferArrayOfArrays.length, bufferToProcess.length >= 50, bufferToProcess.length)
-                if (queuePacketsArr.length > 0) {
-                    writePacketTimer.setTimeout(preWritePacketHelper, '', '150m')
-                }
-            }
+            skipPacketWrittenCount++
+            if (logPacketWrites) logger.silly('preWritePacketHelper: Skipping write packet %s time(s) due to \n1. bufferArrayOfArrays.length>=2: %s (%s) \n2. bufferToProcess.length>=50:  %s (%s)', skipPacketWrittenCount, bufferArrayOfArrays.length >= 2, bufferArrayOfArrays.length, bufferToProcess.length >= 50, bufferToProcess.length)
+            writePacketTimer.setTimeout(preWritePacketHelper, '', '150m')
         } else
         //if none of the conditions above are met, let's write the packet
         {
             if (logPacketWrites) logger.silly('preWritePacketHelper: Ok to write message %s because no other conditions have been met', queuePacketsArr[0])
-            writePacketFlag = 1
-        }
-
-        if (writePacketFlag === 1) {
+            skipPacketWrittenCount = 0
             writePacket()
         }
     }
@@ -2371,14 +2354,43 @@ function postWritePacketHelper() {
     } else
     if (msgWriteCounter.counter === 5) //if we get to 5 retries, then throw an Error.
     {
+      //TODO: Move the packet type and retrieve string logic to the module
+      if (queuePacketsArr[0][packetFields.DEST + 3] === 96 || queuePacketsArr[0][packetFields.DEST + 3] === 97) {
+          logger.warn('Error writing pump packet \'%s\' to serial bus.  Tried %s times to write %s', strPumpActions[queuePacketsArr[0][packetFields.ACTION + 3]], msgWriteCounter.counter, msgWriteCounter.msgWrote)
 
-        logger.warn('Error writing packet to serial bus.  Tried %s times to write %s', msgWriteCounter.counter, msgWriteCounter.msgWrote)
+      }
+      //chlorinator
+      else if (queuePacketsArr[0][0] === 16) {
+          logger.warn('Error writing chlorinator packet \'%s\' to serial bus.  Tried %s times to write %s', strChlorinatorActions[queuePacketsArr[0][3]], msgWriteCounter.counter, msgWriteCounter.msgWrote)
+
+      }
+      //controller packet
+      else {
+          logger.warn('Error writing controller packet \'%s\' to serial bus.  Tried %s times to write %s', strControllerActions[queuePacketsArr[0][packetFields.ACTION + 3]], msgWriteCounter.counter, msgWriteCounter.msgWrote)
+
+      }
+
         if (logPacketWrites) logger.silly('postWritePacketHelper: msgWriteCounter: ', msgWriteCounter)
         msgWriteCounter.counter++;
     } else
     if (msgWriteCounter.counter === 10) //if we get to 10 retries, then abort this packet.
     {
-        logger.error('Aborting packet %s in write queue after 10 tries.', queuePacketsArr[0])
+
+      //TODO: Move the packet type and retrieve string logic to the module
+      if (queuePacketsArr[0][packetFields.DEST + 3] === 96 || queuePacketsArr[0][packetFields.DEST + 3] === 97) {
+          logger.error('Aborting pump packet \'%s\'.  Tried %s times to write %s', strPumpActions[queuePacketsArr[0][packetFields.ACTION + 3]], msgWriteCounter.counter, msgWriteCounter.msgWrote)
+
+      }
+      //chlorinator
+      else if (queuePacketsArr[0][0] === 16) {
+          logger.error('Aborting chlorinator packet \'%s\'.  Tried %s times to write %s', strChlorinatorActions[queuePacketsArr[0][3]], msgWriteCounter.counter, msgWriteCounter.msgWrote)
+
+      }
+      //controller packet
+      else {
+          logger.error('Aborting controller packet \'%s\'.  Tried %s times to write %s', strControllerActions[queuePacketsArr[0][packetFields.ACTION + 3]], msgWriteCounter.counter, msgWriteCounter.msgWrote)
+
+      }
         ejectPacketAndReset()
         if (logPacketWrites) logger.silly('postWritePacketHelper: Tries===10.  Shifted queuePacketsArr.  \nWrite queue now: %s\nmsgWriteCounter:', queuePacketsArr, msgWriteCounter)
             //let's reconsider if we want to change the logging levels, or just fail silently/gracefully?
@@ -2418,7 +2430,9 @@ if (pumpOnly) {
     var pumpInitialRequestConfigDelay = new NanoTimer();
     var pumpStatusTimer = new NanoTimer();
     if (numberOfPumps == 1) {
+        if (logPumpTimers) logger.silly('pumpStatusTimer.setInterval(pumpStatusCheck, [1], \'30s\');')
         pumpStatusTimer.setInterval(pumpStatusCheck, [1], '30s');
+        if (logPumpTimers) logger.silly('pumpInitialRequestConfigDelay.setTimeout(pumpStatusCheck, [1], \'3500m\');')
         pumpInitialRequestConfigDelay.setTimeout(pumpStatusCheck, [1], '3500m'); //must give a short delay to allow the port to open
     } else {
         var pump2Timer = new NanoTimer();
@@ -2584,28 +2598,28 @@ function getControllerConfiguration(dest, src) {
 
     logger.verbose('Queueing messages to retrieve SW Version')
         //get Heat Mode
-    queuePacket([165, preambleByte, 16, 34, 253, 1, 0]);
+    queuePacket([165, preambleByte, 16, appAddress, 253, 1, 0]);
 
     logger.verbose('Queueing messages to retrieve Pool/Spa Heat Mode')
         //get Heat Mode
-    queuePacket([165, preambleByte, 16, 34, 200, 1, 0]);
+    queuePacket([165, preambleByte, 16, appAddress, 200, 1, 0]);
 
     logger.verbose('Queueing messages to retrieve settings(?)')
         //get Heat Mode
-    queuePacket([165, preambleByte, 16, 34, 232, 1, 0]);
+    queuePacket([165, preambleByte, 16, appAddress, 232, 1, 0]);
 
     logger.verbose('Queueing messages to retrieve Custom Names')
     var i = 0;
     //get custom names
     for (i; i < 10; i++) {
-        queuePacket([165, preambleByte, 16, 34, 202, 1, i]);
+        queuePacket([165, preambleByte, 16, appAddress, 202, 1, i]);
     }
 
 
     logger.verbose('Queueing messages to retrieve Circuit Names')
         //get circuit names
     for (i = 1; i < 21; i++) {
-        queuePacket([165, preambleByte, 16, 34, 203, 1, i]);
+        queuePacket([165, preambleByte, 16, appAddress, 203, 1, i]);
     }
 
 
@@ -2613,7 +2627,7 @@ function getControllerConfiguration(dest, src) {
         //get schedules
     for (i = 1; i < 13; i++) {
 
-        queuePacket([165, preambleByte, 16, 34, 209, 1, i]);
+        queuePacket([165, preambleByte, 16, appAddress, 209, 1, i]);
     }
 }
 
@@ -2621,17 +2635,18 @@ function getControllerConfiguration(dest, src) {
 
 function pumpStatusCheck(pump1, pump2) {
     //request pump status
-    var statusPacket = [165, 0, 96, 16, 7, 0];
+    if (logPumpTimers) logger.silly('pumpStatusCheck: Running pump 1 command on setInterval to check pump status')
+    var statusPacket = [165, 0, 96, appAddress, 7, 0];
     logger.verbose('Sending Request Pump 1 Status: %s', statusPacket)
-    queuePacket([165, 0, 96, 16, 4, 1, 255]);
+    queuePacket([165, 0, 96, appAddress, 4, 1, 255]);
     queuePacket(statusPacket);
-    //queuePacket([165, 0, 96, 16, 4, 1, 0]);
+    //queuePacket([165, 0, 96, appAddress, 4, 1, 0]);
 
     if (pump2 === 2) {
         //request pump status
-        var statusPacket = [165, 0, 97, 16, 7, 0];
+        var statusPacket = [165, 0, 97, appAddress, 7, 0];
         logger.verbose('Sending Request Pump 2 Status: %s', statusPacket)
-        queuePacket([165, 0, 97, 16, 4, 1, 255]);
+        queuePacket([165, 0, 97, appAddress, 4, 1, 255]);
         queuePacket(statusPacket);
         //queuePacket([165, 0, 97, 16, 4, 1, 0]);
     }
@@ -2639,21 +2654,23 @@ function pumpStatusCheck(pump1, pump2) {
 
 
 function pump1SafePumpMode() {
+    if (logPumpTimers) logger.silly('pump1SafePumpMode: Running pump 1 on setTimer expiration')
     currentPumpStatus[1].duration--;
     if (currentPumpStatus[1].duration > 0) {
         //set pump to remote control
-        var remoteControlPacket = [165, 0, 96, 16, 4, 1, 255];
+        var remoteControlPacket = [165, 0, 96, appAddress, 4, 1, 255];
         logger.verbose('Sending Set pump to remote control: %s', remoteControlPacket)
         queuePacket(remoteControlPacket);
         //Initially this was resending the 'timer' packet, but that was found to be ineffective.
         //Instead, sending the Program packet again resets the timer.
-        var setProgramPacket = [165, 0, 96, 16, 1, 4, 3, 33, 0, currentPumpStatus[1].currentprogram * 8];
+        var setProgramPacket = [165, 0, 96, appAddress, 1, 4, 3, 33, 0, currentPumpStatus[1].currentprogram * 8];
         logger.verbose('App -> Pump 1: Sending Run Program %s: %s (%s total minutes left)', currentPumpStatus[1].currentprogram, setProgramPacket, currentPumpStatus[1].duration);
         queuePacket(setProgramPacket);
         //set pump to local control
-        var localControlPacket = [165, 0, 96, 16, 4, 1, 0];
+        var localControlPacket = [165, 0, 96, appAddress, 4, 1, 0];
         logger.verbose('Sending Set pump to local control: %s', localControlPacket)
         queuePacket(localControlPacket);
+        if (logPumpTimers) logger.silly('pumpStatusCheck: Setting 10s delay to run pump1SafePumpModeDelay')
         pump1TimerDelay.setTimeout(pump1SafePumpModeDelay, '', '10s')
     } else {
         logger.info('Pump 1 Program Finished.   Pump will shut down in ~10 seconds.')
@@ -2669,7 +2686,7 @@ function pump2SafePumpMode() {
     currentPumpStatus[2].duration--;
     if (currentPumpStatus[2].duration > 0) {
         //set pump to remote control
-        var remoteControlPacket = [165, 0, 97, 16, 4, 1, 255];
+        var remoteControlPacket = [165, 0, 97, appAddress, 4, 1, 255];
         logger.verbose('Sending Set pump to remote control: %s', remoteControlPacket)
         queuePacket(remoteControlPacket);
         //Initially this was resending the 'timer' packet, but that was found to be ineffective.
@@ -2678,7 +2695,7 @@ function pump2SafePumpMode() {
         logger.verbose('App -> Pump 2: Sending Run Program %s: %s (%s total minutes left)', currentPumpStatus[2].currentprogram, setProgramPacket, currentPumpStatus[2].duration);
         queuePacket(setProgramPacket);
         //set pump to local control
-        var localControlPacket = [165, 0, 97, 16, 4, 1, 0];
+        var localControlPacket = [165, 0, 97, appAddress, 4, 1, 0];
         logger.verbose('Sending Set pump to local control: %s', localControlPacket)
         queuePacket(localControlPacket);
         //pad the timer with 10 seconds so we have a full minute per cycle
@@ -2694,6 +2711,7 @@ function pump2SafePumpMode() {
 }
 
 function pump1SafePumpModeDelay() {
+    if (logPumpTimers) logger.silly('pumpStatusCheck: Setting 50s delay to run pump1SafePumpMode')
     pump1Timer.setTimeout(pump1SafePumpMode, '', '50s')
 }
 
@@ -2789,13 +2807,13 @@ function changeHeatMode(equip, heatmode, src) {
     //pool
     if (equip === 'pool') {
         var updateHeatMode = (currentHeat.spaHeatMode << 2) | heatmode;
-        var updateHeat = [165, preambleByte, 16, 34, 136, 4, currentHeat.poolSetPoint, currentHeat.spaSetPoint, updateHeatMode, 0]
+        var updateHeat = [165, preambleByte, 16, appAddress, 136, 4, currentHeat.poolSetPoint, currentHeat.spaSetPoint, updateHeatMode, 0]
         queuePacket(updateHeat);
         logger.info('User request to update pool heat mode to %s', heatmode)
     } else {
         //spaSetPoint
         var updateHeatMode = (parseInt(heatmode) << 2) | currentHeat.poolHeatMode;
-        var updateHeat = [165, preambleByte, 16, 34, 136, 4, currentHeat.poolSetPoint, currentHeat.spaSetPoint, updateHeatMode, 0]
+        var updateHeat = [165, preambleByte, 16, appAddress, 136, 4, currentHeat.poolSetPoint, currentHeat.spaSetPoint, updateHeatMode, 0]
         queuePacket(updateHeat);
         logger.info('User request to update spa heat mode to %s', heatmode)
     }
@@ -2828,10 +2846,10 @@ function changeHeatSetPoint(equip, change, src) {
     logger.debug('cHSP: setHeatPoint called with %s %s from %s', equip, change, src)
     var updateHeatMode = (currentHeat.spaHeatMode << 2) | currentHeat.poolHeatMode;
     if (equip === 'pool') {
-        var updateHeat = [165, preambleByte, 16, 34, 136, 4, currentHeat.poolSetPoint + parseInt(change), currentHeat.spaSetPoint, updateHeatMode, 0]
+        var updateHeat = [165, preambleByte, 16, appAddress, 136, 4, currentHeat.poolSetPoint + parseInt(change), currentHeat.spaSetPoint, updateHeatMode, 0]
         logger.info('User request to update %s set point to %s', equip, currentHeat.poolSetPoint + change)
     } else {
-        var updateHeat = [165, preambleByte, 16, 34, 136, 4, currentHeat.poolSetPoint, currentHeat.spaSetPoint + parseInt(change), updateHeatMode, 0]
+        var updateHeat = [165, preambleByte, 16, appAddress, 136, 4, currentHeat.poolSetPoint, currentHeat.spaSetPoint + parseInt(change), updateHeatMode, 0]
         logger.info('User request to update %s set point to %s', equip, currentHeat.spaSetPoint + change)
     }
     queuePacket(updateHeat);
@@ -2917,7 +2935,7 @@ app.get('/circuit/:circuit', function(req, res) {
 
 app.get('/circuit/:circuit/toggle', function(req, res) {
     var desiredStatus = currentCircuitArrObj[req.params.circuit].status == "on" ? 0 : 1;
-    var toggleCircuitPacket = [165, preambleByte, 16, 34, 134, 2, Number(req.params.circuit), desiredStatus];
+    var toggleCircuitPacket = [165, preambleByte, 16, appAddress, 134, 2, Number(req.params.circuit), desiredStatus];
     queuePacket(toggleCircuitPacket);
     var response = 'User Request to toggle ' + currentCircuitArrObj[req.params.circuit].name + ' to ' + (desiredStatus == 0 ? 'off' : 'on') + ' received';
     logger.info(response)
@@ -2953,7 +2971,7 @@ app.get('/spaheat/setpoint/:spasetpoint', function(req, res) {
     //  [16,34,136,4,POOL HEAT Temp,SPA HEAT Temp,Heat Mode,0,2,56]
 
     var updateHeatMode = (currentHeat.spaHeatMode << 2) | currentHeat.poolHeatMode;
-    var updateHeat = [165, preambleByte, 16, 34, 136, 4, currentHeat.poolSetPoint, parseInt(req.params.temp), updateHeatMode, 0]
+    var updateHeat = [165, preambleByte, 16, appAddress, 136, 4, currentHeat.poolSetPoint, parseInt(req.params.temp), updateHeatMode, 0]
     logger.info('User request to update spa set point to %s', req.params.spasetpoint, updateHeat)
     queuePacket(updateHeat);
     var response = 'Request to set spa heat setpoint to ' + req.params.spasetpoint + ' sent to controller'
@@ -2964,7 +2982,7 @@ app.get('/spaheat/setpoint/:spasetpoint', function(req, res) {
 
 app.get('/spaheat/mode/:spaheatmode', function(req, res) {
     var updateHeatMode = (parseInt(req.params.spaheatmode) << 2) | currentHeat.poolHeatMode;
-    var updateHeat = [165, preambleByte, 16, 34, 136, 4, currentHeat.poolSetPoint, currentHeat.spaSetPoint, updateHeatMode, 0]
+    var updateHeat = [165, preambleByte, 16, appAddress, 136, 4, currentHeat.poolSetPoint, currentHeat.spaSetPoint, updateHeatMode, 0]
     queuePacket(updateHeat);
     logger.info('User request to update spa heat mode to %s', req.params.spaheatmode, updateHeat)
     var response = 'Request to set spa heat mode to ' + heatModeStr[req.params.spaheatmode] + ' sent to controller'
@@ -2974,7 +2992,7 @@ app.get('/spaheat/mode/:spaheatmode', function(req, res) {
 
 app.get('/poolheat/setpoint/:poolsetpoint', function(req, res) {
     var updateHeatMode = (currentHeat.spaHeatMode << 2) | currentHeat.poolHeatMode;
-    var updateHeat = [165, preambleByte, 16, 34, 136, 4, parseInt(req.params.poolsetpoint), currentHeat.spaSetPoint, updateHeatMode, 0]
+    var updateHeat = [165, preambleByte, 16, appAddress, 136, 4, parseInt(req.params.poolsetpoint), currentHeat.spaSetPoint, updateHeatMode, 0]
     queuePacket(updateHeat);
     logger.info('User request to update pool set point to %s', req.params.poolsetpoint, updateHeat)
     var response = 'Request to set pool heat setpoint to ' + req.params.poolsetpoint + ' sent to controller'
@@ -2983,7 +3001,7 @@ app.get('/poolheat/setpoint/:poolsetpoint', function(req, res) {
 
 app.get('/poolheat/mode/:poolheatmode', function(req, res) {
     var updateHeatMode = (currentHeat.spaHeatMode << 2) | req.params.poolheatmode;
-    var updateHeat = [165, preambleByte, 16, 34, 136, 4, currentHeat.poolSetPoint, currentHeat.spaSetPoint, updateHeatMode, 0]
+    var updateHeat = [165, preambleByte, 16, appAddress, 136, 4, currentHeat.poolSetPoint, currentHeat.spaSetPoint, updateHeatMode, 0]
     queuePacket(updateHeat);
     logger.info('User request to update pool set point to %s', req.params.poolheatmode, updateHeat)
     var response = 'Request to set pool heat mode to ' + heatModeStr[req.params.poolheatmode] + ' sent to controller'
@@ -3033,7 +3051,7 @@ io.on('connection', function(socket, error) {
     socket.on('toggleCircuit', function(equipment) {
 
         var desiredStatus = currentCircuitArrObj[equipment].status == "on" ? 0 : 1;
-        var toggleCircuitPacket = [165, preambleByte, 16, 34, 134, 2, equipment, desiredStatus];
+        var toggleCircuitPacket = [165, preambleByte, 16, appAddress, 134, 2, equipment, desiredStatus];
         queuePacket(toggleCircuitPacket);
         logger.info('User request to toggle %s to %s', currentCircuitArrObj[equipment].name, desiredStatus == 0 ? "off" : "on")
 
@@ -3165,7 +3183,7 @@ io.on('connection', function(socket, error) {
 
 
         //set pump to remote control
-        var remoteControlPacket = [165, 0, pump, 16, 4, 1, 255];
+        var remoteControlPacket = [165, 0, pump, appAddress, 4, 1, 255];
         logger.verbose('Sending Set pump to remote control: %s', remoteControlPacket)
         queuePacket(remoteControlPacket);
         //set program packet
@@ -3189,11 +3207,11 @@ io.on('connection', function(socket, error) {
             logger.verbose('Sending Run Program %s: %s', program, runProgramPacket)
             queuePacket(runProgramPacket);
             //turn on pump
-            var turnPumpOnPacket = [165, 0, pump, 16, 6, 1, 10];
+            var turnPumpOnPacket = [165, 0, pump, appAddress, 6, 1, 10];
             logger.verbose('Sending Turn pump on: %s', turnPumpOnPacket)
             queuePacket(turnPumpOnPacket);
             //set a timer for 1 minute
-            var setTimerPacket = [165, 0, pump, 16, 1, 4, 3, 43, 0, 1];
+            var setTimerPacket = [165, 0, pump, appAddress, 1, 4, 3, 43, 0, 1];
             logger.info('Sending Set a 1 minute timer (safe mode enabled, timer will reset every minute for a total of %s minutes): %s', duration, setTimerPacket);
             queuePacket(setTimerPacket);
             //fix until the default duration actually is set to 1
@@ -3220,11 +3238,11 @@ io.on('connection', function(socket, error) {
             queuePacket(pumpPowerPacket);
         }
         //set pump to local control
-        var localControlPacket = [165, 0, pump, 16, 4, 1, 0];
+        var localControlPacket = [165, 0, pump, appAddress, 4, 1, 0];
         logger.verbose('Sending Set pump to local control: %s', localControlPacket)
         queuePacket(localControlPacket);
         //request pump status
-        var statusPacket = [165, 0, pump, 16, 7, 0];
+        var statusPacket = [165, 0, pump, appAddress, 7, 0];
         logger.verbose('Sending Request Pump Status: %s', statusPacket)
         queuePacket(statusPacket);
         logger.info('End of Sending Pump Packet \n \n')

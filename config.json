@@ -7,7 +7,7 @@
 
         "chlorinator": 1,
 
-        "numberOfPumps": 2,
+        "numberOfPumps": 1,
 
         "spa": 1,
         "pool": 1,
@@ -19,7 +19,8 @@
         "spaCircuits": {
           "Jets":1,
           "Air Blower":1
-        }
+        },
+        "appAddress": 33
 
     },
     "Misc": {
@@ -40,7 +41,8 @@
         "logConfigMessages": 0,
         "logMessageDecoding": 0,
         "logChlorinator": 0,
-        "logPacketWrites": 1
+        "logPacketWrites": 1,
+        "logPumpTimers": 1
     },
     "ISY": {
         "username": "blank",
