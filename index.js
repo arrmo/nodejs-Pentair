@@ -7,7 +7,7 @@ console.log('\033[2J'); //clear the console
 var dateFormat = require('dateformat');
 var Dequeue = require('dequeue')
 
-var version = '1.0.0 alpha 25'
+var version = '1.0.0'
 
 const events = require('events')
 
@@ -791,18 +791,18 @@ function iterateOverArrayOfArrays() {
                     breakLoop = true //do nothing, but exit until we get a second buffer to concat
                 }
             } else
-            if (chatterlen==undefined || isNaN(chatterlen)) {
+            if (chatterlen == undefined || isNaN(chatterlen)) {
                 if (logMessageDecoding)
                     logger.silly('Msg#  n/a   chatterlen NaN: %s.', bufferToProcess)
                 if (bufferArrayOfArrays.length > 0) {
                     pushBufferToArray()
-                }else {
+                } else {
                     if (logMessageDecoding) logger.silly('iOAOA: Setting breakLoop=true because isNan(chatterlen) is %s.  bufferToProcess:', chatterlen, bufferToProcess)
                     breakLoop = true //do nothing, but exit until we get a second buffer to concat
                 }
             } else {
-              if (logMessageDecoding)
-                logger.silly('iOAOA: Think we have a packet. bufferToProcess: %s  chatterlen: %s', bufferToProcess, chatterlen)
+                if (logMessageDecoding)
+                    logger.silly('iOAOA: Think we have a packet. bufferToProcess: %s  chatterlen: %s', bufferToProcess, chatterlen)
                 msgCounter += 1;
                 bufferToProcess.shift() //remove the 255 byte
                 chatter = bufferToProcess.splice(0, chatterlen); //splice modifies the existing buffer.  We remove chatter from the bufferarray.
@@ -1969,11 +1969,10 @@ function decode(data, counter, packetType) {
                 }
                 //something besides watts changed
                 else {
-
-
                     //NOTE: Need to ignore TIME & remotecontrol so the packets aren't emitted every minute if there are no other changes.
-                    var tempPumpStatus = JSON.stringify(pumpStatus)
-                    var tempcurrentPumpStatus = JSON.stringify(currentPumpStatus[pumpNum])
+                    var tempPumpStatus = JSON.parse(JSON.stringify(pumpStatus))
+                    var tempcurrentPumpStatus = JSON.parse(JSON.stringify(currentPumpStatus[pumpNum]))
+
                     delete tempPumpStatus.time
                     delete tempcurrentPumpStatus.time
                     delete tempPumpStatus.remotecontrol
@@ -1985,185 +1984,187 @@ function decode(data, counter, packetType) {
                         needToEmit = 1
                     }
                     //We will still output any differences in verbose, including time
-                    logger.verbose('Msg# %s   Pump %s status changed: %s \n', counter, pumpStatus.pump, currentPumpStatus[pumpNum].whatsDifferent(pumpStatus));
-
+                    var pumpWhatsDifferent = currentPumpStatus[pumpNum].whatsDifferent(pumpStatus)
+                if (pumpWhatsDifferent != "Nothing!") {
+                    logger.verbose('Msg# %s   Pump %s status changed: %s \n', counter, pumpStatus.pump, pumpWhatsDifferent);
                 }
-                //if we have 'notset' as part of the variable, then it's the first time we are here.
+            }
+            //if we have 'notset' as part of the variable, then it's the first time we are here.
 
-                currentPumpStatus[pumpStatus.pump] = JSON.parse(JSON.stringify(pumpStatus));
-                if (needToEmit) {
-                    emit('pump');
-                }
+            currentPumpStatus[pumpStatus.pump] = JSON.parse(JSON.stringify(pumpStatus));
+            if (needToEmit) {
+                emit('pump');
             }
         }
     }
-    //End Pump Decode
-    //Start Chlorinator Decode
-    else if (packetType == 'chlorinator') {
+}
+//End Pump Decode
+//Start Chlorinator Decode
+else if (packetType == 'chlorinator') {
 
-        //put in logic (or logging here) for chlorinator discovered (upon 1st message?)
+    //put in logic (or logging here) for chlorinator discovered (upon 1st message?)
 
-        if (!intellitouch) //If we have an intellitouch, we will get it from decoding the controller packets (25, 153 or 217)
-        {
-            var destination;
-            if (data[chlorinatorPacketFields.DEST] == 80) {
-                destination = 'Salt cell';
-                from = 'Controller'
-            } else {
-                destination = 'Controller'
-                from = 'Salt cell'
-            }
-
-            //logger.error('currentChlorStatus  ', currentChlorinatorStatus)
-            //var chlorinatorStatus = clone(currentChlorinatorStatus);
-            //not sure why the above line failed...?  Implementing the following instead.
-            var chlorinatorStatus = JSON.parse(JSON.stringify(currentChlorinatorStatus));
-            //TODO: better check besides pump power for asking for the chlorinator name
-            if (currentChlorinatorStatus.name == '' && chlorinator && currentPumpStatus[1].power == 1)
-            //If we see a chlorinator status packet, then request the name.  Not sure when the name would be automatically sent over otherwise.
-            {
-                logger.verbose('Queueing messages to retrieve Salt Cell Name (AquaRite or OEM)')
-                    //get salt cell name
-                if (logPacketWrites) logger.debug('decode: Queueing packet to retrieve Chlorinator Salt Cell Name: [16, 2, 80, 20, 0]')
-                queuePacket([16, 2, 80, 20, 0]);
-            }
-
-
-
-            switch (data[chlorinatorPacketFields.ACTION]) {
-                case 0: //Get status of Chlorinator
-                    {
-                        if (logChlorinator)
-                            logger.verbose('Msg# %s   %s --> %s: Please provide status: %s', counter, from, destination, data)
-                        decoded = true;
-                        break;
-                    }
-                case 1: //Response to get status
-                    {
-                        if (logChlorinator)
-                            logger.verbose('Msg# %s   %s --> %s: I am here: %s', counter, from, destination, data)
-                        decoded = true;
-                        break;
-                    }
-                case 3: //Response to version
-                    {
-                        chlorinatorStatus.name = '';
-                        chlorinatorStatus.version = data[4];
-                        for (var i = 5; i <= 20; i++) {
-                            chlorinatorStatus.name += String.fromCharCode(data[i]);
-                        }
-                        if (logChlorinator)
-                            logger.verbose('Msg# %s   %s --> %s: Chlorinator version (%s) and name (%s): %s', counter, from, destination, chlorinatorStatus.version, chlorinatorStatus.name, data);
-                        decoded = true;
-                        break;
-                    }
-                case 17: //Set Generate %
-                    {
-                        chlorinatorStatus.outputPercent = data[4];
-                        if (data[4] == 101) {
-                            chlorinatorStatus.superChlorinate = 1
-                        } else {
-                            chlorinatorStatus.superChlorinate = 0
-                        }
-                        if (logChlorinator)
-                            logger.verbose('Msg# %s   %s --> %s: Set current output to %s %: %s', counter, from, destination, chlorinatorStatus.superChlorinate == 'On' ? 'Super Chlorinate' : chlorinatorStatus.outputPercent, data);
-                        decoded = true;
-                        break;
-                    }
-                case 18: //Response to 17 (set generate %)
-                    {
-                        chlorinatorStatus.saltPPM = data[4] * 50;
-                        switch (data[3]) {
-                            case 0: //ok
-                                {
-                                    chlorinatorStatus.status = "Ok";
-                                    break;
-                                }
-                            case 1:
-                                {
-                                    chlorinatorStatus.status = "No flow";
-                                    break;
-                                }
-                            case 2:
-                                {
-                                    chlorinatorStatus.status = "Low Salt";
-                                    break;
-                                }
-                            case 4:
-                                {
-                                    chlorinatorStatus.status = "High Salt";
-                                    break;
-                                }
-                            case 144:
-                                {
-                                    chlorinatorStatus.status = "Clean Salt Cell"
-                                    break;
-                                }
-                            default:
-                                {
-                                    chlorinatorStatus.status = "Unknown - Status code: " + data[5];
-                                }
-                        }
-                        if (logChlorinator)
-                            logger.verbose('Msg# %s   %s --> %s: Current Salt level is %s PPM: %s', counter, from, destination, chlorinatorStatus.saltPPM, data);
-                        decoded = true;
-                        break;
-                    }
-                case 20: //Get version
-                    {
-                        if (logChlorinator)
-                            logger.verbose('Msg# %s   %s --> %s: What is your version?: %s', counter, from, destination, data)
-                        decoded = true;
-                        break;
-                    }
-                case 21: //Set Generate %, but value / 10??
-                    {
-                        chlorinatorStatus.outputPercent = data[6] / 10;
-                        if (logChlorinator)
-                            logger.verbose('Msg# %s   %s --> %s: Set current output to %s %: %s', counter, from, destination, chlorinatorStatus.outputPercent, data);
-                        decoded = true;
-                        break;
-                    }
-                default:
-                    {
-                        if (logChlorinator)
-                            logger.verbose('Msg# %s   %s --> %s: Other chlorinator packet?: %s', counter, from, destination, data)
-                        decoded = true;
-                        break;
-                    }
-            }
-
-            if (currentChlorinatorStatus.equals(chlorinatorStatus)) {
-                if (logChlorinator)
-                    logger.debug('Msg# %s   Chlorinator status has not changed: ', counter, JSON.stringify(data))
-            } else {
-                if (logChlorinator)
-                    logger.verbose('Msg# %s   Chlorinator status changed: ', counter, currentChlorinatorStatus.whatsDifferent(chlorinatorStatus));
-                currentChlorinatorStatus = chlorinatorStatus;
-                emit('chlorinator');
-            }
-        } else //need to set decoded to true or it will show up as NOT DECODED in the log.  Essentially, we are dropping it if we have an intellitouch.
-        {
-            decoded = true;
+    if (!intellitouch) //If we have an intellitouch, we will get it from decoding the controller packets (25, 153 or 217)
+    {
+        var destination;
+        if (data[chlorinatorPacketFields.DEST] == 80) {
+            destination = 'Salt cell';
+            from = 'Controller'
+        } else {
+            destination = 'Controller'
+            from = 'Salt cell'
         }
 
+        //logger.error('currentChlorStatus  ', currentChlorinatorStatus)
+        //var chlorinatorStatus = clone(currentChlorinatorStatus);
+        //not sure why the above line failed...?  Implementing the following instead.
+        var chlorinatorStatus = JSON.parse(JSON.stringify(currentChlorinatorStatus));
+        //TODO: better check besides pump power for asking for the chlorinator name
+        if (currentChlorinatorStatus.name == '' && chlorinator && currentPumpStatus[1].power == 1)
+        //If we see a chlorinator status packet, then request the name.  Not sure when the name would be automatically sent over otherwise.
+        {
+            logger.verbose('Queueing messages to retrieve Salt Cell Name (AquaRite or OEM)')
+                //get salt cell name
+            if (logPacketWrites) logger.debug('decode: Queueing packet to retrieve Chlorinator Salt Cell Name: [16, 2, 80, 20, 0]')
+            queuePacket([16, 2, 80, 20, 0]);
+        }
+
+
+
+        switch (data[chlorinatorPacketFields.ACTION]) {
+            case 0: //Get status of Chlorinator
+                {
+                    if (logChlorinator)
+                        logger.verbose('Msg# %s   %s --> %s: Please provide status: %s', counter, from, destination, data)
+                    decoded = true;
+                    break;
+                }
+            case 1: //Response to get status
+                {
+                    if (logChlorinator)
+                        logger.verbose('Msg# %s   %s --> %s: I am here: %s', counter, from, destination, data)
+                    decoded = true;
+                    break;
+                }
+            case 3: //Response to version
+                {
+                    chlorinatorStatus.name = '';
+                    chlorinatorStatus.version = data[4];
+                    for (var i = 5; i <= 20; i++) {
+                        chlorinatorStatus.name += String.fromCharCode(data[i]);
+                    }
+                    if (logChlorinator)
+                        logger.verbose('Msg# %s   %s --> %s: Chlorinator version (%s) and name (%s): %s', counter, from, destination, chlorinatorStatus.version, chlorinatorStatus.name, data);
+                    decoded = true;
+                    break;
+                }
+            case 17: //Set Generate %
+                {
+                    chlorinatorStatus.outputPercent = data[4];
+                    if (data[4] == 101) {
+                        chlorinatorStatus.superChlorinate = 1
+                    } else {
+                        chlorinatorStatus.superChlorinate = 0
+                    }
+                    if (logChlorinator)
+                        logger.verbose('Msg# %s   %s --> %s: Set current output to %s %: %s', counter, from, destination, chlorinatorStatus.superChlorinate == 'On' ? 'Super Chlorinate' : chlorinatorStatus.outputPercent, data);
+                    decoded = true;
+                    break;
+                }
+            case 18: //Response to 17 (set generate %)
+                {
+                    chlorinatorStatus.saltPPM = data[4] * 50;
+                    switch (data[3]) {
+                        case 0: //ok
+                            {
+                                chlorinatorStatus.status = "Ok";
+                                break;
+                            }
+                        case 1:
+                            {
+                                chlorinatorStatus.status = "No flow";
+                                break;
+                            }
+                        case 2:
+                            {
+                                chlorinatorStatus.status = "Low Salt";
+                                break;
+                            }
+                        case 4:
+                            {
+                                chlorinatorStatus.status = "High Salt";
+                                break;
+                            }
+                        case 144:
+                            {
+                                chlorinatorStatus.status = "Clean Salt Cell"
+                                break;
+                            }
+                        default:
+                            {
+                                chlorinatorStatus.status = "Unknown - Status code: " + data[5];
+                            }
+                    }
+                    if (logChlorinator)
+                        logger.verbose('Msg# %s   %s --> %s: Current Salt level is %s PPM: %s', counter, from, destination, chlorinatorStatus.saltPPM, data);
+                    decoded = true;
+                    break;
+                }
+            case 20: //Get version
+                {
+                    if (logChlorinator)
+                        logger.verbose('Msg# %s   %s --> %s: What is your version?: %s', counter, from, destination, data)
+                    decoded = true;
+                    break;
+                }
+            case 21: //Set Generate %, but value / 10??
+                {
+                    chlorinatorStatus.outputPercent = data[6] / 10;
+                    if (logChlorinator)
+                        logger.verbose('Msg# %s   %s --> %s: Set current output to %s %: %s', counter, from, destination, chlorinatorStatus.outputPercent, data);
+                    decoded = true;
+                    break;
+                }
+            default:
+                {
+                    if (logChlorinator)
+                        logger.verbose('Msg# %s   %s --> %s: Other chlorinator packet?: %s', counter, from, destination, data)
+                    decoded = true;
+                    break;
+                }
+        }
+
+        if (currentChlorinatorStatus.equals(chlorinatorStatus)) {
+            if (logChlorinator)
+                logger.debug('Msg# %s   Chlorinator status has not changed: ', counter, JSON.stringify(data))
+        } else {
+            if (logChlorinator)
+                logger.verbose('Msg# %s   Chlorinator status changed: ', counter, currentChlorinatorStatus.whatsDifferent(chlorinatorStatus));
+            currentChlorinatorStatus = chlorinatorStatus;
+            emit('chlorinator');
+        }
+    } else //need to set decoded to true or it will show up as NOT DECODED in the log.  Essentially, we are dropping it if we have an intellitouch.
+    {
+        decoded = true;
     }
-    //End Chlorinator Decode
+
+}
+//End Chlorinator Decode
 
 
-    //in case we get here and the first message has not already been set as the instruction command
-    /*if (instruction == null || instruction == undefined) {
-     instruction = data;
-     }*/
-    if (!decoded) {
-        if (logConsoleNotDecoded) {
+//in case we get here and the first message has not already been set as the instruction command
+/*if (instruction == null || instruction == undefined) {
+ instruction = data;
+ }*/
+if (!decoded) {
+    if (logConsoleNotDecoded) {
 
-            logger.info('Msg# %s is NOT DECODED %s', counter, JSON.stringify(data));
-        };
-    } else {
-        decoded = false
-    }
-    return true; //fix this; turn into callback(?)  What do we want to do with it?
+        logger.info('Msg# %s is NOT DECODED %s', counter, JSON.stringify(data));
+    };
+} else {
+    decoded = false
+}
+return true; //fix this; turn into callback(?)  What do we want to do with it?
 
 }
 

@@ -3,46 +3,32 @@
         "intellicom": 0,
         "intellitouch": 1,
         "pumpOnly": 0,
-        "ISYController": 0,
-
+        "numberOfPumps": 2,
         "chlorinator": 1,
-
-        "numberOfPumps": 1,
-
-        "spa": 1,
-        "pool": 1,
-        "solar": 1,
-        "poolCircuits": {
-          "Waterfall 1.5":1,
-          "Spillway":1
-        },
-        "spaCircuits": {
-          "Jets":1,
-          "Air Blower":1
-        },
+        "ISYController": 0,
         "appAddress": 33
 
     },
     "Misc": {
-        "expressDir": "/public",
+        "expressDir": "/bootstrap",
         "expressPort": 3000,
         "expressTransport": "http"
     },
     "Network": {
-        "netConnect": 1,
+        "netConnect": 0,
         "netHost": "raspberrypi",
         "netPort": 9801
     },
     "Log": {
-        "logType": "debug",
+        "logType": "info",
         "logPumpMessages": 0,
         "logDuplicateMessages": 0,
         "logConsoleNotDecoded": 0,
         "logConfigMessages": 0,
         "logMessageDecoding": 0,
         "logChlorinator": 0,
-        "logPacketWrites": 1,
-        "logPumpTimers": 1
+        "logPacketWrites": 0,
+        "logPumpTimers": 0
     },
     "ISY": {
         "username": "blank",
