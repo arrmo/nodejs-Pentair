@@ -9,7 +9,6 @@ var Dequeue = require('dequeue')
 
 var version = '1.0.0'
 
-
 const events = require('events')
 
 var bufferArr = []; //variable to process buffer.  interimBufferArr will be copied here when ready to process
@@ -891,8 +890,6 @@ function processChecksum(chatter, counter, packetType) {
     //call new function to process message; if it isn't valid, we noted above so just don't continue
     //TODO: countChecksumMismatch is not incrementing properly
     if (decodeHelper.checksum(chatter, counter, packetType, logMessageDecoding, logger, countChecksumMismatch)) {
-
-
         if (queuePacketsArr.length > 0) {
             if (decodeHelper.isResponse(chatter, counter, packetType, logger, logMessageDecoding, packetFields, queuePacketsArr)) {
 
@@ -900,8 +897,6 @@ function processChecksum(chatter, counter, packetType) {
             } else {
                 successfulAck(chatter, counter, 0);
             }
-
-
         }
         decode(chatter, counter, packetType)
     } else {
@@ -967,7 +962,6 @@ function decode(data, counter, packetType) {
                 {
                     //quick gut test to see if we have a duplicate packet
                     if (JSON.stringify(data) != JSON.stringify(currentStatusBytes)) {
-
                         //--------Following code (re)-assigns all the incoming data to the status object
                         var status = {};
 
@@ -1038,954 +1032,949 @@ function decode(data, counter, packetType) {
                             logger.info('Msg# %s   Discovered initial system settings: ', counter, status)
                             logger.verbose('\n ', decodeHelper.printStatus(data));
 
-                            //do we need to output the circuits when we first discover them?
-
-                            //NOTE:  Commented this out because we only want to display the circuit discovery info when we have both the circuit names and status
-                            /*var circuitStr = '';
-                            //logger.info('Msg# %s  Initial circuits status discovered', counter)
-                            for (var i = 1; i <= 20; i++) {
-                                if (circuitArrObj[i].name != undefined) {
-                                    circuitStr += circuitArrObj[i].name + " status: "
-                                    circuitStr += circuitArrObj[i].status + '\n'
-                                    logger.info('Msg# %s: Circuit states discovered: \n %s', counter, circuitStr)
-                                }
-                            }*/
-
-
-
-                        } else {
-
-                            //now, let's output what is different between the packet and stored packets
-                            if (logConfigMessages) {
-                                //what's different (overall) with the status packet
-                                logger.verbose('-->EQUIPMENT Msg# %s   \n', counter)
-                                    //this will output the difference between currentStatusByte and data
-                                logger.verbose('Msg# %s: \n', counter, decodeHelper.printStatus(currentStatusBytes, data));
-                                currentWhatsDifferent = currentStatus.whatsDifferent(status);
-                                if (currentWhatsDifferent != "Nothing!") {
-                                    logger.verbose('Msg# %s   System Status changed: %s', counter, currentWhatsDifferent)
-                                }
-
-
-                                //What's different with the circuit status?
-                                //THE LOOP IS BECAUSE THERE IS A BUG IN THE RECURSIVE LOOP.  It won't display the output.  Need to fix for objects embedded inside an array.
-                                var results;
+                                //NOTE:  Commented this out because we only want to display the circuit discovery info when we have both the circuit names and status
+                                /*var circuitStr = '';
+                                //logger.info('Msg# %s  Initial circuits status discovered', counter)
                                 for (var i = 1; i <= 20; i++) {
-                                    if (currentCircuitArrObj[i].status != undefined) {
-                                        results = currentCircuitArrObj[i].whatsDifferent(circuitArrObj[i]);
-                                        if (!(results == "Nothing!" || currentCircuitArrObj[i].name == undefined)) {
-                                            logger.verbose('Msg# %s   Circuit %s change:  %s', counter, circuitArrObj[i].name, results)
-                                        }
+                                    if (circuitArrObj[i].name != undefined) {
+                                        circuitStr += circuitArrObj[i].name + " status: "
+                                        circuitStr += circuitArrObj[i].status + '\n'
+                                        logger.info('Msg# %s: Circuit states discovered: \n %s', counter, circuitStr)
                                     }
-                                }
-                            }
-                        }
+                                }*/
 
 
-                        //and finally assign the temporary variables to the permanent one
-                        currentStatus = JSON.parse(JSON.stringify(status));
-                        currentStatusBytes = JSON.parse(JSON.stringify(data));
-                        currentCircuitArrObj = JSON.parse(JSON.stringify(circuitArrObj));
 
-
-                        //and finally emit the packets
-                        emit('config')
-                        emit('circuit')
-
-                    } else {
-                        if (logDuplicateMessages)
-                            logger.debug('Msg# %s   Duplicate broadcast.', counter)
-                    }
-
-                    decoded = true;
-                    break;
-                }
-
-
-            case 7:
-
-                //Send request/response for pump status
-                {
-                    var pumpNum;
-                    if (data[packetFields.FROM] == 96 || data[packetFields.DEST] == 96) {
-                        pumpNum = 1
-                    } else {
-                        pumpNum = 2
-                    }
-
-                    //var pumpname = (data[packetFields.FROM]).toString(); //returns 96 (pump1) or 97 (pump2)
-                    //time returned in HH:MM (24 hour)  <-- need to clean this up so we don't get times like 5:3
-
-
-                    var pumpStatus;
-                    //pump status has not been copied to currentPumpStatus yet
-                    //if (currentPumpStatus[pumpNum].name == undefined) {
-                    //    pumpStatus = new pump();
-                    //} else {
-                    pumpStatus = JSON.parse(JSON.stringify(currentPumpStatus[pumpNum]));
-                    pumpStatus.name = ctrlString[pumpNum + 95];
-                    //}
-
-
-                    if (data[packetFields.FROM] == 16) //Request of status from Main
-                    {
-                        if (logPumpMessages) {
-                            logger.verbose('Msg# %s   Main asking pump %s for status: %s', counter, ctrlString[data[packetFields.DEST]], JSON.stringify(data));
-                        }
-                    } else //Response to request for status
-                    {
-
-
-                        //TODO: make this code the same (one function?) as coming from the controller
-
-                        pumpStatus.pump = pumpNum;
-                        var pumpname = (data[packetFields.FROM]).toString(); //returns 96 (pump1) or 97 (pump2)
-                        //time returned in HH:MM (24 hour)  <-- need to clean this up so we don't get times like 5:3
-
-                        pumpStatus.time = data[pumpPacketFields.HOUR] + ':' + data[pumpPacketFields.MIN];
-                        pumpStatus.run = data[pumpPacketFields.CMD]
-                        pumpStatus.name = ctrlString[pumpname];
-                        pumpStatus.mode = data[pumpPacketFields.MODE]
-                        pumpStatus.drivestate = data[pumpPacketFields.DRIVESTATE]
-                        pumpStatus.watts = (data[pumpPacketFields.WATTSH] * 256) + data[pumpPacketFields.WATTSL]
-                        pumpStatus.rpm = (data[pumpPacketFields.RPMH] * 256) + data[pumpPacketFields.RPML]
-                        pumpStatus.ppc = data[pumpPacketFields.PPC]
-                        pumpStatus.err = data[pumpPacketFields.ERR]
-                        pumpStatus.timer = data[pumpPacketFields.TIMER]
-                            //pumpStatus.packet = data;
-
-                        if (logPumpMessages)
-                            logger.debug('Msg# %s  %s Status: ', counter, pumpStatus.name, JSON.stringify(pumpStatus), data);
-                        //if (logPumpMessages) logger.silly('currentPumpStatusPacket', currentPumpStatusPacket)
-
-                        if (pumpNum == 1 || pumpNum == 2) {
-
-                            //TODO - I don't think the following works...
-                            if (JSON.stringify(currentPumpStatus[status.pump]).equals(JSON.stringify(status))) {
-
-                                if (logPumpMessages)
-                                    logger.debug('Msg# %s   Pump %s status has not changed: ', counter, status.pump, data)
                             } else {
-                                var moreThanFive = 0
-                                if (logPumpMessages) {
-                                    if ((Math.abs((pumpStatus.watts - currentPumpStatus[pumpNum].watts) / pumpStatus.watts)) > .05) {
-                                        //logger.error('pumpnum.watts:', JSON.stringify(currentPumpStatus), currentPumpStatus[pumpNum].watts)
-                                        logger.info('Msg# %s   Pump %s watts changed >5%: %s --> %s \n', counter, pumpStatus.pump, currentPumpStatus[pumpNum].watts, pumpStatus.watts)
-                                        moreThanFive = 1;
-                                    }
-                                    //logger.error('2 what\'s different: \n %s \n %s', JSON.stringify(pumpStatus), JSON.stringify(currentPumpStatus))
-                                    if (logPumpMessages)
-                                        logger.verbose('Msg# %s   Pump %s status changed: %s \n', counter, pumpStatus.pump, currentPumpStatus[pumpNum].whatsDifferent(pumpStatus));
-                                }
 
-                                //if we don't have a previous value for .watts than it should be the first time we are here and let's emit the pump status
-                                if ((currentPumpStatus[pumpNum].watts).toLowerCase.indexOf('notset') >= 0) {
-                                    emit('pump');
-                                }
-                                currentPumpStatus[pumpNum] = pumpStatus;
-                                if (moreThanFive) {
-                                    emit('pump');
-                                }
-
-                            }
-                        }
-                    }
-                    decoded = true;
-                    break;
-                }
-            case 8: //Broadcast current heat set point and mode
-                {
-                    //   0 1  2  3 4  5  6 7   8  9  19 11 12 13  14 15 16 17 18 19  20
-                    //[165,x,15,16,8,13,75,75,64,87,101,11,0,  0 ,62 ,0 ,0 ,0 ,0 ,2,190]
-                    //function heatObj(poolSetPoint, poolHeatMode, spaSetPoint, spaHeatMode)
-
-
-                    var heat = new Heat(data[9], data[11] & 3, data[10], (data[11] & 12) >> 2)
-
-
-
-                    if (logConfigMessages) {
-                        logger.silly('heat status packet object: %s  data: %s  currentHeat: %s', JSON.stringify(heat), data, currentHeat == undefined ? "Not set yet" : JSON.stringify(currentHeat));
-                    }
-                    if (heat.poolSetPoint != undefined) //invalid packet?
-                    {
-                        if (currentHeat.poolSetPoint == undefined) {
-                            currentHeat = JSON.parse(JSON.stringify(heat))
-                            if (logConfigMessages)
-                                logger.info('Msg# %s   Pool/Spa heat set point discovered:  \n  Pool heat mode: %s @ %s degrees \n  Spa heat mode: %s at %s degrees', counter, heatModeStr[currentHeat.poolHeatMode], currentHeat.poolSetPoint, heatModeStr[currentHeat.spaHeatMode], currentHeat.spaSetPoint);
-
-                            emit('heat');
-                        } else {
-
-                            if (currentHeat.equals(heat)) {
-                                logger.debug('Msg# %s   Pool/Spa heat set point HAS NOT CHANGED:  pool heat mode: %s @ %s degrees; spa heat mode %s at %s degrees', counter, heatModeStr[heat.poolHeatMode], heat.poolSetPoint, heatModeStr[heat.spaHeatMode], heat.spaSetPoint);
-                            } else {
+                                //now, let's output what is different between the packet and stored packets
                                 if (logConfigMessages) {
-                                    logger.verbose('Msg# %s   Pool/Spa heat set point changed:  pool heat mode: %s @ %s degrees; spa heat mode %s at %s degrees', counter, heatModeStr[heat.poolHeatMode], heat.poolSetPoint, heatModeStr[heat.spaHeatMode], heat.spaSetPoint);
-                                    logger.info('Msg# %s  Change in Pool/Spa Heat Mode:  %s', counter, currentHeat.whatsDifferent(heat))
-                                }
-                                currentHeat = JSON.parse(JSON.stringify(heat))
-                                emit('heat');
-                            }
-                        }
-                    }
-                    decoded = true;
-                    break;
-                }
+                                    //what's different (overall) with the status packet
+                                    logger.verbose('-->EQUIPMENT Msg# %s   \n', counter)
+                                        //this will output the difference between currentStatusByte and data
+                                    logger.verbose('Msg# %s: \n', counter, decodeHelper.printStatus(currentStatusBytes, data));
+                                    currentWhatsDifferent = currentStatus.whatsDifferent(status);
+                                    if (currentWhatsDifferent != "Nothing!") {
+                                        logger.verbose('Msg# %s   System Status changed: %s', counter, currentWhatsDifferent)
+                                    }
 
 
-            case 10: //Get Custom Names
-                {
-                    var customName = '';
-                    for (var i = 7; i < 18; i++) {
-                        if (data[i] > 0 && data[i] < 251) //251 is used to terminate the custom name string if shorter than 11 digits
-                        {
-
-                            customName += String.fromCharCode(data[i])
-                        };
-                    }
-
-                    if (logConfigMessages) {
-                        logger.silly('Msg# %s  Custom Circuit Name Raw:  %s  & Decoded: %s', counter, JSON.stringify(data), customName)
-                            //logger.verbose('Msg# %s  Custom Circuit Name Decoded: "%s"', counter, customName)
-                    }
-
-                    if (checkForChange[0]) {
-                        if (customNameArr[data[6]] !== customName) {
-                            logger.info('Msg# %s  Custom Circuit name %s changed to %s', customNameArr[data[6]], customName)
-                            emit('circuit');
-                        }
-                    }
-
-                    customNameArr[data[6]] = customName;
-                    //display custom names when we reach the last circuit
-                    if (data[6] == 9 && checkForChange[0] === 0) {
-                        logger.info('\n  Custom Circuit Names retrieved from configuration: ', customNameArr)
-                        checkForChange[0] = 1
-                        emit('circuit');
-                    }
-
-
-                    decoded = true;
-                    break;
-                }
-
-            case 11: // Get Circuit Names
-                {
-                    var circuitNumber = data[namePacketFields.NUMBER]
-                    logger.silly('get circuit names packet: %s', data)
-                    var freezeProtection;
-                    if ((data[namePacketFields.CIRCUITFUNCTION] & 64) == 64) {
-                        freezeProtection = 1
-                    } else {
-                        freezeProtection = 0
-                    }
-                    //The &63 masks to 00111111 because 01000000 is freeze protection bit
-
-                    //if the ID of the circuit name is 1-101 then it is a standard name.  If it is 200-209 it is a custom name.  The mapping between the string value in the getCircuitNames and getCustomNames is 200.  So subtract 200 from the circuit name to get the id in the custom name array.
-                    //data[4]-1 because this array starts at 1 and JS arrays start at 0.
-                    //-(8*whichCircuit) because this will subtract 0, 8 or 16 from the index so each secondary index will start at 0
-
-                    var circuit = JSON.parse(JSON.stringify(currentCircuitArrObj[circuitNumber]))
-
-                    if (circuitNumber != null || circuit.name != undefined) {
-                        if (data[namePacketFields.NAME] < 200) {
-                            circuit.name = strCircuitName[data[namePacketFields.NAME]]
-                        } else {
-                            circuit.name = customNameArr[data[namePacketFields.NAME] - 200];
-                        }
-                        circuit.number = circuitNumber;
-                        circuit.numberStr = 'circuit' + circuitNumber;
-                        circuit.circuitFunction = strCircuitFunction[data[namePacketFields.CIRCUITFUNCTION] & 63];
-                        circuit.freeze = freezeProtection;
-
-                        if (checkForChange[1]) {
-                            if (!(circuit.equals(currentCircuitArrObj[circuitNumber]))) {
-                                results = currentCircuitArrObj[i].whatsDifferent(circuit);
-                                if (!(results == "Nothing!" || currentCircuitArrObj[i].name === 'NOT USED')) {
-                                    logger.verbose('Msg# %s   Circuit %s change:  %s', counter, circuit.name, results)
-
-                                    if (logConfigMessages) {
-                                        logger.silly('Msg# %s  Circuit Info  %s', counter, JSON.stringify(data))
-                                            //logger.debug('currentCircuitArrObj[%s]: %s ', circuitNumber, JSON.stringify(currentCircuitArrObj[circuitNumber]))
-                                            //logger.verbose('Msg# %s  Circuit %s:   Name: %s  Function: %s  Status: %s  Freeze Protection: %s', counter, circuitNumber, strCircuitName[data[namePacketFields.NAME]], strCircuitFunction[data[namePacketFields.CIRCUITFUNCTION] & 63], freezeProtection)
-                                        if (circuit.status == undefined) {
-                                            logger.debug('Msg# %s  Circuit %s:   Name: %s  Function: %s  Status: (not received yet)  Freeze Protection: %s', counter, currentCircuitArrObj[circuitNumber].number, currentCircuitArrObj[circuitNumber].name, currentCircuitArrObj[circuitNumber].circuitFunction, currentCircuitArrObj[circuitNumber].freeze)
-                                        } else {
-                                            logger.debug('Msg# %s  Circuit %s:   Name: %s  Function: %s  Status: %s  Freeze Protection: %s', counter, currentCircuitArrObj[circuitNumber].number, currentCircuitArrObj[circuitNumber].name, currentCircuitArrObj[circuitNumber].circuitFunction, currentCircuitArrObj[circuitNumber].status, currentCircuitArrObj[circuitNumber].freeze)
-
+                                    //What's different with the circuit status?
+                                    //THE LOOP IS BECAUSE THERE IS A BUG IN THE RECURSIVE LOOP.  It won't display the output.  Need to fix for objects embedded inside an array.
+                                    var results;
+                                    for (var i = 1; i <= 20; i++) {
+                                        if (currentCircuitArrObj[i].status != undefined) {
+                                            results = currentCircuitArrObj[i].whatsDifferent(circuitArrObj[i]);
+                                            if (!(results == "Nothing!" || currentCircuitArrObj[i].name == undefined)) {
+                                                logger.verbose('Msg# %s   Circuit %s change:  %s', counter, circuitArrObj[i].name, results)
+                                            }
                                         }
                                     }
-                                    emit('circuit');
-                                }
-                            } else {
-                                logger.debug('Msg# %s  No change in circuit %s', counter, circuit.number)
-                            }
-                        }
-                        currentCircuitArrObj[circuitNumber] = JSON.parse(JSON.stringify(circuit));
-
-
-
-                        if (data[namePacketFields.NUMBER] === 20 && checkForChange[1] === 0 && currentCircuitArrObj[20].name != undefined) {
-                            var circuitStr = '';
-                            for (var i = 1; i <= 20; i++) {
-                                circuitStr += 'Circuit ' + currentCircuitArrObj[i].number + ': ' + currentCircuitArrObj[i].name
-                                circuitStr += ' Function: ' + currentCircuitArrObj[circuitNumber].circuitFunction
-                                if (currentCircuitArrObj[circuitNumber].status == undefined) {
-                                    circuitStr += ' Status: (not received yet)'
-                                } else {
-                                    circuitStr += ' Status: ' + currentCircuitArrObj[circuitNumber].status
-                                }
-                                circuitStr += ' Freeze Protection: ' + currentCircuitArrObj[circuitNumber].freeze
-                                circuitStr += '\n'
-                            }
-                            logger.info('\n  Circuit Array Discovered from configuration: \n%s \n', circuitStr)
-                            emit('circuit');
-                            checkForChange[1] = 1
-                        }
-                    }
-
-                    decoded = true;
-                    break;
-                }
-
-            case 17: // Get Schedules
-                { //byte:      0  1  2  3  4 5 6 7 8  9 10 11  12 13 14
-                    //example: 165,16,15,16,17,7,1,6,9,25,15,55,255,2, 90
-                    var schedule = {};
-                    schedule.ID = data[6];
-                    schedule.CIRCUIT = data[7] === 0 ? strCircuitName[data[7]] : currentCircuitArrObj[data[7]].name; //Correct???
-                    schedule.CIRCUITNUM = data[7]
-                    if (data[8] == 25) //25 = Egg Timer
-                    {
-                        schedule.MODE = 'Egg Timer'
-                        schedule.DURATION = data[10] + ':' + data[11];
-                    } else {
-                        schedule.MODE = 'Schedule'
-                        schedule.DURATION = 'n/a'
-                        schedule.START_TIME = data[8] + ':' + data[9];
-                        schedule.END_TIME = data[10] + ':' + data[11];
-                        schedule.DAYS = '';
-                        // if (data[12] == 255) { //not sure this is needed as it is really x1111111 with the x=1 being unknown.  See following note.
-                        //    schedule.DAYS += 'EVERY DAY'
-                        //} else { //0 = none;  My Pentiar Intellitouch always adds a leading 1xxxxxxx to the schedule.  Don't know the significance of that.
-                        if ((data[12] == 0))
-                            schedule.DAYS += 'None';
-                        if ((data[12] & 1) == 1)
-                            schedule.DAYS += 'Sunday '; //1
-                        if ((data[12] & 2) >> 1 == 1)
-                            schedule.DAYS += 'Monday '; // 2
-                        if ((data[12] & 4) >> 2 == 1)
-                            schedule.DAYS += 'Tuesday '; // 4
-                        if ((data[12] & 8) >> 3 == 1)
-                            schedule.DAYS += 'Wednesday '; //8
-                        if ((data[12] & 16) >> 4 == 1)
-                            schedule.DAYS += 'Thursday '; //16
-                        if ((data[12] & 32) >> 5 == 1)
-                            schedule.DAYS += 'Friday '; //32
-                        if ((data[12] & 64) >> 6 == 1)
-                            schedule.DAYS += 'Saturday '; //64
-                        //}
-                    }
-
-
-
-
-
-                    if (logConfigMessages)
-                        logger.silly('\nMsg# %s  Schedule packet %s', counter, JSON.stringify(data))
-
-
-                    if ((JSON.stringify(currentSchedule[schedule.ID])) === (JSON.stringify(schedule))) {
-                        if (logConfigMessages)
-                            logger.debug('Msg# %s:  Schedule %s has not changed.', counter, schedule.ID)
-                    } else {
-                        if (currentSchedule[schedule.ID] == undefined && schedule.ID === 12 && checkForChange[2] === 0) {
-                            currentSchedule[schedule.ID] = schedule; //should only be called here for schedule.ID === 12.
-                            var scheduleStr = 'Msg# ' + counter + '  Schedules discovered:'
-                            for (var i = 1; i <= 12; i++) {
-                                scheduleStr += '\nID:' + currentSchedule[i].ID + '  CIRCUIT:(' + currentSchedule[i].CIRCUITNUM + ')' + currentSchedule[i].CIRCUIT
-                                if (currentSchedule[i].CIRCUIT !== 'NOT USED') {
-                                    if (currentSchedule[i].MODE == 'Egg Timer') {
-                                        scheduleStr += ' MODE:' + currentSchedule[i].MODE + ' DURATION:' + currentSchedule[i].DURATION
-                                    } else {
-                                        scheduleStr += ' MODE:' + currentSchedule[i].MODE + ' START_TIME:' + currentSchedule[i].START_TIME + '  END_TIME:' + currentSchedule[i].END_TIME + '  DAYS:' + currentSchedule[i].DAYS
-                                    }
                                 }
                             }
-                            logger.info('%s\n\n', scheduleStr)
-                            checkForChange[2] = 1
-                        } else if (checkForChange[2] === 1) {
-                            //Explicitly writing out the old/new packets because if we call .whatsDifferent and the schedule switches from an egg timer to schedule (or vice versa) it will throw an error)
 
-                            var scheduleChgStr = 'Msg# ' + counter + '  Schedule ' + 'ID:' + schedule.ID + ' changed from:\n'
-                                //FROM string
-                            if (currentSchedule[schedule.ID].MODE === 'Egg Timer') {
-
-                                scheduleChgStr += 'ID:' + currentSchedule[schedule.ID].ID + ' CIRCUIT:(' + data[6] + ')' + currentSchedule[schedule.ID].CIRCUIT + ' MODE:' + currentSchedule[schedule.ID].MODE + ' DURATION:' + currentSchedule[schedule.ID].DURATION
-                            } else {
-
-                                scheduleChgStr += 'Schedule: ID:' + currentSchedule[schedule.ID].ID + ' CIRCUIT:(' + data[6] + ')' + currentSchedule[schedule.ID].CIRCUIT + ' MODE:' + currentSchedule[schedule.ID].MODE + ' START_TIME:' + currentSchedule[schedule.ID].START_TIME + ' END_TIME:' + currentSchedule[schedule.ID].END_TIME + ' DAYS:(' + data[12] + ')' + currentSchedule[schedule.ID].DAYS
-                            }
+                            //and finally assign the temporary variables to the permanent one
+                            currentStatus = JSON.parse(JSON.stringify(status));
+                            currentStatusBytes = JSON.parse(JSON.stringify(data));
+                            currentCircuitArrObj = JSON.parse(JSON.stringify(circuitArrObj));
 
 
-                            scheduleChgStr += '\n'
-                                //TO string
-                            if (schedule.MODE == 'Egg Timer') {
+                            //and finally emit the packets
+                            emit('config')
+                            emit('circuit')
 
-                                scheduleChgStr += ' CIRCUIT:(' + data[6] + ')' + schedule.CIRCUIT + ' MODE:' + schedule.MODE + ' DURATION:' + schedule.DURATION
-                            } else {
-
-                                scheduleChgStr += ' CIRCUIT:(' + data[6] + ')' + schedule.CIRCUIT + ' MODE:' + schedule.MODE + ' START_TIME:' + schedule.START_TIME + ' END_TIME:' + schedule.END_TIME + ' DAYS:(' + data[12] + ')' + schedule.DAYS
-                            }
-                            logger.verbose(scheduleChgStr)
-                        }
-
-                        currentSchedule[schedule.ID] = schedule;
-                        if (schedule.ID === 12) {
-                            emit('schedule')
-                        }
-                    }
-                    decoded = true;
-                    break;
-                }
-                //Set Circuit Function On/Off
-
-            case 25: //Intellichlor status
-                {
-                    if (intellitouch) { //this is to test configs without a chlorinator.  can get rid of it.
-                        if (logChlorinator)
-                            logger.debug('Msg# %s   Chlorinator status packet: %s', counter, data)
-
-                        //copy the currentChlorinatorStatus to temp object
-                        //var chlorinatorStatus = JSON.parse(JSON.stringify(currentChlorinatorStatus));;
-                        var chlorinatorStatus = new chlorinatorObj;
-                        chlorinatorStatus.outputSpaPercent = (data[6] - 1) / 2; //41 would equal 20%, for example
-                        chlorinatorStatus.outputPercent = data[7];
-                        chlorinatorStatus.saltPPM = data[9] * 50;
-                        switch (data[10]) {
-                            case 0: //ok
-                                {
-                                    chlorinatorStatus.status = "Ok";
-                                    break;
-                                }
-                            case 1:
-                                {
-                                    chlorinatorStatus.status = "No flow";
-                                    break;
-                                }
-                            case 2:
-                                {
-                                    chlorinatorStatus.status = "Low Salt";
-                                    break;
-                                }
-                            case 4:
-                                {
-                                    chlorinatorStatus.status = "High Salt";
-                                    break;
-                                }
-                            case 132:
-                                {
-                                    chlorinatorStatus.status = "Comm Link Error(?).  Also Low Salt.  ";
-                                    break;
-                                }
-
-                            case 144:
-                                {
-                                    chlorinatorStatus.status = "Clean Salt Cell"
-                                    break;
-                                }
-                            case 145:
-                                {
-                                    chlorinatorStatus.status = "???"
-                                    break;
-                                }
-                            default:
-                                {
-                                    chlorinatorStatus.status = "Unknown - Status code: " + data[10];
-                                }
-                        }
-                        chlorinatorStatus.name = '';
-                        for (var i = 12; i <= 27; i++) {
-                            chlorinatorStatus.name += String.fromCharCode(data[i]);
-                        }
-                        if (currentChlorinatorStatus.name == '') {
-                            currentChlorinatorStatus = chlorinatorStatus;
-                            if (logChlorinator)
-                                logger.info('Msg# %s   Initial chlorinator settings discovered: ', counter, JSON.stringify(currentChlorinatorStatus))
-                            emit('chlorinator');
-                        } else
-                        if (currentChlorinatorStatus.equals(chlorinatorStatus)) {
-                            if (logChlorinator)
-                                logger.debug('Msg# %s   Chlorinator status has not changed: ', counter, JSON.stringify(data))
                         } else {
-                            if (logChlorinator)
-                                logger.verbose('Msg# %s   Chlorinator status changed: ', counter, currentChlorinatorStatus.whatsDifferent(chlorinatorStatus));
-                            currentChlorinatorStatus = chlorinatorStatus;
-                            emit('chlorinator');
+                            if (logDuplicateMessages)
+                                logger.debug('Msg# %s   Duplicate broadcast.', counter)
                         }
+
                         decoded = true;
                         break;
                     }
+
+
+        case 7:
+
+            //Send request/response for pump status
+            {
+                var pumpNum;
+                if (data[packetFields.FROM] == 96 || data[packetFields.DEST] == 96) {
+                    pumpNum = 1
+                } else {
+                    pumpNum = 2
                 }
-            case 134:
+
+                //var pumpname = (data[packetFields.FROM]).toString(); //returns 96 (pump1) or 97 (pump2)
+                //time returned in HH:MM (24 hour)  <-- need to clean this up so we don't get times like 5:3
+
+                var pumpStatus;
+                //pump status has not been copied to currentPumpStatus yet
+                //if (currentPumpStatus[pumpNum].name == undefined) {
+                //    pumpStatus = new pump();
+                //} else {
+                pumpStatus = JSON.parse(JSON.stringify(currentPumpStatus[pumpNum]));
+                pumpStatus.name = ctrlString[pumpNum + 95];
+                //}
+
+
+                if (data[packetFields.FROM] == 16) //Request of status from Main
                 {
-
-
-                    var status = {
-
-                        source: null,
-                        destination: null,
-                        sFeature: null,
-                        ACTION: null,
+                    if (logPumpMessages) {
+                        logger.verbose('Msg# %s   Main asking pump %s for status: %s', counter, ctrlString[data[packetFields.DEST]], JSON.stringify(data));
                     }
-                    status.source = data[packetFields.FROM]
-                    status.destination = data[packetFields.DEST]
+                } else //Response to request for status
+                {
 
 
-                    status.sFeature = currentCircuitArrObj[data[6]].name
-                    if (data[7] == 0) {
-                        status.ACTION = "off"
-                    } else if (data[7] == 1) {
-                        status.ACTION = "on"
+                    //TODO: make this code the same (one function?) as coming from the controller
+
+                    pumpStatus.pump = pumpNum;
+                    var pumpname = (data[packetFields.FROM]).toString(); //returns 96 (pump1) or 97 (pump2)
+                    //time returned in HH:MM (24 hour)  <-- need to clean this up so we don't get times like 5:3
+
+                    pumpStatus.time = data[pumpPacketFields.HOUR] + ':' + data[pumpPacketFields.MIN];
+                    pumpStatus.run = data[pumpPacketFields.CMD]
+                    pumpStatus.name = ctrlString[pumpname];
+                    pumpStatus.mode = data[pumpPacketFields.MODE]
+                    pumpStatus.drivestate = data[pumpPacketFields.DRIVESTATE]
+                    pumpStatus.watts = (data[pumpPacketFields.WATTSH] * 256) + data[pumpPacketFields.WATTSL]
+                    pumpStatus.rpm = (data[pumpPacketFields.RPMH] * 256) + data[pumpPacketFields.RPML]
+                    pumpStatus.ppc = data[pumpPacketFields.PPC]
+                    pumpStatus.err = data[pumpPacketFields.ERR]
+                    pumpStatus.timer = data[pumpPacketFields.TIMER]
+                        //pumpStatus.packet = data;
+
+                    if (logPumpMessages)
+                        logger.debug('Msg# %s  %s Status: ', counter, pumpStatus.name, JSON.stringify(pumpStatus), data);
+                    //if (logPumpMessages) logger.silly('currentPumpStatusPacket', currentPumpStatusPacket)
+
+                    if (pumpNum == 1 || pumpNum == 2) {
+
+                        //TODO - I don't think the following works...
+                        if (JSON.stringify(currentPumpStatus[status.pump]).equals(JSON.stringify(status))) {
+
+                            if (logPumpMessages)
+                                logger.debug('Msg# %s   Pump %s status has not changed: ', counter, status.pump, data)
+                        } else {
+                            var moreThanFive = 0
+                            if (logPumpMessages) {
+                                if ((Math.abs((pumpStatus.watts - currentPumpStatus[pumpNum].watts) / pumpStatus.watts)) > .05) {
+                                    //logger.error('pumpnum.watts:', JSON.stringify(currentPumpStatus), currentPumpStatus[pumpNum].watts)
+                                    logger.info('Msg# %s   Pump %s watts changed >5%: %s --> %s \n', counter, pumpStatus.pump, currentPumpStatus[pumpNum].watts, pumpStatus.watts)
+                                    moreThanFive = 1;
+                                }
+                                //logger.error('2 what\'s different: \n %s \n %s', JSON.stringify(pumpStatus), JSON.stringify(currentPumpStatus))
+                                if (logPumpMessages)
+                                    logger.verbose('Msg# %s   Pump %s status changed: %s \n', counter, pumpStatus.pump, currentPumpStatus[pumpNum].whatsDifferent(pumpStatus));
+                            }
+
+                            //if we don't have a previous value for .watts than it should be the first time we are here and let's emit the pump status
+                            if ((currentPumpStatus[pumpNum].watts).toLowerCase.indexOf('notset') >= 0) {
+                                emit('pump');
+                            }
+                            currentPumpStatus[pumpNum] = pumpStatus;
+                            if (moreThanFive) {
+                                emit('pump');
+                            }
+
+                        }
                     }
-                    logger.info('Msg# %s   %s --> %s: Change %s to %s : %s', counter, ctrlString[data[packetFields.FROM]], ctrlString[data[packetFields.DEST]], status.sFeature, status.ACTION, JSON.stringify(data));
-                    decoded = true;
-                    break;
                 }
+                decoded = true;
+                break;
+            }
+        case 8: //Broadcast current heat set point and mode
+            {
+                //   0 1  2  3 4  5  6 7   8  9  19 11 12 13  14 15 16 17 18 19  20
+                //[165,x,15,16,8,13,75,75,64,87,101,11,0,  0 ,62 ,0 ,0 ,0 ,0 ,2,190]
+                //function heatObj(poolSetPoint, poolHeatMode, spaSetPoint, spaHeatMode)
 
-                //This is _SET_ heat/temp... not the response.
-            case 136:
-                {
-                    //  [16,34,136,4,POOL HEAT,SPA HEAT,Heat Mode,0,2,56]
 
-                    var status = {
+                var heat = new Heat(data[9], data[11] & 3, data[10], (data[11] & 12) >> 2)
 
-                        source: null,
-                        destination: null,
-                        b3: null,
-                        CMD: null,
-                        sFeature: null,
-                        ACTION: null,
-                        b7: null
 
-                    }
-                    status.source = data[packetFields.FROM]
-                    status.destination = data[packetFields.DEST]
 
-                    status.POOLSETPOINT = data[6];
-                    status.SPASETPOINT = data[7];
-                    status.POOLHEATMODE = heatModeStr[data[8] & 3]; //mask the data[6] with 0011
-                    status.SPAHEATMODE = heatModeStr[(data[8] & 12) >> 2]; //mask the data[6] with 1100 and shift right two places
-                    logger.info('Msg# %s   %s asking %s to change pool heat mode to %s (@ %s degrees) & spa heat mode to %s (at %s degrees): %s', counter, ctrlString[data[packetFields.FROM]], ctrlString[data[packetFields.DEST]], status.POOLHEATMODE, status.POOLSETPOINT, status.SPAHEATMODE, status.SPASETPOINT, JSON.stringify(data));
-                    decoded = true;
-                    break;
-                }
-            case 153: //Intellichlor status
-                {
-
-                    if (logChlorinator)
-                        logger.info('Msg# %s   Set Chlorinator packet: %s', counter, data)
-                    decoded = true;
-                    break;
-                }
-            case 217: //Intellichlor status
-                {
-
-                    if (logChlorinator)
-                        if (logMessageDecoding)
-                            logger.debug('Msg# %s   Get Chlorinator packet: %s', counter, data)
-                    decoded = true;
-                    break;
-                }
-            case 252: //Software/Bootloader Revision
                 if (logConfigMessages) {
-                    logger.info('Controller Bootloader Revision: %s  Full Packet: %s', data[11] + '.' + data[12] + data[13], JSON.stringify(data))
+                    logger.silly('heat status packet object: %s  data: %s  currentHeat: %s', JSON.stringify(heat), data, currentHeat == undefined ? "Not set yet" : JSON.stringify(currentHeat));
                 }
-            default:
+                if (heat.poolSetPoint != undefined) //invalid packet?
                 {
+                    if (currentHeat.poolSetPoint == undefined) {
+                        currentHeat = JSON.parse(JSON.stringify(heat))
+                        if (logConfigMessages)
+                            logger.info('Msg# %s   Pool/Spa heat set point discovered:  \n  Pool heat mode: %s @ %s degrees \n  Spa heat mode: %s at %s degrees', counter, heatModeStr[currentHeat.poolHeatMode], currentHeat.poolSetPoint, heatModeStr[currentHeat.spaHeatMode], currentHeat.spaSetPoint);
 
-                    var currentAction = strControllerActions[data[packetFields.ACTION]]
-                    if (currentAction != undefined) {
-                        if (logConsoleNotDecoded)
-                            logger.verbose('Msg# %s   %s packet: %s', counter, currentAction, data)
-                        decoded = true;
+                        emit('heat');
                     } else {
-                        if (logConsoleNotDecoded)
-                            logger.verbose('Msg# %s   is NOT DEFINED packet: %s', counter, data)
+
+                        if (currentHeat.equals(heat)) {
+                            logger.debug('Msg# %s   Pool/Spa heat set point HAS NOT CHANGED:  pool heat mode: %s @ %s degrees; spa heat mode %s at %s degrees', counter, heatModeStr[heat.poolHeatMode], heat.poolSetPoint, heatModeStr[heat.spaHeatMode], heat.spaSetPoint);
+                        } else {
+                            if (logConfigMessages) {
+                                logger.verbose('Msg# %s   Pool/Spa heat set point changed:  pool heat mode: %s @ %s degrees; spa heat mode %s at %s degrees', counter, heatModeStr[heat.poolHeatMode], heat.poolSetPoint, heatModeStr[heat.spaHeatMode], heat.spaSetPoint);
+                                logger.info('Msg# %s  Change in Pool/Spa Heat Mode:  %s', counter, currentHeat.whatsDifferent(heat))
+                            }
+                            currentHeat = JSON.parse(JSON.stringify(heat))
+                            emit('heat');
+                        }
+                    }
+                }
+                decoded = true;
+                break;
+            }
+
+
+        case 10: //Get Custom Names
+            {
+                var customName = '';
+                for (var i = 7; i < 18; i++) {
+                    if (data[i] > 0 && data[i] < 251) //251 is used to terminate the custom name string if shorter than 11 digits
+                    {
+
+                        customName += String.fromCharCode(data[i])
+                    };
+                }
+
+                if (logConfigMessages) {
+                    logger.silly('Msg# %s  Custom Circuit Name Raw:  %s  & Decoded: %s', counter, JSON.stringify(data), customName)
+                        //logger.verbose('Msg# %s  Custom Circuit Name Decoded: "%s"', counter, customName)
+                }
+
+                if (checkForChange[0]) {
+                    if (customNameArr[data[6]] !== customName) {
+                        logger.info('Msg# %s  Custom Circuit name %s changed to %s', customNameArr[data[6]], customName)
+                        emit('circuit');
+                    }
+                }
+
+                customNameArr[data[6]] = customName;
+                //display custom names when we reach the last circuit
+                if (data[6] == 9 && checkForChange[0] === 0) {
+                    logger.info('\n  Custom Circuit Names retrieved from configuration: ', customNameArr)
+                    checkForChange[0] = 1
+                    emit('circuit');
+                }
+
+
+                decoded = true;
+                break;
+            }
+
+        case 11: // Get Circuit Names
+            {
+                var circuitNumber = data[namePacketFields.NUMBER]
+                logger.silly('get circuit names packet: %s', data)
+                var freezeProtection;
+                if ((data[namePacketFields.CIRCUITFUNCTION] & 64) == 64) {
+                    freezeProtection = 1
+                } else {
+                    freezeProtection = 0
+                }
+                //The &63 masks to 00111111 because 01000000 is freeze protection bit
+
+                //if the ID of the circuit name is 1-101 then it is a standard name.  If it is 200-209 it is a custom name.  The mapping between the string value in the getCircuitNames and getCustomNames is 200.  So subtract 200 from the circuit name to get the id in the custom name array.
+                //data[4]-1 because this array starts at 1 and JS arrays start at 0.
+                //-(8*whichCircuit) because this will subtract 0, 8 or 16 from the index so each secondary index will start at 0
+
+                var circuit = JSON.parse(JSON.stringify(currentCircuitArrObj[circuitNumber]))
+
+                if (circuitNumber != null || circuit.name != undefined) {
+                    if (data[namePacketFields.NAME] < 200) {
+                        circuit.name = strCircuitName[data[namePacketFields.NAME]]
+                    } else {
+                        circuit.name = customNameArr[data[namePacketFields.NAME] - 200];
+                    }
+                    circuit.number = circuitNumber;
+                    circuit.numberStr = 'circuit' + circuitNumber;
+                    circuit.circuitFunction = strCircuitFunction[data[namePacketFields.CIRCUITFUNCTION] & 63];
+                    circuit.freeze = freezeProtection;
+
+                    if (checkForChange[1]) {
+                        if (!(circuit.equals(currentCircuitArrObj[circuitNumber]))) {
+                            results = currentCircuitArrObj[i].whatsDifferent(circuit);
+                            if (!(results == "Nothing!" || currentCircuitArrObj[i].name === 'NOT USED')) {
+                                logger.verbose('Msg# %s   Circuit %s change:  %s', counter, circuit.name, results)
+
+                                if (logConfigMessages) {
+                                    logger.silly('Msg# %s  Circuit Info  %s', counter, JSON.stringify(data))
+                                        //logger.debug('currentCircuitArrObj[%s]: %s ', circuitNumber, JSON.stringify(currentCircuitArrObj[circuitNumber]))
+                                        //logger.verbose('Msg# %s  Circuit %s:   Name: %s  Function: %s  Status: %s  Freeze Protection: %s', counter, circuitNumber, strCircuitName[data[namePacketFields.NAME]], strCircuitFunction[data[namePacketFields.CIRCUITFUNCTION] & 63], freezeProtection)
+                                    if (circuit.status == undefined) {
+                                        logger.debug('Msg# %s  Circuit %s:   Name: %s  Function: %s  Status: (not received yet)  Freeze Protection: %s', counter, currentCircuitArrObj[circuitNumber].number, currentCircuitArrObj[circuitNumber].name, currentCircuitArrObj[circuitNumber].circuitFunction, currentCircuitArrObj[circuitNumber].freeze)
+                                    } else {
+                                        logger.debug('Msg# %s  Circuit %s:   Name: %s  Function: %s  Status: %s  Freeze Protection: %s', counter, currentCircuitArrObj[circuitNumber].number, currentCircuitArrObj[circuitNumber].name, currentCircuitArrObj[circuitNumber].circuitFunction, currentCircuitArrObj[circuitNumber].status, currentCircuitArrObj[circuitNumber].freeze)
+
+                                    }
+                                }
+                                emit('circuit');
+                            }
+                        } else {
+                            logger.debug('Msg# %s  No change in circuit %s', counter, circuit.number)
+                        }
+                    }
+                    currentCircuitArrObj[circuitNumber] = JSON.parse(JSON.stringify(circuit));
+
+
+
+                    if (data[namePacketFields.NUMBER] === 20 && checkForChange[1] === 0 && currentCircuitArrObj[20].name != undefined) {
+                        var circuitStr = '';
+                        for (var i = 1; i <= 20; i++) {
+                            circuitStr += 'Circuit ' + currentCircuitArrObj[i].number + ': ' + currentCircuitArrObj[i].name
+                            circuitStr += ' Function: ' + currentCircuitArrObj[circuitNumber].circuitFunction
+                            if (currentCircuitArrObj[circuitNumber].status == undefined) {
+                                circuitStr += ' Status: (not received yet)'
+                            } else {
+                                circuitStr += ' Status: ' + currentCircuitArrObj[circuitNumber].status
+                            }
+                            circuitStr += ' Freeze Protection: ' + currentCircuitArrObj[circuitNumber].freeze
+                            circuitStr += '\n'
+                        }
+                        logger.info('\n  Circuit Array Discovered from configuration: \n%s \n', circuitStr)
+                        emit('circuit');
+                        checkForChange[1] = 1
+                    }
+                }
+
+                decoded = true;
+                break;
+            }
+
+        case 17: // Get Schedules
+            { //byte:      0  1  2  3  4 5 6 7 8  9 10 11  12 13 14
+                //example: 165,16,15,16,17,7,1,6,9,25,15,55,255,2, 90
+                var schedule = {};
+                schedule.ID = data[6];
+                schedule.CIRCUIT = data[7] === 0 ? strCircuitName[data[7]] : currentCircuitArrObj[data[7]].name; //Correct???
+                schedule.CIRCUITNUM = data[7]
+                if (data[8] == 25) //25 = Egg Timer
+                {
+                    schedule.MODE = 'Egg Timer'
+                    schedule.DURATION = data[10] + ':' + data[11];
+                } else {
+                    schedule.MODE = 'Schedule'
+                    schedule.DURATION = 'n/a'
+                    schedule.START_TIME = data[8] + ':' + data[9];
+                    schedule.END_TIME = data[10] + ':' + data[11];
+                    schedule.DAYS = '';
+                    // if (data[12] == 255) { //not sure this is needed as it is really x1111111 with the x=1 being unknown.  See following note.
+                    //    schedule.DAYS += 'EVERY DAY'
+                    //} else { //0 = none;  My Pentiar Intellitouch always adds a leading 1xxxxxxx to the schedule.  Don't know the significance of that.
+                    if ((data[12] == 0))
+                        schedule.DAYS += 'None';
+                    if ((data[12] & 1) == 1)
+                        schedule.DAYS += 'Sunday '; //1
+                    if ((data[12] & 2) >> 1 == 1)
+                        schedule.DAYS += 'Monday '; // 2
+                    if ((data[12] & 4) >> 2 == 1)
+                        schedule.DAYS += 'Tuesday '; // 4
+                    if ((data[12] & 8) >> 3 == 1)
+                        schedule.DAYS += 'Wednesday '; //8
+                    if ((data[12] & 16) >> 4 == 1)
+                        schedule.DAYS += 'Thursday '; //16
+                    if ((data[12] & 32) >> 5 == 1)
+                        schedule.DAYS += 'Friday '; //32
+                    if ((data[12] & 64) >> 6 == 1)
+                        schedule.DAYS += 'Saturday '; //64
+                    //}
+                }
+
+
+
+
+
+                if (logConfigMessages)
+                    logger.silly('\nMsg# %s  Schedule packet %s', counter, JSON.stringify(data))
+
+
+                if ((JSON.stringify(currentSchedule[schedule.ID])) === (JSON.stringify(schedule))) {
+                    if (logConfigMessages)
+                        logger.debug('Msg# %s:  Schedule %s has not changed.', counter, schedule.ID)
+                } else {
+                    if (currentSchedule[schedule.ID] == undefined && schedule.ID === 12 && checkForChange[2] === 0) {
+                        currentSchedule[schedule.ID] = schedule; //should only be called here for schedule.ID === 12.
+                        var scheduleStr = 'Msg# ' + counter + '  Schedules discovered:'
+                        for (var i = 1; i <= 12; i++) {
+                            scheduleStr += '\nID:' + currentSchedule[i].ID + '  CIRCUIT:(' + currentSchedule[i].CIRCUITNUM + ')' + currentSchedule[i].CIRCUIT
+                            if (currentSchedule[i].CIRCUIT !== 'NOT USED') {
+                                if (currentSchedule[i].MODE == 'Egg Timer') {
+                                    scheduleStr += ' MODE:' + currentSchedule[i].MODE + ' DURATION:' + currentSchedule[i].DURATION
+                                } else {
+                                    scheduleStr += ' MODE:' + currentSchedule[i].MODE + ' START_TIME:' + currentSchedule[i].START_TIME + '  END_TIME:' + currentSchedule[i].END_TIME + '  DAYS:' + currentSchedule[i].DAYS
+                                }
+                            }
+                        }
+                        logger.info('%s\n\n', scheduleStr)
+                        checkForChange[2] = 1
+                    } else if (checkForChange[2] === 1) {
+                        //Explicitly writing out the old/new packets because if we call .whatsDifferent and the schedule switches from an egg timer to schedule (or vice versa) it will throw an error)
+
+                        var scheduleChgStr = 'Msg# ' + counter + '  Schedule ' + 'ID:' + schedule.ID + ' changed from:\n'
+                            //FROM string
+                        if (currentSchedule[schedule.ID].MODE === 'Egg Timer') {
+
+                            scheduleChgStr += 'ID:' + currentSchedule[schedule.ID].ID + ' CIRCUIT:(' + data[6] + ')' + currentSchedule[schedule.ID].CIRCUIT + ' MODE:' + currentSchedule[schedule.ID].MODE + ' DURATION:' + currentSchedule[schedule.ID].DURATION
+                        } else {
+
+                            scheduleChgStr += 'Schedule: ID:' + currentSchedule[schedule.ID].ID + ' CIRCUIT:(' + data[6] + ')' + currentSchedule[schedule.ID].CIRCUIT + ' MODE:' + currentSchedule[schedule.ID].MODE + ' START_TIME:' + currentSchedule[schedule.ID].START_TIME + ' END_TIME:' + currentSchedule[schedule.ID].END_TIME + ' DAYS:(' + data[12] + ')' + currentSchedule[schedule.ID].DAYS
+                        }
+
+
+                        scheduleChgStr += '\n'
+                            //TO string
+                        if (schedule.MODE == 'Egg Timer') {
+
+                            scheduleChgStr += ' CIRCUIT:(' + data[6] + ')' + schedule.CIRCUIT + ' MODE:' + schedule.MODE + ' DURATION:' + schedule.DURATION
+                        } else {
+
+                            scheduleChgStr += ' CIRCUIT:(' + data[6] + ')' + schedule.CIRCUIT + ' MODE:' + schedule.MODE + ' START_TIME:' + schedule.START_TIME + ' END_TIME:' + schedule.END_TIME + ' DAYS:(' + data[12] + ')' + schedule.DAYS
+                        }
+                        logger.verbose(scheduleChgStr)
                     }
 
+                    currentSchedule[schedule.ID] = schedule;
+                    if (schedule.ID === 12) {
+                        emit('schedule')
+                    }
+                }
+                decoded = true;
+                break;
+            }
+            //Set Circuit Function On/Off
+
+        case 25: //Intellichlor status
+            {
+                if (intellitouch) { //this is to test configs without a chlorinator.  can get rid of it.
+                    if (logChlorinator)
+                        logger.debug('Msg# %s   Chlorinator status packet: %s', counter, data)
+
+                    //copy the currentChlorinatorStatus to temp object
+                    //var chlorinatorStatus = JSON.parse(JSON.stringify(currentChlorinatorStatus));;
+                    var chlorinatorStatus = new chlorinatorObj;
+                    chlorinatorStatus.outputSpaPercent = (data[6] - 1) / 2; //41 would equal 20%, for example
+                    chlorinatorStatus.outputPercent = data[7];
+                    chlorinatorStatus.saltPPM = data[9] * 50;
+                    switch (data[10]) {
+                        case 0: //ok
+                            {
+                                chlorinatorStatus.status = "Ok";
+                                break;
+                            }
+                        case 1:
+                            {
+                                chlorinatorStatus.status = "No flow";
+                                break;
+                            }
+                        case 2:
+                            {
+                                chlorinatorStatus.status = "Low Salt";
+                                break;
+                            }
+                        case 4:
+                            {
+                                chlorinatorStatus.status = "High Salt";
+                                break;
+                            }
+                        case 132:
+                            {
+                                chlorinatorStatus.status = "Comm Link Error(?).  Also Low Salt.  ";
+                                break;
+                            }
+
+                        case 144:
+                            {
+                                chlorinatorStatus.status = "Clean Salt Cell"
+                                break;
+                            }
+                        case 145:
+                            {
+                                chlorinatorStatus.status = "???"
+                                break;
+                            }
+                        default:
+                            {
+                                chlorinatorStatus.status = "Unknown - Status code: " + data[10];
+                            }
+                    }
+                    chlorinatorStatus.name = '';
+                    for (var i = 12; i <= 27; i++) {
+                        chlorinatorStatus.name += String.fromCharCode(data[i]);
+                    }
+                    if (currentChlorinatorStatus.name == '') {
+                        currentChlorinatorStatus = chlorinatorStatus;
+                        if (logChlorinator)
+                            logger.info('Msg# %s   Initial chlorinator settings discovered: ', counter, JSON.stringify(currentChlorinatorStatus))
+                        emit('chlorinator');
+                    } else
+                    if (currentChlorinatorStatus.equals(chlorinatorStatus)) {
+                        if (logChlorinator)
+                            logger.debug('Msg# %s   Chlorinator status has not changed: ', counter, JSON.stringify(data))
+                    } else {
+                        if (logChlorinator)
+                            logger.verbose('Msg# %s   Chlorinator status changed: ', counter, currentChlorinatorStatus.whatsDifferent(chlorinatorStatus));
+                        currentChlorinatorStatus = chlorinatorStatus;
+                        emit('chlorinator');
+                    }
+                    decoded = true;
+                    break;
+                }
+            }
+        case 134:
+            {
+
+
+                var status = {
+
+                    source: null,
+                    destination: null,
+                    sFeature: null,
+                    ACTION: null,
+                }
+                status.source = data[packetFields.FROM]
+                status.destination = data[packetFields.DEST]
+
+
+                status.sFeature = currentCircuitArrObj[data[6]].name
+                if (data[7] == 0) {
+                    status.ACTION = "off"
+                } else if (data[7] == 1) {
+                    status.ACTION = "on"
+                }
+                logger.info('Msg# %s   %s --> %s: Change %s to %s : %s', counter, ctrlString[data[packetFields.FROM]], ctrlString[data[packetFields.DEST]], status.sFeature, status.ACTION, JSON.stringify(data));
+                decoded = true;
+                break;
+            }
+
+            //This is _SET_ heat/temp... not the response.
+        case 136:
+            {
+                //  [16,34,136,4,POOL HEAT,SPA HEAT,Heat Mode,0,2,56]
+
+                var status = {
+
+                    source: null,
+                    destination: null,
+                    b3: null,
+                    CMD: null,
+                    sFeature: null,
+                    ACTION: null,
+                    b7: null
+
+                }
+                status.source = data[packetFields.FROM]
+                status.destination = data[packetFields.DEST]
+
+                status.POOLSETPOINT = data[6];
+                status.SPASETPOINT = data[7];
+                status.POOLHEATMODE = heatModeStr[data[8] & 3]; //mask the data[6] with 0011
+                status.SPAHEATMODE = heatModeStr[(data[8] & 12) >> 2]; //mask the data[6] with 1100 and shift right two places
+                logger.info('Msg# %s   %s asking %s to change pool heat mode to %s (@ %s degrees) & spa heat mode to %s (at %s degrees): %s', counter, ctrlString[data[packetFields.FROM]], ctrlString[data[packetFields.DEST]], status.POOLHEATMODE, status.POOLSETPOINT, status.SPAHEATMODE, status.SPASETPOINT, JSON.stringify(data));
+                decoded = true;
+                break;
+            }
+        case 153: //Intellichlor status
+            {
+
+                if (logChlorinator)
+                    logger.info('Msg# %s   Set Chlorinator packet: %s', counter, data)
+                decoded = true;
+                break;
+            }
+        case 217: //Intellichlor status
+            {
+
+                if (logChlorinator)
+                    if (logMessageDecoding)
+                        logger.debug('Msg# %s   Get Chlorinator packet: %s', counter, data)
+                decoded = true;
+                break;
+            }
+        case 252: //Software/Bootloader Revision
+            if (logConfigMessages) {
+                logger.info('Controller Bootloader Revision: %s  Full Packet: %s', data[11] + '.' + data[12] + data[13], JSON.stringify(data))
+            }
+        default:
+            {
+
+                var currentAction = strControllerActions[data[packetFields.ACTION]]
+                if (currentAction != undefined) {
+                    if (logConsoleNotDecoded)
+                        logger.verbose('Msg# %s   %s packet: %s', counter, currentAction, data)
+                    decoded = true;
+                } else {
+                    if (logConsoleNotDecoded)
+                        logger.verbose('Msg# %s   is NOT DEFINED packet: %s', counter, data)
                 }
 
+            }
 
-        }
 
     }
-    //End Controller Decode
 
-    //Start Pump Decode
-    //I believe this should be any packet with 165,0.  Need to verify.
-    else if (packetType == 'pump')
+}
+//End Controller Decode
 
-    {
-        if (logPumpMessages)
-            logger.silly('Msg# %s  Decoding pump packet %s', counter, data)
+//Start Pump Decode
+//I believe this should be any packet with 165,0.  Need to verify.
+else if (packetType == 'pump')
 
-        var pumpNum;
-        if (data[packetFields.FROM] == 96 || data[packetFields.DEST] == 96) {
-            pumpNum = 1
-        } else {
-            pumpNum = 2
-        };
-        //var pumpname = (data[packetFields.FROM]).toString(); //returns 96 (pump1) or 97 (pump2)
-        //time returned in HH:MM (24 hour)  <-- need to clean this up so we don't get times like 5:3
+{
+    if (logPumpMessages)
+        logger.silly('Msg# %s  Decoding pump packet %s', counter, data)
 
-        //logger.error('BEFORE    currentPumpStatus: %s', JSON.stringify(currentPumpStatus))
-        var pumpStatus;
-        //pump status has not been copied to currentPumpStatus yet
-        //if (currentPumpStatus[pumpNum].name == undefined) {
-        //    pumpStatus = new pump();
-        //} else {
-        pumpStatus = JSON.parse(JSON.stringify(currentPumpStatus[pumpNum]));
-        pumpStatus.name = ctrlString[pumpNum + 95];
-        pumpStatus.pump = pumpNum;
-        //}
+    var pumpNum;
+    if (data[packetFields.FROM] == 96 || data[packetFields.DEST] == 96) {
+        pumpNum = 1
+    } else {
+        pumpNum = 2
+    };
+    //var pumpname = (data[packetFields.FROM]).toString(); //returns 96 (pump1) or 97 (pump2)
+    //time returned in HH:MM (24 hour)  <-- need to clean this up so we don't get times like 5:3
 
-        //logger.error('pumpStatus: %s    currentPumpStatus: %s', JSON.stringify(pumpStatus), JSON.stringify(currentPumpStatus))
+    //logger.error('BEFORE    currentPumpStatus: %s', JSON.stringify(currentPumpStatus))
+    var pumpStatus;
+    //pump status has not been copied to currentPumpStatus yet
+    //if (currentPumpStatus[pumpNum].name == undefined) {
+    //    pumpStatus = new pump();
+    //} else {
+    pumpStatus = JSON.parse(JSON.stringify(currentPumpStatus[pumpNum]));
+    pumpStatus.name = ctrlString[pumpNum + 95];
+    pumpStatus.pump = pumpNum;
+    //}
 
-
-        switch (data[packetFields.ACTION]) {
-
+    //logger.error('pumpStatus: %s    currentPumpStatus: %s', JSON.stringify(pumpStatus), JSON.stringify(currentPumpStatus))
 
 
-            case 1: //Set speed setting
+    switch (data[packetFields.ACTION]) {
+
+
+
+        case 1: //Set speed setting
+            {
+                var str1;
+                var str2;
+                var setAmount = data[8] * 256 + data[9];
+
+                if (data[5] == 2) // Length==2 is a response.
                 {
+
                     var str1;
-                    var str2;
+                    var setAmount = data[6] * 256 + data[7];
+                    decoded = true;
+                    if (logPumpMessages)
+                        logger.verbose('Msg# %s   %s responded with acknowledgement: %s', counter, ctrlString[data[packetFields.FROM]], JSON.stringify(data));
+                } else if (data[6] == 3) // data[4]: 1== Response; 2==IntelliTouch; 3==Intellicom2(?)/manual
+                {
+                    switch (data[7]) {
+
+                        case 33: //0x21
+                            {
+                                setAmount = setAmount / 8
+                                str1 = 'Set Current Program to '
+                                str2 = setAmount.toString();
+                                pumpStatus.currentprogram = setAmount;
+                                break;
+                            }
+                        case 39: //0x27
+                            {
+                                str1 = 'Save Program 1 as '
+                                str2 = setAmount.toString() + 'rpm';
+                                pumpStatus.program1rpm = setAmount;
+                                break;
+                            }
+                        case 40: //0x28
+                            {
+                                str1 = 'Save Program 2 as '
+                                str2 = setAmount.toString() + 'rpm';
+                                pumpStatus.program2rpm = setAmount;
+                                break;
+                            }
+                        case 41: //0x29
+                            {
+                                str1 = 'Save Program 3 as '
+                                str2 = setAmount.toString() + 'rpm';
+                                pumpStatus.program3rpm = setAmount;
+                                break;
+                            }
+                        case 42: //0x2a
+                            {
+                                str1 = 'Save Program 4 as ';
+                                pumpStatus.program4rpm = setAmount;
+                                str2 = setAmount.toString() + 'rpm';
+                                break;
+                            }
+                        case 43: //0x2B
+                            {
+                                str1 = 'Set Pump Timer for ';
+                                //commented out the following line because we are not sure what the timer actually does
+                                //leaving it in creates problems for ISY that might rely on this variable
+                                //pumpStatus.timer = setAmount;
+                                str2 = setAmount.toString() + ' minutes'
+                                break;
+                            }
+                        default:
+                            {
+                                str1 = 'unknown(?)'
+                            }
+                            decoded = true;
+                    }
+
+                    if (logPumpMessages)
+                        logger.verbose('Msg# %s   %s: %s %s %s', counter, ctrlString[data[packetFields.FROM]], str1, str2, JSON.stringify(data));
+                    decoded = true;
+                } else if (data[6] == 2) // data[4]: 1== Response; 2==IntelliTouch; 3==Intellicom2(?)/manual
+                {
+
+                    var str1;
                     var setAmount = data[8] * 256 + data[9];
-
-                    if (data[5] == 2) // Length==2 is a response.
-                    {
-
-                        var str1;
-                        var setAmount = data[6] * 256 + data[7];
-                        decoded = true;
-                        if (logPumpMessages)
-                            logger.verbose('Msg# %s   %s responded with acknowledgement: %s', counter, ctrlString[data[packetFields.FROM]], JSON.stringify(data));
-                    } else if (data[6] == 3) // data[4]: 1== Response; 2==IntelliTouch; 3==Intellicom2(?)/manual
-                    {
-                        switch (data[7]) {
-
-                            case 33: //0x21
-                                {
-                                    setAmount = setAmount / 8
-                                    str1 = 'Set Current Program to '
-                                    str2 = setAmount.toString();
-                                    pumpStatus.currentprogram = setAmount;
-                                    break;
-                                }
-                            case 39: //0x27
-                                {
-                                    str1 = 'Save Program 1 as '
-                                    str2 = setAmount.toString() + 'rpm';
-                                    pumpStatus.program1rpm = setAmount;
-                                    break;
-                                }
-                            case 40: //0x28
-                                {
-                                    str1 = 'Save Program 2 as '
-                                    str2 = setAmount.toString() + 'rpm';
-                                    pumpStatus.program2rpm = setAmount;
-                                    break;
-                                }
-                            case 41: //0x29
-                                {
-                                    str1 = 'Save Program 3 as '
-                                    str2 = setAmount.toString() + 'rpm';
-                                    pumpStatus.program3rpm = setAmount;
-                                    break;
-                                }
-                            case 42: //0x2a
-                                {
-                                    str1 = 'Save Program 4 as ';
-                                    pumpStatus.program4rpm = setAmount;
-                                    str2 = setAmount.toString() + 'rpm';
-                                    break;
-                                }
-                            case 43: //0x2B
-                                {
-                                    str1 = 'Set Pump Timer for ';
-                                    //commented out the following line because we are not sure what the timer actually does
-                                    //leaving it in creates problems for ISY that might rely on this variable
-                                    //pumpStatus.timer = setAmount;
-                                    str2 = setAmount.toString() + ' minutes'
-                                    break;
-                                }
-                            default:
-                                {
-                                    str1 = 'unknown(?)'
-                                }
-                                decoded = true;
-                        }
-
-                        if (logPumpMessages)
-                            logger.verbose('Msg# %s   %s: %s %s %s', counter, ctrlString[data[packetFields.FROM]], str1, str2, JSON.stringify(data));
-                        decoded = true;
-                    } else if (data[6] == 2) // data[4]: 1== Response; 2==IntelliTouch; 3==Intellicom2(?)/manual
-                    {
-
-                        var str1;
-                        var setAmount = data[8] * 256 + data[9];
-                        if (logPumpMessages)
-                            logger.verbose('Msg# %s   %s --> %s: Set Speed (Intellitouch) to %s rpm: %s', counter, ctrlString[data[packetFields.FROM]], ctrlString[data[packetFields.DEST]], setAmount, JSON.stringify(data));
-                    } else {
-                        str1 = '[' + data[6] + ',' + data[7] + ']';
-                        str2 = ' rpm(?)'
-                        logger.warn('Msg# %s  Pump data ?', str1, str2, counter, data)
-                    }
-                    decoded = true;
-                    break;
+                    if (logPumpMessages)
+                        logger.verbose('Msg# %s   %s --> %s: Set Speed (Intellitouch) to %s rpm: %s', counter, ctrlString[data[packetFields.FROM]], ctrlString[data[packetFields.DEST]], setAmount, JSON.stringify(data));
+                } else {
+                    str1 = '[' + data[6] + ',' + data[7] + ']';
+                    str2 = ' rpm(?)'
+                    logger.warn('Msg# %s  Pump data ?', str1, str2, counter, data)
                 }
-            case 2: //??
+                decoded = true;
+                break;
+            }
+        case 2: //??
+            {
+                logger.info('in pump area 2: ', data)
+                decoded = true;
+                break;
+            }
+        case 4: //Pump control panel on/off
+            {
+
+                if (data[pumpPacketFields.CMD] == 255) //Set pump control panel off (Main panel control only)
                 {
-                    logger.info('in pump area 2: ', data)
-                    decoded = true;
-                    break;
-                }
-            case 4: //Pump control panel on/off
+                    pumpStatus.remotecontrol = 1;
+                } else //0 = Set pump control panel on
                 {
-
-                    if (data[pumpPacketFields.CMD] == 255) //Set pump control panel off (Main panel control only)
-                    {
-                        pumpStatus.remotecontrol = 1;
-                    } else //0 = Set pump control panel on
-                    {
-                        pumpStatus.remotecontrol = 0;
-                    }
-                    var remoteControlStr = pumpStatus.remotecontrol === 1 ? 'on' : 'off'
-
-
-                    if (data[packetFields.DEST] == 96 || data[packetFields.DEST] == 97) //Command to the pump
-                    {
-                        if (logPumpMessages)
-                            logger.verbose('Msg# %s   %s --> %s: Remote control (turn %s pump control panel): %s', counter, ctrlString[data[packetFields.FROM]], ctrlString[data[packetFields.DEST]], remoteControlStr, JSON.stringify(data));
-                    } else {
-                        if (logPumpMessages)
-                            logger.verbose('Msg# %s   %s: Remote control %s: %s', counter, ctrlString[data[packetFields.FROM]], remoteControlStr, JSON.stringify(data));
-                    }
-                    decoded = true;
-                    break;
+                    pumpStatus.remotecontrol = 0;
                 }
+                var remoteControlStr = pumpStatus.remotecontrol === 1 ? 'on' : 'off'
 
 
-
-            case 5: //Set pump mode
-                {
-                    if (data[packetFields.DEST] == 96 || data[packetFields.DEST] == 97) //Command to the pump
-                    {
-                        if (logPumpMessages)
-                            logger.verbose('Msg# %s   %s --> %s: Set pump mode to _%s_: %s', counter, ctrlString[data[packetFields.FROM]], ctrlString[data[packetFields.DEST]], data[pumpPacketFields.CMD], JSON.stringify(data));
-                        var pumpMode;
-                        switch (data[7]) {
-                            case 0:
-                                {
-                                    pumpMode = "Filter";
-                                    break;
-                                }
-                            case 1:
-                                {
-                                    pumpMode = "Manual";
-                                    break;
-                                }
-                            case 2:
-                                {
-                                    pumpMode = "Speed 1";
-                                    break;
-                                }
-                            case 3:
-                                {
-                                    pumpMode = "Speed 2";
-                                    break;
-                                }
-                            case 4:
-                                {
-                                    pumpMode = "Speed 3";
-                                    break;
-                                }
-                            case 5:
-                                {
-                                    pumpMode = "Speed 4";
-                                    break;
-                                }
-                            case 6:
-                                {
-                                    pumpMode = "Feature 1";
-                                    break;
-                                }
-                            case 7:
-                                {
-                                    pumpMode = "Unknown pump mode";
-                                    break;
-                                }
-                            case 8:
-                                {
-                                    pumpMode = "Unknown pump mode";
-                                    break;
-                                }
-                            case 9:
-                                {
-                                    pumpMode = "External Program 1";
-                                    break;
-                                }
-                            case 10:
-                                {
-                                    pumpMode = "External Program 2";
-                                    break;
-                                }
-                            case 11:
-                                {
-                                    pumpMode = "External Program 3";
-                                    break;
-                                }
-                            case 12:
-                                {
-                                    pumpMode = "External Program 4";
-                                    break;
-                                }
-
-                            default:
-                                {
-                                    pumpMode = "Oops, we missed something!"
-                                }
-
-                        }
-                        logger.verbose('Pump mode: %s  %s', pumpMode, JSON.stringify(data))
-                        pumpStatus.mode = pumpMode;
-                        decoded = true;
-                    } else {
-                        if (logPumpMessages)
-                            logger.verbose('Msg# %s   %s confirming it is in mode %s: %s', counter, ctrlString[data[packetFields.FROM]], data[packetFields.CMD], JSON.stringify(data));
-                        decoded = true;
-                    }
-                    break;
-                }
-            case 6: //Turn pump on/off
-                {
-
-                    var power;
-                    if (data[6] == 10)
-                        power = 1
-                    else if (data[6] == 4)
-                        power = 0;
-                    var powerStr = power === 1 ? 'on' : 'off'
-                    pumpStatus.power = power;
-                    if (data[packetFields.DEST] == 96 || data[packetFields.DEST] == 97) //Command to the pump
-                    {
-                        if (logPumpMessages)
-                            logger.verbose('Msg# %s   %s --> %s: Pump power to %s: %s', counter, ctrlString[data[packetFields.FROM]], ctrlString[data[packetFields.DEST]], powerStr, JSON.stringify(data));
-                        decoded = true;
-                    } else {
-                        if (logPumpMessages)
-                            logger.verbose('Msg# %s   %s: Pump power %s: %s', counter, ctrlString[data[packetFields.FROM]], powerStr, JSON.stringify(data));
-                        decoded = true;
-                    }
-                    break;
-                }
-            case 7: //cyclical status of controller requesting pump status
-                {
-
-                    if (data[packetFields.DEST] == 96 || data[packetFields.DEST] == 97) //Command to the pump
-                    {
-                        if (logPumpMessages)
-                            logger.verbose('Msg# %s   %s --> %s: Provide status: %s', counter, ctrlString[data[packetFields.FROM]], ctrlString[data[packetFields.DEST]], JSON.stringify(data));
-                        decoded = true;
-                    } else //response
-                    {
-
-
-                        pumpStatus.time = data[pumpPacketFields.HOUR] + ':' + data[pumpPacketFields.MIN];
-                        pumpStatus.run = data[pumpPacketFields.CMD] == 10 ? 1 : 0 //10=On, 4=Off
-
-                        pumpStatus.mode = data[pumpPacketFields.MODE]
-                        pumpStatus.drivestate = data[pumpPacketFields.DRIVESTATE]
-                        pumpStatus.watts = (data[pumpPacketFields.WATTSH] * 256) + data[pumpPacketFields.WATTSL]
-                        pumpStatus.rpm = (data[pumpPacketFields.RPMH] * 256) + data[pumpPacketFields.RPML]
-                        pumpStatus.ppc = data[pumpPacketFields.PPC]
-                        pumpStatus.err = data[pumpPacketFields.ERR]
-                        pumpStatus.timer = data[pumpPacketFields.TIMER]
-                            //status.packet = data;
-
-                        if (logPumpMessages)
-                            logger.verbose('\n Msg# %s  %s Pump Status (from pump): ', counter, pumpStatus.name, JSON.stringify(pumpStatus), data, '\n');
-                        //logger.error('1. what\'s different:', JSON.stringify(pumpStatus), JSON.stringify(currentPumpStatus))
-
-                        currentPumpStatusPacket[pumpStatus.pump] = data;
-                    }
-                    decoded = true;
-                    break;
-                }
-
-            case 256: //03:17:39.122 INFO Msg# 5 is UNKNOWN: [16,96,255,1,8,2,29]  Possibly priming?
-                {
-                    logger.warn('Msg# %s  Pump message?  Possibly priming?  %s', JSON.stringify(pumpStatus))
-                    decoded = true;
-                    break;
-                }
-
-            default:
+                if (data[packetFields.DEST] == 96 || data[packetFields.DEST] == 97) //Command to the pump
                 {
                     if (logPumpMessages)
-                        logger.info('Msg# %s is UNKNOWN: %s', counter, JSON.stringify(data));
+                        logger.verbose('Msg# %s   %s --> %s: Remote control (turn %s pump control panel): %s', counter, ctrlString[data[packetFields.FROM]], ctrlString[data[packetFields.DEST]], remoteControlStr, JSON.stringify(data));
+                } else {
+                    if (logPumpMessages)
+                        logger.verbose('Msg# %s   %s: Remote control %s: %s', counter, ctrlString[data[packetFields.FROM]], remoteControlStr, JSON.stringify(data));
+                }
+                decoded = true;
+                break;
+            }
+
+
+
+        case 5: //Set pump mode
+            {
+                if (data[packetFields.DEST] == 96 || data[packetFields.DEST] == 97) //Command to the pump
+                {
+                    if (logPumpMessages)
+                        logger.verbose('Msg# %s   %s --> %s: Set pump mode to _%s_: %s', counter, ctrlString[data[packetFields.FROM]], ctrlString[data[packetFields.DEST]], data[pumpPacketFields.CMD], JSON.stringify(data));
+                    var pumpMode;
+                    switch (data[7]) {
+                        case 0:
+                            {
+                                pumpMode = "Filter";
+                                break;
+                            }
+                        case 1:
+                            {
+                                pumpMode = "Manual";
+                                break;
+                            }
+                        case 2:
+                            {
+                                pumpMode = "Speed 1";
+                                break;
+                            }
+                        case 3:
+                            {
+                                pumpMode = "Speed 2";
+                                break;
+                            }
+                        case 4:
+                            {
+                                pumpMode = "Speed 3";
+                                break;
+                            }
+                        case 5:
+                            {
+                                pumpMode = "Speed 4";
+                                break;
+                            }
+                        case 6:
+                            {
+                                pumpMode = "Feature 1";
+                                break;
+                            }
+                        case 7:
+                            {
+                                pumpMode = "Unknown pump mode";
+                                break;
+                            }
+                        case 8:
+                            {
+                                pumpMode = "Unknown pump mode";
+                                break;
+                            }
+                        case 9:
+                            {
+                                pumpMode = "External Program 1";
+                                break;
+                            }
+                        case 10:
+                            {
+                                pumpMode = "External Program 2";
+                                break;
+                            }
+                        case 11:
+                            {
+                                pumpMode = "External Program 3";
+                                break;
+                            }
+                        case 12:
+                            {
+                                pumpMode = "External Program 4";
+                                break;
+                            }
+                        default:
+                            {
+                                pumpMode = "Oops, we missed something!"
+                            }
+
+                    }
+                    logger.verbose('Pump mode: %s  %s', pumpMode, JSON.stringify(data))
+                    pumpStatus.mode = pumpMode;
+                    decoded = true;
+                } else {
+                    if (logPumpMessages)
+                        logger.verbose('Msg# %s   %s confirming it is in mode %s: %s', counter, ctrlString[data[packetFields.FROM]], data[packetFields.CMD], JSON.stringify(data));
                     decoded = true;
                 }
-        }
-        if (logPumpMessages)
-            logger.silly('\n Analyzing pump packets for pump ', pumpNum, ': \n currentPumpStatus: ', JSON.stringify(currentPumpStatus[pumpStatus.pump]), '\n pumpStatus: ', JSON.stringify(pumpStatus), '\n equal?: ', JSON.stringify(currentPumpStatus[pumpNum]).equals(JSON.stringify(pumpStatus)))
+                break;
+            }
+        case 6: //Turn pump on/off
+            {
 
-        if ((currentPumpStatus[pumpNum].rpm === 'rpmnotset')) {
-            //we don't have status yet, but something changed
-            currentPumpStatus[pumpStatus.pump] = JSON.parse(JSON.stringify(pumpStatus));
-            emit('pump')
-        } else {
-            if (JSON.stringify(currentPumpStatus[pumpNum]) == (JSON.stringify(pumpStatus))) {
-                if (logPumpMessages)
-                    logger.debug('Msg# %s   Pump %s status has not changed: %s  \n', counter, pumpStatus.pump, data)
-            } else {
-
-
-                var needToEmit = 0
-                    //  If the difference is less then (absolute) 5% and the watts is not the same as it previously was, then notify the user.
-                    //  Separate check just for watts.  If not watts, this check isn't applicable.
-                if (pumpStatus.watts !== currentPumpStatus[pumpNum].watts) {
-                    if (logPumpMessages) {
-                        if ((Math.abs((pumpStatus.watts - currentPumpStatus[pumpNum].watts) / pumpStatus.watts)) > .05) {
-                            //logger.error('pumpnum.watts:', JSON.stringify(currentPumpStatus), currentPumpStatus[pumpNum].watts)
-                            logger.info('Msg# %s   Pump %s watts changed >5%: %s --> %s \n', counter, pumpStatus.pump, currentPumpStatus[pumpNum].watts, pumpStatus.watts)
-                            needToEmit = 1;
-                        }
-                        //logger.error('2 what\'s different: \n %s \n %s', JSON.stringify(pumpStatus), JSON.stringify(currentPumpStatus))
-
-                        logger.verbose('Msg# %s   Pump %s status changed: %s \n', counter, pumpStatus.pump, currentPumpStatus[pumpNum].whatsDifferent(pumpStatus));
-                    }
+                var power;
+                if (data[6] == 10)
+                    power = 1
+                else if (data[6] == 4)
+                    power = 0;
+                var powerStr = power === 1 ? 'on' : 'off'
+                pumpStatus.power = power;
+                if (data[packetFields.DEST] == 96 || data[packetFields.DEST] == 97) //Command to the pump
+                {
+                    if (logPumpMessages)
+                        logger.verbose('Msg# %s   %s --> %s: Pump power to %s: %s', counter, ctrlString[data[packetFields.FROM]], ctrlString[data[packetFields.DEST]], powerStr, JSON.stringify(data));
+                    decoded = true;
+                } else {
+                    if (logPumpMessages)
+                        logger.verbose('Msg# %s   %s: Pump power %s: %s', counter, ctrlString[data[packetFields.FROM]], powerStr, JSON.stringify(data));
+                    decoded = true;
                 }
-                //something besides watts changed
-                else {
-                    //NOTE: Need to ignore TIME & remotecontrol so the packets aren't emitted every minute if there are no other changes.
-                    var tempPumpStatus = JSON.parse(JSON.stringify(pumpStatus))
-                    var tempcurrentPumpStatus = JSON.parse(JSON.stringify(currentPumpStatus[pumpNum]))
+                break;
+            }
+        case 7: //cyclical status of controller requesting pump status
+            {
 
-                    delete tempPumpStatus.time
-                    delete tempcurrentPumpStatus.time
-                    delete tempPumpStatus.remotecontrol
-                    delete tempcurrentPumpStatus.remotecontrol
-                    if (tempPumpStatus === tempcurrentPumpStatus) {
-                        //only time or remotecontrol has changed, so don't emit
-                        needToEmit = 0
-                    } else {
-                        needToEmit = 1
+                if (data[packetFields.DEST] == 96 || data[packetFields.DEST] == 97) //Command to the pump
+                {
+                    if (logPumpMessages)
+                        logger.verbose('Msg# %s   %s --> %s: Provide status: %s', counter, ctrlString[data[packetFields.FROM]], ctrlString[data[packetFields.DEST]], JSON.stringify(data));
+                    decoded = true;
+                } else //response
+                {
+
+
+                    pumpStatus.time = data[pumpPacketFields.HOUR] + ':' + data[pumpPacketFields.MIN];
+                    pumpStatus.run = data[pumpPacketFields.CMD] == 10 ? 1 : 0 //10=On, 4=Off
+
+                    pumpStatus.mode = data[pumpPacketFields.MODE]
+                    pumpStatus.drivestate = data[pumpPacketFields.DRIVESTATE]
+                    pumpStatus.watts = (data[pumpPacketFields.WATTSH] * 256) + data[pumpPacketFields.WATTSL]
+                    pumpStatus.rpm = (data[pumpPacketFields.RPMH] * 256) + data[pumpPacketFields.RPML]
+                    pumpStatus.ppc = data[pumpPacketFields.PPC]
+                    pumpStatus.err = data[pumpPacketFields.ERR]
+                    pumpStatus.timer = data[pumpPacketFields.TIMER]
+                        //status.packet = data;
+
+                    if (logPumpMessages)
+                        logger.verbose('\n Msg# %s  %s Pump Status (from pump): ', counter, pumpStatus.name, JSON.stringify(pumpStatus), data, '\n');
+                    //logger.error('1. what\'s different:', JSON.stringify(pumpStatus), JSON.stringify(currentPumpStatus))
+
+                    currentPumpStatusPacket[pumpStatus.pump] = data;
+                }
+                decoded = true;
+                break;
+            }
+
+        case 256: //03:17:39.122 INFO Msg# 5 is UNKNOWN: [16,96,255,1,8,2,29]  Possibly priming?
+            {
+                logger.warn('Msg# %s  Pump message?  Possibly priming?  %s', JSON.stringify(pumpStatus))
+                decoded = true;
+                break;
+            }
+
+        default:
+            {
+                if (logPumpMessages)
+                    logger.info('Msg# %s is UNKNOWN: %s', counter, JSON.stringify(data));
+                decoded = true;
+            }
+    }
+    if (logPumpMessages)
+        logger.silly('\n Analyzing pump packets for pump ', pumpNum, ': \n currentPumpStatus: ', JSON.stringify(currentPumpStatus[pumpStatus.pump]), '\n pumpStatus: ', JSON.stringify(pumpStatus), '\n equal?: ', JSON.stringify(currentPumpStatus[pumpNum]).equals(JSON.stringify(pumpStatus)))
+
+    if ((currentPumpStatus[pumpNum].rpm === 'rpmnotset')) {
+        //we don't have status yet, but something changed
+        currentPumpStatus[pumpStatus.pump] = JSON.parse(JSON.stringify(pumpStatus));
+        emit('pump')
+    } else {
+        if (JSON.stringify(currentPumpStatus[pumpNum]) == (JSON.stringify(pumpStatus))) {
+            if (logPumpMessages)
+                logger.debug('Msg# %s   Pump %s status has not changed: %s  \n', counter, pumpStatus.pump, data)
+        } else {
+
+
+            var needToEmit = 0
+                //  If the difference is less then (absolute) 5% and the watts is not the same as it previously was, then notify the user.
+                //  Separate check just for watts.  If not watts, this check isn't applicable.
+            if (pumpStatus.watts !== currentPumpStatus[pumpNum].watts) {
+                if (logPumpMessages) {
+                    if ((Math.abs((pumpStatus.watts - currentPumpStatus[pumpNum].watts) / pumpStatus.watts)) > .05) {
+                        //logger.error('pumpnum.watts:', JSON.stringify(currentPumpStatus), currentPumpStatus[pumpNum].watts)
+                        logger.info('Msg# %s   Pump %s watts changed >5%: %s --> %s \n', counter, pumpStatus.pump, currentPumpStatus[pumpNum].watts, pumpStatus.watts)
+                        needToEmit = 1;
                     }
-                    //We will still output any differences in verbose, including time
-                    var pumpWhatsDifferent = currentPumpStatus[pumpNum].whatsDifferent(pumpStatus)
+                    //logger.error('2 what\'s different: \n %s \n %s', JSON.stringify(pumpStatus), JSON.stringify(currentPumpStatus))
+
+                    logger.verbose('Msg# %s   Pump %s status changed: %s \n', counter, pumpStatus.pump, currentPumpStatus[pumpNum].whatsDifferent(pumpStatus));
+                }
+            }
+            //something besides watts changed
+            else {
+                //NOTE: Need to ignore TIME & remotecontrol so the packets aren't emitted every minute if there are no other changes.
+                var tempPumpStatus = JSON.parse(JSON.stringify(pumpStatus))
+                var tempcurrentPumpStatus = JSON.parse(JSON.stringify(currentPumpStatus[pumpNum]))
+
+                delete tempPumpStatus.time
+                delete tempcurrentPumpStatus.time
+                delete tempPumpStatus.remotecontrol
+                delete tempcurrentPumpStatus.remotecontrol
+                if (tempPumpStatus === tempcurrentPumpStatus) {
+                    //only time or remotecontrol has changed, so don't emit
+                    needToEmit = 0
+                } else {
+                    needToEmit = 1
+                }
+                //We will still output any differences in verbose, including time
+                var pumpWhatsDifferent = currentPumpStatus[pumpNum].whatsDifferent(pumpStatus)
                 if (pumpWhatsDifferent != "Nothing!") {
                     logger.verbose('Msg# %s   Pump %s status changed: %s \n', counter, pumpStatus.pump, pumpWhatsDifferent);
                 }
@@ -2168,8 +2157,6 @@ if (!decoded) {
 return true; //fix this; turn into callback(?)  What do we want to do with it?
 
 }
-
-
 
 
 
