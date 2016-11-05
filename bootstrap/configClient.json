@@ -4,10 +4,10 @@
 		"pool": { "state": "visible" },
 		"spa": { "state": "visible" },
 		"features": { "state": "visible" },
-		"pump": { "state": "hidden" },
+		"pump": { "state": "visible" },
 		"schedule": { "state": "visible" },
-		"eggtimer": { "state": "hidden" },
-		"debug": { "state": "visible" }
+		"eggtimer": { "state": "visible" },
+		"debug": { "state": "hidden" }
 	},
 	
 	"equipConfig" : {
