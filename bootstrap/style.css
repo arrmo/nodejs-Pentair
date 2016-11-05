@@ -19,11 +19,11 @@
 }
 
 .pnlSchedule {
-	min-width: 570px;
+	min-width: 300px;
 }
 
 .pnlEggtimer {
-	min-width: 0px;
+	min-width: 300px;
 }
 
 .pnlDebug {
@@ -33,4 +33,17 @@
 /* Show the move cursor as the user moves the mouse over the panel header */
 #draggablePanelList .panel-heading {
 	cursor: move;
+}
+
+/* Special Styles, to remove the bottom border under the first line in the schedule table, and padding to squeeze combined rows together */
+.borderless tr, .borderless td {
+    border: none !important;
+}
+
+.botpad tr, .botpad td {
+    padding-bottom: 0px !important;
+}
+
+.toppad tr, .toppad td {
+    padding-top: 0px !important;
 }
