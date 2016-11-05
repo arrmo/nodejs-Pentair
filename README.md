@@ -251,8 +251,12 @@ The inexpensive [JBTek](https://www.amazon.com/gp/product/B00NKAJGZM/ref=oh_aui_
 2.  Connect the DATA+ and DATA-.
 
 3.  To see if you are getting the proper communications from the bus, before you even try to run this program, run from your *nix command line
+
 ```
-od -x < /dev/ttyUSB0```.  Of course, you'll need to change the address of your RS-485 adapter if it isn't the same as mine (here and in the code).
+od -x < /dev/ttyUSB0
+```
+
+Of course, you'll need to change the address of your RS-485 adapter if it isn't the same as mine (here and in the code).
 
 *   You'll know you have the wires write when the output of this command looks like (you should see multiple repititions of ffa5ff):
 ```
