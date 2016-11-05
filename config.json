@@ -24,7 +24,7 @@
 
     },
     "Misc": {
-        "expressDir": "/public",
+        "expressDir": "/bootstrap",
         "expressPort": 3000,
         "expressTransport": "http"
     },
@@ -34,7 +34,7 @@
         "netPort": 9801
     },
     "Log": {
-        "logType": "debug",
+        "logType": "info",
         "logPumpMessages": 0,
         "logDuplicateMessages": 0,
         "logConsoleNotDecoded": 0,

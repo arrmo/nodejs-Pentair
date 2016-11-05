@@ -79,6 +79,13 @@ function fmtScheduleTime(strInpStr) {
 	return strHours + ':' + strMins + ' ' + strAMPM;
 }
 
+function fmtEggTimerTime(strInpStr) {
+	splitInpStr = strInpStr.split(":");
+	strHours = splitInpStr[0];
+	strMins = ('0' + parseInt(splitInpStr[1])).slice(-2);
+	return strHours + ' hrs, ' + strMins + ' mins';
+}
+
 function setStatusButton(btnID, btnState) {
 	if (btnState.toUpperCase().includes('ON')) {
 		btnID.removeClass('btn-primary');
@@ -90,9 +97,30 @@ function setStatusButton(btnID, btnState) {
 	btnID.html(btnState.capitalizeFirstLetter());
 }
 
-function buildDaysButtons(strDays) {
+function buildSchTime(currSchedule) {
+	schName = 'schTime' + currSchedule.ID;
+	strRow = '<tr name="' + schName + '" id="' + schName + '" class="botpad">';
+	strHTML = '<td>' + currSchedule.ID + '</td>' + 
+		'<td>' + currSchedule.CIRCUIT.capitalizeFirstLetter() + '</td>' +
+		'<td>' + fmtScheduleTime(currSchedule.START_TIME) + '</td>' + 
+		'<td>' + fmtScheduleTime(currSchedule.END_TIME) + '</td></tr>';
+	return strRow + strHTML;
+}
+
+function buildEggTime(currSchedule) {
+	schName = 'schEgg' + currSchedule.ID;
+	strRow = '<tr name="' + schName + '" id="' + schName + '">';
+	strHTML = '<td>' + currSchedule.ID + '</td>' + 
+		'<td>' + currSchedule.CIRCUIT.capitalizeFirstLetter() + '</td>' +
+		'<td>' + fmtEggTimerTime(currSchedule.DURATION) + '</td></tr>';
+	return strRow + strHTML;
+}
+
+function buildSchDays(currSchedule) {
+	schName = 'schDays' + currSchedule.ID;
+	strRow = '<tr class="borderless toppad" name="' + schName + '" id="' + schName + '" class="botpad"><td colspan="4" align="left">';
 	var arrDays = Array(7).fill(false);
-	splitDays = strDays.split(" ");
+	splitDays = currSchedule.DAYS.split(" ");
 	for (var currDay of splitDays) {
 		if (currDay !== "")
 			arrDays[dayOfWeekAsInteger(currDay)] = true;
@@ -107,7 +135,7 @@ function buildDaysButtons(strDays) {
 		}
 		strHTML += strCurrDay + '</button>';
 	}
-	return strHTML;
+	return strRow + strHTML + '</td></tr>';
 }
 
 function formatLog(strMessage) {
@@ -278,24 +306,26 @@ $(function () {
 	}
 
 	function showSchedule(data) {
+		// Schedule/EggTimer to be updated => Wipe, then (Re)Build Below
+		$('#schedules tr').not('tr:first').remove();
+		$('#eggtimers tr').not('tr:first').remove();
+		// And (Re)Build Schedule and EggTimer tables / panels
 		for (var currSchedule of data) {
 			if (currSchedule == null) {
 				//console.log("Schedule: Dataset empty.")
 			} else {
-				if (currSchedule.MODE === "Schedule") {
-					// Schedule Event
-					if (currSchedule.CIRCUIT !== 'NOT USED') {
-						schName = 'schItem' + currSchedule.ID;
-						schHTML = '<tr name="' + schName + '" id="' + schName +'"><td>' + currSchedule.ID + '</td>' + '<td>' + currSchedule.CIRCUIT.capitalizeFirstLetter() + '</td>' +
-							'<td>' + fmtScheduleTime(currSchedule.START_TIME) + '</td>' + '<td>' + fmtScheduleTime(currSchedule.END_TIME) + '</td>' + '<td>' + buildDaysButtons(currSchedule.DAYS) + '</td></tr>'
-						if (document.getElementById(schName)) {
-							$(schName).html(schHTML);
-						} else {
-							$('#schedules tr:last').after(schHTML);
+				if (currSchedule !== "blank") {
+					if (currSchedule.MODE === "Schedule") {
+						// Schedule Event (if circuit used)
+						if (currSchedule.CIRCUIT !== 'NOT USED') {
+							$('#schedules tr:last').after(buildSchTime(currSchedule) + buildSchDays(currSchedule));
 						}
-					}
-				} else {
-					// EggTimer
+					} else {
+						// EggTimer Event (if circuit used)
+						if (currSchedule.CIRCUIT !== 'NOT USED') {
+							$('#eggtimers tr:last').after(buildEggTime(currSchedule));
+						}
+					}					
 				}
 			}
 		}
@@ -311,7 +341,7 @@ $(function () {
 	}
 
 	function showCircuit(data) {
-	for (var currCircuit of data) {
+		for (var currCircuit of data) {
 			if (currCircuit.hasOwnProperty('name')) {
 				if (currCircuit.name != "NOT USED") {
 					if (document.getElementById(currCircuit.name)) {
@@ -328,5 +358,11 @@ $(function () {
 				}
 			}
 		}
-	}		
+	}
+	
+	// Temporary Code - for developing / debugging EggTimers, Pumps ...
+	//var testEgg = '["blank",{"ID":1,"CIRCUIT":"POOL","CIRCUITNUM":6,"MODE":"Schedule","DURATION":"n/a","START_TIME":"9:25","END_TIME":"15:55","DAYS":"Sunday Monday "},{"ID":2,"CIRCUIT":"WtrFall 2","CIRCUITNUM":13,"MODE":"Schedule","DURATION":"n/a","START_TIME":"16:57","END_TIME":"17:0","DAYS":"Sunday "},{"ID":3,"CIRCUIT":"SPA","CIRCUITNUM":1,"MODE":"Egg Timer","DURATION":"4:0"},{"ID":4,"CIRCUIT":"POOL","CIRCUITNUM":6,"MODE":"Egg Timer","DURATION":"7:15"},{"ID":5,"CIRCUIT":"CLEANER","CIRCUITNUM":4,"MODE":"Egg Timer","DURATION":"4:0"},{"ID":6,"CIRCUIT":"Pool Low2","CIRCUITNUM":15,"MODE":"Schedule","DURATION":"n/a","START_TIME":"21:10","END_TIME":"23:55","DAYS":"Sunday Monday Tuesday Wednesday Thursday Friday Saturday "},{"ID":7,"CIRCUIT":"Pool Low2","CIRCUITNUM":15,"MODE":"Schedule","DURATION":"n/a","START_TIME":"0:5","END_TIME":"9:20","DAYS":"Sunday Monday Tuesday Wednesday Thursday Friday Saturday "},{"ID":8,"CIRCUIT":"SPA LIGHT","CIRCUITNUM":7,"MODE":"Egg Timer","DURATION":"2:0"},{"ID":9,"CIRCUIT":"JETS","CIRCUITNUM":2,"MODE":"Egg Timer","DURATION":"3:45"},{"ID":10,"CIRCUIT":"PATH LIGHTS","CIRCUITNUM":9,"MODE":"Egg Timer","DURATION":"4:15"},{"ID":11,"CIRCUIT":"SPILLWAY","CIRCUITNUM":11,"MODE":"Schedule","DURATION":"n/a","START_TIME":"13:0","END_TIME":"13:11","DAYS":"Sunday Monday Tuesday Wednesday Thursday Friday Saturday "},{"ID":12,"CIRCUIT":"WtrFall 1.5","CIRCUITNUM":5,"MODE":"Schedule","DURATION":"n/a","START_TIME":"13:20","END_TIME":"13:40","DAYS":"Sunday Tuesday Thursday "}]';
+	//var testPump = '["blank",{"pump":1,"time":"21:13","run":1,"mode":0,"drivestate":0,"watts":405,"rpm":1800,"ppc":0,"err":0,"timer":1,"duration":"durationnotset","currentprogram":"currentprognotset","program1rpm":"prg1notset","program2rpm":"prg2notset","program3rpm":"prg3notset","program4rpm":"prg4notset","remotecontrol":1,"power":1,"name":"Pump1"},{"pump":2,"time":"21:13","run":0,"mode":0,"drivestate":0,"watts":0,"rpm":0,"ppc":0,"err":0,"timer":0,"duration":"durationnotset","currentprogram":"currentprognotset","program1rpm":"prg1notset","program2rpm":"prg2notset","program3rpm":"prg3notset","program4rpm":"prg4notset","remotecontrol":1,"power":0,"name":"Pump2"}]';
+	//showSchedule(JSON.parse(testEgg));
+	
 });
