@@ -14,13 +14,15 @@ nodejs-Pentair is an application to communicate and control your Pentair compati
  Controllers:  Intellitouch, EasyTouch, Intermatic, SunTouch, IntellicomII
  Pumps: Intelliflow, older models
  Chlorinator: Intellichlor, Aqua-Rite and OEM brands
- Home Automation:  ISY.  (Soon to include Siri, Echo, more?) 
- 
+ Home Automation:  ISY.  (Soon to include Siri, Echo, more?)
+
+<img src="https://raw.githubusercontent.com/tagyoureit/tagyoureit.github.io/master/images/bootstrap.png?raw=true" height="300">
+
 ***
 
 ## Installation Instructions
 
-**This code requires a physical (RS485)[#module_nodejs-Pentair--RS485] adapter to work.**
+**This code requires a physical [RS485](#module_nodejs-Pentair--RS485) adapter to work.**
 
 ```
 npm install nodejs-Pentair
@@ -38,7 +40,7 @@ If you don't know anything about NodeJS, these directions might be helpful.
 
 ## Support
 
-For support you can open a [github issue](https://github.com/tagyoureit/nodejs-Pentair/issues/new), 
+For support you can open a [github issue](https://github.com/tagyoureit/nodejs-Pentair/issues/new),
 for discussions, designs, and clarifications, we recommend you join our [Gitter Chat room](https://gitter.im/pentair_pool/Lobby).
 
 ***
@@ -51,7 +53,7 @@ for discussions, designs, and clarifications, we recommend you join our [Gitter 
 
 ## Useful URL's included with the boring, basic, functional interface
 
-  -  Control standalone pumps: http://_your_machine_name_:3000/pump.html 
+  -  Control standalone pumps: http://_your_machine_name_:3000/pump.html
   -  Listen for specific messages: `http://_your_machine_name_:3000/debug.html`
 
 #### Technical notes:
@@ -62,7 +64,7 @@ for discussions, designs, and clarifications, we recommend you join our [Gitter 
 
 ##  REST Interface & Socket.IO
 
-  
+
  You can also call REST URI's like:  
  * Get circuit status: /circuit/# to get the status of circuit '#'
  * Toggle circuit status: /circuit/#/toggle to get the toggle circuit '#'
@@ -73,11 +75,11 @@ for discussions, designs, and clarifications, we recommend you join our [Gitter 
  * Set spa heat mode: /spaheat/mode/#  (0=off, 1=heater, 2=solar pref, 3=solar only)
  * Set pool heat setpoint: /poolheat/setpoint/#
  * Set pool heat mode: /poolheat/mode/# (0=off, 1=heater, 2=solar pref, 3=solar only)
- * Run pumps in stand-alone mode 
- 
+ * Run pumps in stand-alone mode
+
  ### Socket.IO
  You can use Sockets.IO  (see the "basic UI" example).  Valid sockets:
- 
+
 | Direction | Socket | Description |
 | --- | --- | --- |
 | To app | <code>toggleCircuit(equipment)</code> | toggles the variable `equipment` (as a circuit number)  |
@@ -100,34 +102,41 @@ for discussions, designs, and clarifications, we recommend you join our [Gitter 
 ## Config.JSON
 
 <a name="module_nodejs-Pentair--config"></a>
-  
+See below for descriptions
+
+```
 {
     "Equipment": {
-        "intellicom": 0,
+        "intellicom": 0,   
         "intellitouch": 1,
         "pumpOnly": 0,
+        "numberOfPumps": 2,
+        "chlorinator": 1,
         "ISYController": 0,
+        "appAddress": 33
 
-        "chlorinator": 0,
-        "numberOfPumps": 2
     },
     "Misc": {
-        "expressDir": "/public"
+          // "/bootstrap" for the nice UI, "/public" for a basic UI
+        "expressDir": "/bootstrap",
+        "expressPort": 3000
     },
     "Network": {
-        "netConnect": 1,
+          //netConnect enables remote debugging.  See other section
+        "netConnect": 0,
         "netHost": "raspberrypi",
-        "netPort": "9801"
+        "netPort": 9801
     },
     "Log": {
-        "loglevel": 1,
-        "logType": "debug",
+        "logType": "info",
         "logPumpMessages": 0,
         "logDuplicateMessages": 0,
         "logConsoleNotDecoded": 0,
-        "logConfigMessages": 1,
-        "logMessageDecoding": 1,
-        "logChlorinator": 0
+        "logConfigMessages": 0,
+        "logMessageDecoding": 0,
+        "logChlorinator": 0,
+        "logPacketWrites": 0,
+        "logPumpTimers": 0
     },
     "ISY": {
         "username": "blank",
@@ -149,6 +158,7 @@ for discussions, designs, and clarifications, we recommend you join our [Gitter 
     }
 }
 
+```
 
 ***
 
@@ -159,25 +169,30 @@ for discussions, designs, and clarifications, we recommend you join our [Gitter 
 For your pool equipment, choose the appropriate variable.  
 Only one of these should be 1 (true).  The other two should be 0 (false).
 
-#### ISY Controller
-1 (true), 0 (false)
-See below for ISY configuration.
+#### numberOfPumps
+1 = 1 pump, 2 = 2 pumps
+(This variable is only applicable with `pumpOnly=1`)
 
 #### Chlorinator
 1 = there is a chlorinator in your equipment, 0 = no chlorinator
 (This variable is only applicable with `pumpOnly=1`)
 
-#### numberOfPumps
-1 = 1 pump, 2 = 2 pumps
-(This variable is only applicable with `pumpOnly=1`)
+#### ISY Controller
+1 (true), 0 (false)
+See below for ISY configuration.
+
+#### appAddress
+The address on the serial bus that this app will use.
+The pumps don't seem to care what number you use, but Intellitouch won't respond unless this address is one of 32, 33, 34.
+
 
 ### Misc
 
 #### expressDir
-set to `/public` for the basic UI or `/bootstrap` for a nicer UI
+set to `/bootstrap` for the fancy UI or `/public` for a basic
 
 
-### Network 
+### Network
 For SOCAT functionality
         "netConnect": 1,
         "netHost": "raspberrypi",
@@ -186,9 +201,6 @@ For SOCAT functionality
 
 ### Log
 
-#### logLevel
-0 = fewer messages within each option below, 1 = more messages
-
 #### logType
 | --- | --- |
 | Error | Only output error messages |
@@ -196,7 +208,7 @@ For SOCAT functionality
 | **Info** | Output the above, plus information about circuit/status changes |
 | Debug | Output the above, plus debugging information |
 | Silly | Output the above, plus code-level troubleshooting messages |
-  
+
 #### logPumpMessages
 1 = show messages from the pump in the logs, 0 = hide
 
@@ -209,6 +221,24 @@ For SOCAT functionality
 #### logConfigMessages
 1 = log messages that relate to the configuration of the pool (from controllers), 0 = hide
 
+#### logChlorinator
+1 = log messages directly from the chlorinator, 0 = hide
+(If you have Intellitouch, status will be received from the controller directly)
+
+#### logPacketWrites
+1 = log debug messages about packet writes, 0 = hide
+
+#### logPumpTimers
+1 = log debug messages about pump timers, 0 = hide
+
+### ISY
+If you use ISY, put in your system information.
+
+#### Variables
+Any number of ISY variables can go here.  
+Format should be "currentPumpStatus[pump number].xyz": port #
+xyz is one of: number, time, run, mode, drivestate, watts, rpm, ppc, err, timer, duration, currentprogram, program1rpm, program2rpm, program3rpm, program4rpm, remotecontrol, power
+
 <a name="module_nodejs-Pentair--RS485"></a>
 
 ***
@@ -220,9 +250,11 @@ The inexpensive [JBTek](https://www.amazon.com/gp/product/B00NKAJGZM/ref=oh_aui_
 
 2.  Connect the DATA+ and DATA-.
 
-3.  To see if you are getting the proper communications from the bus, before you even try to run this program, run from your *nix command line ```od -x < /dev/ttyUSB0```.  Of course, you'll need to change the address of your RS-485 adapter if it isn't the same as mine (here and in the code).
+3.  To see if you are getting the proper communications from the bus, before you even try to run this program, run from your *nix command line
+```
+od -x < /dev/ttyUSB0```.  Of course, you'll need to change the address of your RS-485 adapter if it isn't the same as mine (here and in the code).
 
-*   You'll know you have the wires write when the output of this command looks like (you should see multiple repititions of ffa5ff): 
+*   You'll know you have the wires write when the output of this command looks like (you should see multiple repititions of ffa5ff):
 ```
 0002240 0000 0000 0000 0000 0000 ff00 ffff ffff
 0002260 **ffff 00ff a5ff** 0f0a 0210 161d 000c 0040
@@ -290,14 +322,15 @@ Msg# 25   What's Different?:  uom: ° Celsius --> ° Farenheit
 Orig:                15, 16,  2, 29,  8, 57,  0, 64,  0,  0,  0,  0,  0,  4,  3,  0, 64,  4, 26, 26, 32,  0, 18, 18,  0,  0,  3,  0,  0,170,223,  0, 13,  3,202
  New:                15, 16,  2, 29,  8, 57,  0, 64,  0,  0,  0,  0,  0,  0,  3,  0, 64,  4, 26, 26, 32,  0, 18, 18,  0,  0,  3,  0,  0,170,186,  0, 13,  3,161
 Diff:                                                                     *                                                                   *            
- <-- EQUIPMENT 
 ```
-An example of pump communication.  To show these, change logPumpMessages from 0 to 1. 
+
+An example of pump communication.  To show these, change logPumpMessages from 0 to 1.
+
 ```
---> PUMP  Pump1 
- Pump Status:  {"pump":"Pump1","power":1,"watts":170,"rpm":1250} 
- Full Payload:  [16,96,7,15,10,0,0,0,170,4,226,0,0,0,0,0,1,22,14,2,234] 
-<-- PUMP  Pump1 
+--> PUMP  Pump1
+ Pump Status:  {"pump":"Pump1","power":1,"watts":170,"rpm":1250}
+ Full Payload:  [16,96,7,15,10,0,0,0,170,4,226,0,0,0,0,0,1,22,14,2,234]
+<-- PUMP  Pump1
 ```
 
 
@@ -352,7 +385,7 @@ In the <code>["network"](#module_nodejs-Pentair--config)</code> section, set `ne
 
 * No duplicate messages!  I realized the way my code was running that I was parsing the same message multiple times.  The code now slices the buffer after each message that is parsed.  
 * Logging.  The program now uses Winston to have different logs.  The Pentair bus has a LOT of messages.  All the output, debug messages, etc, are being saved to 'pentair_full_dump.log' and successful messages are being logged to 'pentair_info.log'.  I will update these names, but if you want less logging, set the transports to ```level: 'error'``` from 'level: 'silly'.  It's just silly how much it logs at this level!
-* Decoding.  The code is getting pretty good at understanding the basic message types.  There are some that I know and still have to decode; some that I know mostly what they do, and some that are still mysteries!  Please help here. 
+* Decoding.  The code is getting pretty good at understanding the basic message types.  There are some that I know and still have to decode; some that I know mostly what they do, and some that are still mysteries!  Please help here.
 
 0.0.3 - More bug fixes.  Now detects heat mode changes for both pool & spa.  Logging is set to very low (console), but still nearly everything will get written to the logs (see 0.0.2 notes). I've noticed that if any material change is made to the configuration (temp, heat mode, circuit names, etc) Pentair will spit out about 40 lines of configuration.  Reading this is a little challenging but I have figured out a few things.
 
@@ -360,7 +393,7 @@ In the <code>["network"](#module_nodejs-Pentair--config)</code> section, set `ne
 
 0.0.5 - Added a very simple websocket resource (http://server:3000) which will display the output from the pool.  Will make it pretty, and interactive, shortly.
 
-0.0.6 - 
+0.0.6 -
 * Circuits, custom names, and schedules can now be read from the configuration broadcast by the pool.  However, you need to force the configuration to be re-broadcast by changing the heat set point.  This will change in future versions when successful writing to the serial bus is included.
 * http://_your_machine_name_:3000 to see a basic UI (websockets with persistent updates on status)
 * http://_your_machine_name_:3000/debug.html for a way to listen for specific messages
@@ -386,7 +419,7 @@ In the <code>["network"](#module_nodejs-Pentair--config)</code> section, set `ne
 * Updated UI to reflect new Socket calls (you can now change the heat mode and pool temp).  
 * Updated SerialPort to 4.0.1.
 
-0.1.0 - 
+0.1.0 -
 * Something weird happened and my Intellitouch stopped responding to packets starting with 255,0,255,165,10,DEST,SRC...  The 10 changed to a 16.  I don't know why, but it drove me crazy for 5 days.  Now the app dynamically reads this packet.
 * Much more information debugged for my friends over at CocoonTech.  
 * Bug fixes galore.  More clear logging messages.  
@@ -395,12 +428,12 @@ In the <code>["network"](#module_nodejs-Pentair--config)</code> section, set `ne
 * For those of you with stand-alone pumps you can now control them!
 * Chlorinators are now understood
 * Lot of rework on understanding and decoding packets and their responses in general
-* Make sure you set the variables properly as multiple configurations are now supported. 
+* Make sure you set the variables properly as multiple configurations are now supported.
 * Stand alone pump mode!  New pump.html for the pump(s) only configuration
 * Write packets now controlled via a timer (MUCH faster!)
 * Many more changes!
 
-1.0.0 - 
+1.0.0 -
  * Much of the code reworked and refactored
  * Added Bootstrap UI by @arrmo
  * Better standalone pump control (@bluemantwo was super-helpful here, too!)
