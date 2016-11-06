@@ -245,6 +245,11 @@ $(function () {
 			}
 		}
 	});
+
+	// Button Handling: Debug Log => Clear!
+	$('#debugClear').click(function () {
+		$('#txtDebug').html('<b>DEBUG LOG ... <br />');
+	})
 	
 	// Socket Events (Emit)
 	function setHeatSetPoint(equip, change) {
