@@ -6,7 +6,7 @@
 		"features": { "state": "visible" },
 		"pump": { "state": "visible" },
 		"schedule": { "state": "visible" },
-		"eggtimer": { "state": "visible" },
+		"eggtimer": { "state": "hidden" },
 		"debug": { "state": "hidden" }
 	},
 	
@@ -21,6 +21,15 @@
 		"spaSetpointPlusOne": [{"equip": "spa" }, {"adjust": 1 }],
 		"spaHeatModeDown": {"heatModeDirn": -1},
 		"spaHeatModeUp": {"heatModeDirn": 1}
+	},
+	
+	"pumpParams" : {
+		"name": { "title": "Parameter", "type": "th" },
+		"watts": { "title": "Watts", "type": "td" },
+		"rpm": { "title": "RPM", "type": "td" },
+		"err": { "title": "Error", "type": "td" },
+		"drivestate": { "title": "Drive State", "type": "td" },
+		"run": { "title": "Run Mode", "type": "td" }
 	},
 	
 	"logLevels" : {

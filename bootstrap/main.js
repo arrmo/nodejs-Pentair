@@ -1,8 +1,6 @@
-/*
-Configure Bootstrap Panels, in 2 steps ...
-   1) Enable / Disable panels as configured (in json file)
-   2) Load Panel Sequence from Storage (as saved from last update)
-*/
+//Configure Bootstrap Panels, in 2 steps ...
+//   1) Enable / Disable panels as configured (in json file)
+//   2) Load Panel Sequence from Storage (as saved from last update)
 function configPanels(jsonPanel) {
 	//Enable / Disable panels as configured (in json file)
 	for (var currPanel in jsonPanel) {
@@ -43,9 +41,7 @@ function configPanels(jsonPanel) {
 	}	
 };
 
-/*
-Routine to recursively parse Equipment Configuration, setting associated data for DOM elements 
-*/
+//Routine to recursively parse Equipment Configuration, setting associated data for DOM elements 
 function dataAssociate(strControl, varJSON) {
 	for (var currProperty in varJSON) {
 		if (typeof varJSON[currProperty] !== "object") {
@@ -187,6 +183,8 @@ $(function () {
 		configPanels(json.panelState);
 		// Call routine to recursively parse Equipment Configuration, setting associated data for DOM elements 
 		dataAssociate("base", json.equipConfig);
+		// Log Pump Parameters (rows to output) => no var in front, so global
+		pumpParams = json.pumpParams;
 		// Log test colorization => no var in front, so global
 		logColors = json.logLevels;
 	});
@@ -288,11 +286,6 @@ $(function () {
 	})	
 
 	// Show Information (from received socket.io)
-	function showPump(data) {
-		$('#pump1').html(data[1].name + '<br>Watts: ' + data[1].watts + '<br>RPM: ' + data[1].rpm + '<br>Error: ' + data[1].err + '<br>Mode: ' + data[1].mode + '<br>Drive state: ' + data[1].drivestate + '<br>Run Mode: ' + data[1].run)
-		$('#pump2').html(data[1].name + '<br>Watts: ' + data[2].watts + '<br>RPM: ' + data[2].rpm + '<br>Error: ' + data[2].err + '<br>Mode: ' + data[2].mode + '<br>Drive state: ' + data[2].drivestate + '<br>Run Mode: ' + data[2].run)
-	}
-
 	function showConfig(data) {
 		if (data != null) {
 			$('#currTime').html(data.time);
@@ -302,32 +295,6 @@ $(function () {
 			$('#stateHeater').html(data.HEATER_ACTIVE);
 			$('#poolCurrentTemp').html(data.poolTemp);
 			$('#spaCurrentTemp').html(data.spaTemp);
-		}
-	}
-
-	function showSchedule(data) {
-		// Schedule/EggTimer to be updated => Wipe, then (Re)Build Below
-		$('#schedules tr').not('tr:first').remove();
-		$('#eggtimers tr').not('tr:first').remove();
-		// And (Re)Build Schedule and EggTimer tables / panels
-		for (var currSchedule of data) {
-			if (currSchedule == null) {
-				//console.log("Schedule: Dataset empty.")
-			} else {
-				if (currSchedule !== "blank") {
-					if (currSchedule.MODE === "Schedule") {
-						// Schedule Event (if circuit used)
-						if (currSchedule.CIRCUIT !== 'NOT USED') {
-							$('#schedules tr:last').after(buildSchTime(currSchedule) + buildSchDays(currSchedule));
-						}
-					} else {
-						// EggTimer Event (if circuit used)
-						if (currSchedule.CIRCUIT !== 'NOT USED') {
-							$('#eggtimers tr:last').after(buildEggTime(currSchedule));
-						}
-					}					
-				}
-			}
 		}
 	}
 
@@ -359,10 +326,75 @@ $(function () {
 			}
 		}
 	}
+
+	function showPump(data) {
+		// Build Pump table / panel
+		for (var currPump of data) {
+			if (currPump == null) {
+				//console.log("Pump: Dataset empty.")
+			} else {
+				if (currPump !== "blank") {
+					// New Pump Data (Object) ... make sure pumpParams has been read / processed (i.e. is available)
+					if (typeof(pumpParams) !== "undefined") {
+						if (typeof(currPump["name"]) !== "undefined") {
+							// Determine if we need to add a column (new pump), or replace data - and find the target column if needed
+							var rowHeader = $('#pumps tr:first:contains(' + currPump["name"] + ')');
+							var colAppend = rowHeader.length ? false : true;
+							if (colAppend === false) {
+								var colTarget = -1;
+								$('th', rowHeader).each(function(index){
+									if ($(this).text() === currPump["name"])
+										colTarget = index;
+								});
+							}
+							// Cycle through Pump Parameters
+							for (var currPumpParam in pumpParams) {					
+								currParamSet = pumpParams[currPumpParam];
+								// Find Target Row
+								var rowTarget = $('#pumps tr:contains("' + currParamSet["title"] + '")');
+								// And finally, append or replace data
+								if (colAppend == true) {
+									// Build Cell, Append
+									strCell = '<' + currParamSet["type"] + '>' + currPump[currPumpParam] + '</' + currParamSet["type"] + '>'
+									rowTarget.append(strCell);
+								} else {
+									// Replace Data, target Row, Column
+									$('td', rowTarget).each(function(index){
+										if (index === colTarget)
+											$(this).html(currPump[currPumpParam]);
+									});
+								}
+							}					
+						}
+					}
+				}
+			}
+		}
+	}
 	
-	// Temporary Code - for developing / debugging EggTimers, Pumps ...
-	//var testEgg = '["blank",{"ID":1,"CIRCUIT":"POOL","CIRCUITNUM":6,"MODE":"Schedule","DURATION":"n/a","START_TIME":"9:25","END_TIME":"15:55","DAYS":"Sunday Monday "},{"ID":2,"CIRCUIT":"WtrFall 2","CIRCUITNUM":13,"MODE":"Schedule","DURATION":"n/a","START_TIME":"16:57","END_TIME":"17:0","DAYS":"Sunday "},{"ID":3,"CIRCUIT":"SPA","CIRCUITNUM":1,"MODE":"Egg Timer","DURATION":"4:0"},{"ID":4,"CIRCUIT":"POOL","CIRCUITNUM":6,"MODE":"Egg Timer","DURATION":"7:15"},{"ID":5,"CIRCUIT":"CLEANER","CIRCUITNUM":4,"MODE":"Egg Timer","DURATION":"4:0"},{"ID":6,"CIRCUIT":"Pool Low2","CIRCUITNUM":15,"MODE":"Schedule","DURATION":"n/a","START_TIME":"21:10","END_TIME":"23:55","DAYS":"Sunday Monday Tuesday Wednesday Thursday Friday Saturday "},{"ID":7,"CIRCUIT":"Pool Low2","CIRCUITNUM":15,"MODE":"Schedule","DURATION":"n/a","START_TIME":"0:5","END_TIME":"9:20","DAYS":"Sunday Monday Tuesday Wednesday Thursday Friday Saturday "},{"ID":8,"CIRCUIT":"SPA LIGHT","CIRCUITNUM":7,"MODE":"Egg Timer","DURATION":"2:0"},{"ID":9,"CIRCUIT":"JETS","CIRCUITNUM":2,"MODE":"Egg Timer","DURATION":"3:45"},{"ID":10,"CIRCUIT":"PATH LIGHTS","CIRCUITNUM":9,"MODE":"Egg Timer","DURATION":"4:15"},{"ID":11,"CIRCUIT":"SPILLWAY","CIRCUITNUM":11,"MODE":"Schedule","DURATION":"n/a","START_TIME":"13:0","END_TIME":"13:11","DAYS":"Sunday Monday Tuesday Wednesday Thursday Friday Saturday "},{"ID":12,"CIRCUIT":"WtrFall 1.5","CIRCUITNUM":5,"MODE":"Schedule","DURATION":"n/a","START_TIME":"13:20","END_TIME":"13:40","DAYS":"Sunday Tuesday Thursday "}]';
-	//var testPump = '["blank",{"pump":1,"time":"21:13","run":1,"mode":0,"drivestate":0,"watts":405,"rpm":1800,"ppc":0,"err":0,"timer":1,"duration":"durationnotset","currentprogram":"currentprognotset","program1rpm":"prg1notset","program2rpm":"prg2notset","program3rpm":"prg3notset","program4rpm":"prg4notset","remotecontrol":1,"power":1,"name":"Pump1"},{"pump":2,"time":"21:13","run":0,"mode":0,"drivestate":0,"watts":0,"rpm":0,"ppc":0,"err":0,"timer":0,"duration":"durationnotset","currentprogram":"currentprognotset","program1rpm":"prg1notset","program2rpm":"prg2notset","program3rpm":"prg3notset","program4rpm":"prg4notset","remotecontrol":1,"power":0,"name":"Pump2"}]';
-	//showSchedule(JSON.parse(testEgg));
-	
+	function showSchedule(data) {
+		// Schedule/EggTimer to be updated => Wipe, then (Re)Build Below
+		$('#schedules tr').not('tr:first').remove();
+		$('#eggtimers tr').not('tr:first').remove();
+		// And (Re)Build Schedule and EggTimer tables / panels
+		for (var currSchedule of data) {
+			if (currSchedule == null) {
+				//console.log("Schedule: Dataset empty.")
+			} else {
+				if (currSchedule !== "blank") {
+					if (currSchedule.MODE === "Schedule") {
+						// Schedule Event (if circuit used)
+						if (currSchedule.CIRCUIT !== 'NOT USED') {
+							$('#schedules tr:last').after(buildSchTime(currSchedule) + buildSchDays(currSchedule));
+						}
+					} else {
+						// EggTimer Event (if circuit used)
+						if (currSchedule.CIRCUIT !== 'NOT USED') {
+							$('#eggtimers tr:last').after(buildEggTime(currSchedule));
+						}
+					}					
+				}
+			}
+		}
+	}
 });
