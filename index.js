@@ -7,7 +7,7 @@ console.log('\033[2J'); //clear the console
 var dateFormat = require('dateformat');
 var Dequeue = require('dequeue')
 
-var version = '1.0.1 API alpha 1'
+var version = '1.0.1 API alpha 2'
 
 const events = require('events')
 
@@ -2870,9 +2870,19 @@ function changeHeatSetPoint(equip, change, src) {
 
 function pumpCommand(equip, program, value, duration) {
     _equip = parseInt(equip)
-    _value = parseInt(value)
-    _program = parseInt(program)
-    _duration = parseInt(duration)
+    if (value != null) {
+        _value = parseInt(value)
+    }
+    if (duration != null) {
+        _duration = parseInt(duration)
+    }
+
+    //program should be one of 'on', 'off' or 1,2,3,4
+    if (program == 'on' || program == 'off') {
+        _program = program
+    } else {
+        _program = parseInt(program)
+    }
 
     var pump;
     if (_equip === 1) {
@@ -2885,9 +2895,9 @@ function pumpCommand(equip, program, value, duration) {
     var runPrg;
     var speed;
     if (logApi) logger.verbose('Sending the following pump commands to pump %s:', _equip)
-    if (_program === 0 || _program === 1) {
+    if (_program === 'off' || _program === 'on') {
         if (logApi) logger.info('User request to set pump %s to %s', _equip, _program);
-        if (_program === 0) {
+        if (_program === 'off') {
             setPrg = [6, 1, 4];
 
             if (_equip === 1) {
@@ -2942,7 +2952,7 @@ function pumpCommand(equip, program, value, duration) {
         queuePacket(setProgramPacket);
     }
 
-    if (_program !== 0 && _program !== 1) {
+    if (_program >= 1 && _program <= 4) {
         //run program packet
         var runProgramPacket = [165, 0, pump, 16];
         Array.prototype.push.apply(runProgramPacket, runPrg);
@@ -3175,6 +3185,27 @@ app.get('/sendthispacket/:packet', function(req, res) {
     }
     queuePacket(packet);
     var response = 'Request to send packet ' + packet + ' sent.'
+    res.send(response)
+})
+
+
+app.get('/pumpCommand/:equip/:program', function(req, res) {
+    var _equip = req.params.equip
+    var _program = req.params.program
+
+
+    var response = 'REST API pumpCommand variables - equip: ' + _equip + ', program: ' + _program + ', value: null, duration: null'
+    pumpCommand(_equip, _program, null, null)
+    res.send(response)
+})
+
+app.get('/pumpCommand/:equip/:program/:value1', function(req, res) {
+    var _equip = req.params.equip
+    var _program = req.params.program
+    var _value = req.params.value1
+
+    var response = 'REST API pumpCommand variables - equip: ' + _equip + ', program: ' + _program + ', value: ' + _value + ', duration: null'
+    pumpCommand(_equip, _program, _value, null)
     res.send(response)
 })
 
