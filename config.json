@@ -1,8 +1,8 @@
 {
     "Equipment": {
         "intellicom": 0,
-        "intellitouch": 1,
-        "pumpOnly": 0,
+        "intellitouch": 0,
+        "pumpOnly": 1,
         "numberOfPumps": 2,
         "chlorinator": 1,
         "ISYController": 0,
@@ -10,7 +10,7 @@
 
     },
     "Misc": {
-        "expressDir": "/bootstrap",
+        "expressDir": "/public",
         "expressPort": 3000,
         "expressTransport": "http"
     },
@@ -29,7 +29,8 @@
         "logMessageDecoding": 0,
         "logChlorinator": 0,
         "logPacketWrites": 0,
-        "logPumpTimers": 0
+        "logPumpTimers": 0,
+        "logApi": 1
     },
     "ISY": {
         "username": "blank",

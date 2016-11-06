@@ -47,7 +47,7 @@ $(function () {
         //alert('pu1pr1set clicked with speed: ' + $('#pump1program1setspeed').val());
         pumpCommand(1, 1,  $('#pump1program1setspeed').val(), $('#pump1duration').val());
     })
-    
+
     $('#pu1pr2run').click(function () {
         //alert('pu1pr1set clicked with speed: ' + $('#pump1program1setspeed').val());
         pumpCommand(1, 2,  $('#pump1program2setspeed').val(), $('#pump1duration').val());
@@ -60,12 +60,12 @@ $(function () {
         //alert('pu1pr1set clicked with speed: ' + $('#pump1program1setspeed').val());
         pumpCommand(1, 4,  $('#pump1program4setspeed').val(), $('#pump1duration').val());
     })
-    
+
     $('#pu2pr1run').click(function () {
         //alert('pu1pr1set clicked with speed: ' + $('#pump1program1setspeed').val());
         pumpCommand(2, 1,  $('#pump2program1setspeed').val(), $('#pump2duration').val());
     })
-    
+
     $('#pu2pr2run').click(function () {
         //alert('pu1pr1set clicked with speed: ' + $('#pump1program1setspeed').val());
         pumpCommand(2, 2,  $('#pump2program2setspeed').val(), $('#pump2duration').val());
@@ -78,26 +78,26 @@ $(function () {
         //alert('pu1pr1set clicked with speed: ' + $('#pump1program1setspeed').val());
         pumpCommand(2, 4,  $('#pump2program4setspeed').val(), $('#pump2duration').val());
     })
-    
+
 
     $('#pu1off').click(function () {
         //alert('pu1off clicked');
-        pumpCommand(1, 'off',0);
+        pumpCommand(1,0,0);
     })
 
     $('#pu2off').click(function () {
 
-        pumpCommand(2, 'off', 0)
+        pumpCommand(2,0, 0)
     })
-    
+
         $('#pu1on').click(function () {
         //alert('pu1off clicked');
-        pumpCommand(1, 'on',0);
+        pumpCommand(1, 1,0);
     })
-        
+
             $('#pu2on').click(function () {
         //alert('pu1off clicked');
-        pumpCommand(1, 'on',0);
+        pumpCommand(1, 1,0);
     })
 
     function pumpCommand(equip, program, value, duration) {
@@ -109,12 +109,12 @@ $(function () {
         //$pump.append(JSON.stringify(data[1]))
         //$pump.append(JSON.stringify(data[2]))
 
-        $('#pump1').html(data[1].name 
-                         + '<br>Watts: ' + data[1].watts 
-                         + '<br>RPM: ' + data[1].rpm 
-                         + '<br>Error: ' + data[1].err 
-                         + '<br>Mode: ' + data[1].mode 
-                         + '<br>Drive state: ' + data[1].drivestate 
+        $('#pump1').html(data[1].name
+                         + '<br>Watts: ' + data[1].watts
+                         + '<br>RPM: ' + data[1].rpm
+                         + '<br>Error: ' + data[1].err
+                         + '<br>Mode: ' + data[1].mode
+                         + '<br>Drive state: ' + data[1].drivestate
                          + '<br>Run Mode: ' + data[1].run
                         + '<br>PPC: ' + data[1].ppc
                         + '<br>Timer (Initial value): '  + data[1].timer
@@ -125,12 +125,12 @@ $(function () {
                         + '<br>Program 4: ' + data[1].program4rpm + ' rpm'
                         + '<br>Remote Control: ' + data[1].remotecontrol
                         + '<br>Power: ' + data[1].power)
-        $('#pump2').html(data[2].name 
-                         + '<br>Watts: ' + data[2].watts 
-                         + '<br>RPM: ' + data[2].rpm 
-                         + '<br>Error: ' + data[2].err 
-                         + '<br>Mode: ' + data[2].mode 
-                         + '<br>Drive state: ' + data[2].drivestate 
+        $('#pump2').html(data[2].name
+                         + '<br>Watts: ' + data[2].watts
+                         + '<br>RPM: ' + data[2].rpm
+                         + '<br>Error: ' + data[2].err
+                         + '<br>Mode: ' + data[2].mode
+                         + '<br>Drive state: ' + data[2].drivestate
                          + '<br>Run Mode: ' + data[2].run
                         + '<br>PPC: ' + data[2].ppc
                         + '<br>Timer (Initial value): ' + data[2].timer
