@@ -20,7 +20,7 @@
         "netPort": 9801
     },
     "Log": {
-        "logType": "info",
+        "logType": "debug",
         "logPumpMessages": 0,
         "logChlorinator": 0,
         "logDuplicateMessages": 0,
