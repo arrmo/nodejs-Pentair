@@ -1032,265 +1032,265 @@ function decode(data, counter, packetType) {
                             logger.info('Msg# %s   Discovered initial system settings: ', counter, status)
                             logger.verbose('\n ', decodeHelper.printStatus(data));
 
-                                //NOTE:  Commented this out because we only want to display the circuit discovery info when we have both the circuit names and status
-                                /*var circuitStr = '';
-                                //logger.info('Msg# %s  Initial circuits status discovered', counter)
+                            //NOTE:  Commented this out because we only want to display the circuit discovery info when we have both the circuit names and status
+                            /*var circuitStr = '';
+                            //logger.info('Msg# %s  Initial circuits status discovered', counter)
+                            for (var i = 1; i <= 20; i++) {
+                                if (circuitArrObj[i].name != undefined) {
+                                    circuitStr += circuitArrObj[i].name + " status: "
+                                    circuitStr += circuitArrObj[i].status + '\n'
+                                    logger.info('Msg# %s: Circuit states discovered: \n %s', counter, circuitStr)
+                                }
+                            }*/
+
+
+
+                        } else {
+
+                            //now, let's output what is different between the packet and stored packets
+                            if (logConfigMessages) {
+                                //what's different (overall) with the status packet
+                                logger.verbose('-->EQUIPMENT Msg# %s   \n', counter)
+                                    //this will output the difference between currentStatusByte and data
+                                logger.verbose('Msg# %s: \n', counter, decodeHelper.printStatus(currentStatusBytes, data));
+                                currentWhatsDifferent = currentStatus.whatsDifferent(status);
+                                if (currentWhatsDifferent != "Nothing!") {
+                                    logger.verbose('Msg# %s   System Status changed: %s', counter, currentWhatsDifferent)
+                                }
+
+
+                                //What's different with the circuit status?
+                                //THE LOOP IS BECAUSE THERE IS A BUG IN THE RECURSIVE LOOP.  It won't display the output.  Need to fix for objects embedded inside an array.
+                                var results;
                                 for (var i = 1; i <= 20; i++) {
-                                    if (circuitArrObj[i].name != undefined) {
-                                        circuitStr += circuitArrObj[i].name + " status: "
-                                        circuitStr += circuitArrObj[i].status + '\n'
-                                        logger.info('Msg# %s: Circuit states discovered: \n %s', counter, circuitStr)
-                                    }
-                                }*/
-
-
-
-                            } else {
-
-                                //now, let's output what is different between the packet and stored packets
-                                if (logConfigMessages) {
-                                    //what's different (overall) with the status packet
-                                    logger.verbose('-->EQUIPMENT Msg# %s   \n', counter)
-                                        //this will output the difference between currentStatusByte and data
-                                    logger.verbose('Msg# %s: \n', counter, decodeHelper.printStatus(currentStatusBytes, data));
-                                    currentWhatsDifferent = currentStatus.whatsDifferent(status);
-                                    if (currentWhatsDifferent != "Nothing!") {
-                                        logger.verbose('Msg# %s   System Status changed: %s', counter, currentWhatsDifferent)
-                                    }
-
-
-                                    //What's different with the circuit status?
-                                    //THE LOOP IS BECAUSE THERE IS A BUG IN THE RECURSIVE LOOP.  It won't display the output.  Need to fix for objects embedded inside an array.
-                                    var results;
-                                    for (var i = 1; i <= 20; i++) {
-                                        if (currentCircuitArrObj[i].status != undefined) {
-                                            results = currentCircuitArrObj[i].whatsDifferent(circuitArrObj[i]);
-                                            if (!(results == "Nothing!" || currentCircuitArrObj[i].name == undefined)) {
-                                                logger.verbose('Msg# %s   Circuit %s change:  %s', counter, circuitArrObj[i].name, results)
-                                            }
+                                    if (currentCircuitArrObj[i].status != undefined) {
+                                        results = currentCircuitArrObj[i].whatsDifferent(circuitArrObj[i]);
+                                        if (!(results == "Nothing!" || currentCircuitArrObj[i].name == undefined)) {
+                                            logger.verbose('Msg# %s   Circuit %s change:  %s', counter, circuitArrObj[i].name, results)
                                         }
                                     }
                                 }
                             }
-
-                            //and finally assign the temporary variables to the permanent one
-                            currentStatus = JSON.parse(JSON.stringify(status));
-                            currentStatusBytes = JSON.parse(JSON.stringify(data));
-                            currentCircuitArrObj = JSON.parse(JSON.stringify(circuitArrObj));
-
-
-                            //and finally emit the packets
-                            emit('config')
-                            emit('circuit')
-
-                        } else {
-                            if (logDuplicateMessages)
-                                logger.debug('Msg# %s   Duplicate broadcast.', counter)
                         }
 
-                        decoded = true;
-                        break;
+                        //and finally assign the temporary variables to the permanent one
+                        currentStatus = JSON.parse(JSON.stringify(status));
+                        currentStatusBytes = JSON.parse(JSON.stringify(data));
+                        currentCircuitArrObj = JSON.parse(JSON.stringify(circuitArrObj));
+
+
+                        //and finally emit the packets
+                        emit('config')
+                        emit('circuit')
+
+                    } else {
+                        if (logDuplicateMessages)
+                            logger.debug('Msg# %s   Duplicate broadcast.', counter)
                     }
 
-
-        case 7:
-
-            //Send request/response for pump status
-            {
-                var pumpNum;
-                if (data[packetFields.FROM] == 96 || data[packetFields.DEST] == 96) {
-                    pumpNum = 1
-                } else {
-                    pumpNum = 2
+                    decoded = true;
+                    break;
                 }
 
-                //var pumpname = (data[packetFields.FROM]).toString(); //returns 96 (pump1) or 97 (pump2)
-                //time returned in HH:MM (24 hour)  <-- need to clean this up so we don't get times like 5:3
 
-                var pumpStatus;
-                //pump status has not been copied to currentPumpStatus yet
-                //if (currentPumpStatus[pumpNum].name == undefined) {
-                //    pumpStatus = new pump();
-                //} else {
-                pumpStatus = JSON.parse(JSON.stringify(currentPumpStatus[pumpNum]));
-                pumpStatus.name = ctrlString[pumpNum + 95];
-                //}
+            case 7:
 
-
-                if (data[packetFields.FROM] == 16) //Request of status from Main
+                //Send request/response for pump status
                 {
-                    if (logPumpMessages) {
-                        logger.verbose('Msg# %s   Main asking pump %s for status: %s', counter, ctrlString[data[packetFields.DEST]], JSON.stringify(data));
+                    var pumpNum;
+                    if (data[packetFields.FROM] == 96 || data[packetFields.DEST] == 96) {
+                        pumpNum = 1
+                    } else {
+                        pumpNum = 2
                     }
-                } else //Response to request for status
-                {
 
-
-                    //TODO: make this code the same (one function?) as coming from the controller
-
-                    pumpStatus.pump = pumpNum;
-                    var pumpname = (data[packetFields.FROM]).toString(); //returns 96 (pump1) or 97 (pump2)
+                    //var pumpname = (data[packetFields.FROM]).toString(); //returns 96 (pump1) or 97 (pump2)
                     //time returned in HH:MM (24 hour)  <-- need to clean this up so we don't get times like 5:3
 
-                    pumpStatus.time = data[pumpPacketFields.HOUR] + ':' + data[pumpPacketFields.MIN];
-                    pumpStatus.run = data[pumpPacketFields.CMD]
-                    pumpStatus.name = ctrlString[pumpname];
-                    pumpStatus.mode = data[pumpPacketFields.MODE]
-                    pumpStatus.drivestate = data[pumpPacketFields.DRIVESTATE]
-                    pumpStatus.watts = (data[pumpPacketFields.WATTSH] * 256) + data[pumpPacketFields.WATTSL]
-                    pumpStatus.rpm = (data[pumpPacketFields.RPMH] * 256) + data[pumpPacketFields.RPML]
-                    pumpStatus.ppc = data[pumpPacketFields.PPC]
-                    pumpStatus.err = data[pumpPacketFields.ERR]
-                    pumpStatus.timer = data[pumpPacketFields.TIMER]
-                        //pumpStatus.packet = data;
+                    var pumpStatus;
+                    //pump status has not been copied to currentPumpStatus yet
+                    //if (currentPumpStatus[pumpNum].name == undefined) {
+                    //    pumpStatus = new pump();
+                    //} else {
+                    pumpStatus = JSON.parse(JSON.stringify(currentPumpStatus[pumpNum]));
+                    pumpStatus.name = ctrlString[pumpNum + 95];
+                    //}
 
-                    if (logPumpMessages)
-                        logger.debug('Msg# %s  %s Status: ', counter, pumpStatus.name, JSON.stringify(pumpStatus), data);
-                    //if (logPumpMessages) logger.silly('currentPumpStatusPacket', currentPumpStatusPacket)
 
-                    if (pumpNum == 1 || pumpNum == 2) {
-
-                        //TODO - I don't think the following works...
-                        if (JSON.stringify(currentPumpStatus[status.pump]).equals(JSON.stringify(status))) {
-
-                            if (logPumpMessages)
-                                logger.debug('Msg# %s   Pump %s status has not changed: ', counter, status.pump, data)
-                        } else {
-                            var moreThanFive = 0
-                            if (logPumpMessages) {
-                                if ((Math.abs((pumpStatus.watts - currentPumpStatus[pumpNum].watts) / pumpStatus.watts)) > .05) {
-                                    //logger.error('pumpnum.watts:', JSON.stringify(currentPumpStatus), currentPumpStatus[pumpNum].watts)
-                                    logger.info('Msg# %s   Pump %s watts changed >5%: %s --> %s \n', counter, pumpStatus.pump, currentPumpStatus[pumpNum].watts, pumpStatus.watts)
-                                    moreThanFive = 1;
-                                }
-                                //logger.error('2 what\'s different: \n %s \n %s', JSON.stringify(pumpStatus), JSON.stringify(currentPumpStatus))
-                                if (logPumpMessages)
-                                    logger.verbose('Msg# %s   Pump %s status changed: %s \n', counter, pumpStatus.pump, currentPumpStatus[pumpNum].whatsDifferent(pumpStatus));
-                            }
-
-                            //if we don't have a previous value for .watts than it should be the first time we are here and let's emit the pump status
-                            if ((currentPumpStatus[pumpNum].watts).toLowerCase.indexOf('notset') >= 0) {
-                                emit('pump');
-                            }
-                            currentPumpStatus[pumpNum] = pumpStatus;
-                            if (moreThanFive) {
-                                emit('pump');
-                            }
-
+                    if (data[packetFields.FROM] == 16) //Request of status from Main
+                    {
+                        if (logPumpMessages) {
+                            logger.verbose('Msg# %s   Main asking pump %s for status: %s', counter, ctrlString[data[packetFields.DEST]], JSON.stringify(data));
                         }
-                    }
-                }
-                decoded = true;
-                break;
-            }
-        case 8: //Broadcast current heat set point and mode
-            {
-                //   0 1  2  3 4  5  6 7   8  9  19 11 12 13  14 15 16 17 18 19  20
-                //[165,x,15,16,8,13,75,75,64,87,101,11,0,  0 ,62 ,0 ,0 ,0 ,0 ,2,190]
-                //function heatObj(poolSetPoint, poolHeatMode, spaSetPoint, spaHeatMode)
-
-
-                var heat = new Heat(data[9], data[11] & 3, data[10], (data[11] & 12) >> 2)
-
-
-
-                if (logConfigMessages) {
-                    logger.silly('heat status packet object: %s  data: %s  currentHeat: %s', JSON.stringify(heat), data, currentHeat == undefined ? "Not set yet" : JSON.stringify(currentHeat));
-                }
-                if (heat.poolSetPoint != undefined) //invalid packet?
-                {
-                    if (currentHeat.poolSetPoint == undefined) {
-                        currentHeat = JSON.parse(JSON.stringify(heat))
-                        if (logConfigMessages)
-                            logger.info('Msg# %s   Pool/Spa heat set point discovered:  \n  Pool heat mode: %s @ %s degrees \n  Spa heat mode: %s at %s degrees', counter, heatModeStr[currentHeat.poolHeatMode], currentHeat.poolSetPoint, heatModeStr[currentHeat.spaHeatMode], currentHeat.spaSetPoint);
-
-                        emit('heat');
-                    } else {
-
-                        if (currentHeat.equals(heat)) {
-                            logger.debug('Msg# %s   Pool/Spa heat set point HAS NOT CHANGED:  pool heat mode: %s @ %s degrees; spa heat mode %s at %s degrees', counter, heatModeStr[heat.poolHeatMode], heat.poolSetPoint, heatModeStr[heat.spaHeatMode], heat.spaSetPoint);
-                        } else {
-                            if (logConfigMessages) {
-                                logger.verbose('Msg# %s   Pool/Spa heat set point changed:  pool heat mode: %s @ %s degrees; spa heat mode %s at %s degrees', counter, heatModeStr[heat.poolHeatMode], heat.poolSetPoint, heatModeStr[heat.spaHeatMode], heat.spaSetPoint);
-                                logger.info('Msg# %s  Change in Pool/Spa Heat Mode:  %s', counter, currentHeat.whatsDifferent(heat))
-                            }
-                            currentHeat = JSON.parse(JSON.stringify(heat))
-                            emit('heat');
-                        }
-                    }
-                }
-                decoded = true;
-                break;
-            }
-
-
-        case 10: //Get Custom Names
-            {
-                var customName = '';
-                for (var i = 7; i < 18; i++) {
-                    if (data[i] > 0 && data[i] < 251) //251 is used to terminate the custom name string if shorter than 11 digits
+                    } else //Response to request for status
                     {
 
-                        customName += String.fromCharCode(data[i])
-                    };
+
+                        //TODO: make this code the same (one function?) as coming from the controller
+
+                        pumpStatus.pump = pumpNum;
+                        var pumpname = (data[packetFields.FROM]).toString(); //returns 96 (pump1) or 97 (pump2)
+                        //time returned in HH:MM (24 hour)  <-- need to clean this up so we don't get times like 5:3
+
+                        pumpStatus.time = data[pumpPacketFields.HOUR] + ':' + data[pumpPacketFields.MIN];
+                        pumpStatus.run = data[pumpPacketFields.CMD]
+                        pumpStatus.name = ctrlString[pumpname];
+                        pumpStatus.mode = data[pumpPacketFields.MODE]
+                        pumpStatus.drivestate = data[pumpPacketFields.DRIVESTATE]
+                        pumpStatus.watts = (data[pumpPacketFields.WATTSH] * 256) + data[pumpPacketFields.WATTSL]
+                        pumpStatus.rpm = (data[pumpPacketFields.RPMH] * 256) + data[pumpPacketFields.RPML]
+                        pumpStatus.ppc = data[pumpPacketFields.PPC]
+                        pumpStatus.err = data[pumpPacketFields.ERR]
+                        pumpStatus.timer = data[pumpPacketFields.TIMER]
+                            //pumpStatus.packet = data;
+
+                        if (logPumpMessages)
+                            logger.debug('Msg# %s  %s Status: ', counter, pumpStatus.name, JSON.stringify(pumpStatus), data);
+                        //if (logPumpMessages) logger.silly('currentPumpStatusPacket', currentPumpStatusPacket)
+
+                        if (pumpNum == 1 || pumpNum == 2) {
+
+                            //TODO - I don't think the following works...
+                            if (JSON.stringify(currentPumpStatus[status.pump]) === JSON.stringify(status)) {
+
+                                if (logPumpMessages)
+                                    logger.debug('Msg# %s   Pump %s status has not changed: ', counter, status.pump, data)
+                            } else {
+                                var moreThanFive = 0
+                                if (logPumpMessages) {
+                                    if ((Math.abs((pumpStatus.watts - currentPumpStatus[pumpNum].watts) / pumpStatus.watts)) > .05) {
+                                        //logger.error('pumpnum.watts:', JSON.stringify(currentPumpStatus), currentPumpStatus[pumpNum].watts)
+                                        logger.info('Msg# %s   Pump %s watts changed >5%: %s --> %s \n', counter, pumpStatus.pump, currentPumpStatus[pumpNum].watts, pumpStatus.watts)
+                                        moreThanFive = 1;
+                                    }
+                                    //logger.error('2 what\'s different: \n %s \n %s', JSON.stringify(pumpStatus), JSON.stringify(currentPumpStatus))
+                                    if (logPumpMessages)
+                                        logger.verbose('Msg# %s   Pump %s status changed: %s \n', counter, pumpStatus.pump, currentPumpStatus[pumpNum].whatsDifferent(pumpStatus));
+                                }
+
+                                //if we don't have a previous value for .watts than it should be the first time we are here and let's emit the pump status
+                                if ((currentPumpStatus[pumpNum].watts).toLowerCase.indexOf('notset') >= 0) {
+                                    emit('pump');
+                                }
+                                currentPumpStatus[pumpNum] = pumpStatus;
+                                if (moreThanFive) {
+                                    emit('pump');
+                                }
+
+                            }
+                        }
+                    }
+                    decoded = true;
+                    break;
+                }
+            case 8: //Broadcast current heat set point and mode
+                {
+                    //   0 1  2  3 4  5  6 7   8  9  19 11 12 13  14 15 16 17 18 19  20
+                    //[165,x,15,16,8,13,75,75,64,87,101,11,0,  0 ,62 ,0 ,0 ,0 ,0 ,2,190]
+                    //function heatObj(poolSetPoint, poolHeatMode, spaSetPoint, spaHeatMode)
+
+
+                    var heat = new Heat(data[9], data[11] & 3, data[10], (data[11] & 12) >> 2)
+
+
+
+                    if (logConfigMessages) {
+                        logger.silly('heat status packet object: %s  data: %s  currentHeat: %s', JSON.stringify(heat), data, currentHeat == undefined ? "Not set yet" : JSON.stringify(currentHeat));
+                    }
+                    if (heat.poolSetPoint != undefined) //invalid packet?
+                    {
+                        if (currentHeat.poolSetPoint == undefined) {
+                            currentHeat = JSON.parse(JSON.stringify(heat))
+                            if (logConfigMessages)
+                                logger.info('Msg# %s   Pool/Spa heat set point discovered:  \n  Pool heat mode: %s @ %s degrees \n  Spa heat mode: %s at %s degrees', counter, heatModeStr[currentHeat.poolHeatMode], currentHeat.poolSetPoint, heatModeStr[currentHeat.spaHeatMode], currentHeat.spaSetPoint);
+
+                            emit('heat');
+                        } else {
+
+                            if (JSON.stringify(currentHeat) === JSON.stringify(heat)) {
+                                logger.debug('Msg# %s   Pool/Spa heat set point HAS NOT CHANGED:  pool heat mode: %s @ %s degrees; spa heat mode %s at %s degrees', counter, heatModeStr[heat.poolHeatMode], heat.poolSetPoint, heatModeStr[heat.spaHeatMode], heat.spaSetPoint);
+                            } else {
+                                if (logConfigMessages) {
+                                    logger.verbose('Msg# %s   Pool/Spa heat set point changed:  pool heat mode: %s @ %s degrees; spa heat mode %s at %s degrees', counter, heatModeStr[heat.poolHeatMode], heat.poolSetPoint, heatModeStr[heat.spaHeatMode], heat.spaSetPoint);
+                                    logger.info('Msg# %s  Change in Pool/Spa Heat Mode:  %s', counter, currentHeat.whatsDifferent(heat))
+                                }
+                                currentHeat = JSON.parse(JSON.stringify(heat))
+                                emit('heat');
+                            }
+                        }
+                    }
+                    decoded = true;
+                    break;
                 }
 
-                if (logConfigMessages) {
-                    logger.silly('Msg# %s  Custom Circuit Name Raw:  %s  & Decoded: %s', counter, JSON.stringify(data), customName)
-                        //logger.verbose('Msg# %s  Custom Circuit Name Decoded: "%s"', counter, customName)
-                }
 
-                if (checkForChange[0]) {
-                    if (customNameArr[data[6]] !== customName) {
-                        logger.info('Msg# %s  Custom Circuit name %s changed to %s', customNameArr[data[6]], customName)
+            case 10: //Get Custom Names
+                {
+                    var customName = '';
+                    for (var i = 7; i < 18; i++) {
+                        if (data[i] > 0 && data[i] < 251) //251 is used to terminate the custom name string if shorter than 11 digits
+                        {
+
+                            customName += String.fromCharCode(data[i])
+                        };
+                    }
+
+                    if (logConfigMessages) {
+                        logger.silly('Msg# %s  Custom Circuit Name Raw:  %s  & Decoded: %s', counter, JSON.stringify(data), customName)
+                            //logger.verbose('Msg# %s  Custom Circuit Name Decoded: "%s"', counter, customName)
+                    }
+
+                    if (checkForChange[0]) {
+                        if (customNameArr[data[6]] !== customName) {
+                            logger.info('Msg# %s  Custom Circuit name %s changed to %s', customNameArr[data[6]], customName)
+                            emit('circuit');
+                        }
+                    }
+
+                    customNameArr[data[6]] = customName;
+                    //display custom names when we reach the last circuit
+                    if (data[6] == 9 && checkForChange[0] === 0) {
+                        logger.info('\n  Custom Circuit Names retrieved from configuration: ', customNameArr)
+                        checkForChange[0] = 1
                         emit('circuit');
                     }
+
+
+                    decoded = true;
+                    break;
                 }
 
-                customNameArr[data[6]] = customName;
-                //display custom names when we reach the last circuit
-                if (data[6] == 9 && checkForChange[0] === 0) {
-                    logger.info('\n  Custom Circuit Names retrieved from configuration: ', customNameArr)
-                    checkForChange[0] = 1
-                    emit('circuit');
-                }
-
-
-                decoded = true;
-                break;
-            }
-
-        case 11: // Get Circuit Names
-            {
-                var circuitNumber = data[namePacketFields.NUMBER]
-                logger.silly('get circuit names packet: %s', data)
-                var freezeProtection;
-                if ((data[namePacketFields.CIRCUITFUNCTION] & 64) == 64) {
-                    freezeProtection = 1
-                } else {
-                    freezeProtection = 0
-                }
-                //The &63 masks to 00111111 because 01000000 is freeze protection bit
-
-                //if the ID of the circuit name is 1-101 then it is a standard name.  If it is 200-209 it is a custom name.  The mapping between the string value in the getCircuitNames and getCustomNames is 200.  So subtract 200 from the circuit name to get the id in the custom name array.
-                //data[4]-1 because this array starts at 1 and JS arrays start at 0.
-                //-(8*whichCircuit) because this will subtract 0, 8 or 16 from the index so each secondary index will start at 0
-
-                var circuit = JSON.parse(JSON.stringify(currentCircuitArrObj[circuitNumber]))
-
-                if (circuitNumber != null || circuit.name != undefined) {
-                    if (data[namePacketFields.NAME] < 200) {
-                        circuit.name = strCircuitName[data[namePacketFields.NAME]]
+            case 11: // Get Circuit Names
+                {
+                    var circuitNumber = data[namePacketFields.NUMBER]
+                    logger.silly('get circuit names packet: %s', data)
+                    var freezeProtection;
+                    if ((data[namePacketFields.CIRCUITFUNCTION] & 64) == 64) {
+                        freezeProtection = 1
                     } else {
-                        circuit.name = customNameArr[data[namePacketFields.NAME] - 200];
+                        freezeProtection = 0
                     }
-                    circuit.number = circuitNumber;
-                    circuit.numberStr = 'circuit' + circuitNumber;
-                    circuit.circuitFunction = strCircuitFunction[data[namePacketFields.CIRCUITFUNCTION] & 63];
-                    circuit.freeze = freezeProtection;
+                    //The &63 masks to 00111111 because 01000000 is freeze protection bit
 
-                    if (checkForChange[1]) {
-                        if (!(circuit.equals(currentCircuitArrObj[circuitNumber]))) {
+                    //if the ID of the circuit name is 1-101 then it is a standard name.  If it is 200-209 it is a custom name.  The mapping between the string value in the getCircuitNames and getCustomNames is 200.  So subtract 200 from the circuit name to get the id in the custom name array.
+                    //data[4]-1 because this array starts at 1 and JS arrays start at 0.
+                    //-(8*whichCircuit) because this will subtract 0, 8 or 16 from the index so each secondary index will start at 0
+
+                    var circuit = JSON.parse(JSON.stringify(currentCircuitArrObj[circuitNumber]))
+
+                    if (circuitNumber != null || circuit.name != undefined) {
+                        if (data[namePacketFields.NAME] < 200) {
+                            circuit.name = strCircuitName[data[namePacketFields.NAME]]
+                        } else {
+                            circuit.name = customNameArr[data[namePacketFields.NAME] - 200];
+                        }
+                        circuit.number = circuitNumber;
+                        circuit.numberStr = 'circuit' + circuitNumber;
+                        circuit.circuitFunction = strCircuitFunction[data[namePacketFields.CIRCUITFUNCTION] & 63];
+                        circuit.freeze = freezeProtection;
+
+                        if (checkForChange[1]) {
+                            if (JSON.stringify(circuit) !== JSON.stringify(currentCircuitArrObj[circuitNumber])) {
                             results = currentCircuitArrObj[i].whatsDifferent(circuit);
                             if (!(results == "Nothing!" || currentCircuitArrObj[i].name === 'NOT USED')) {
                                 logger.verbose('Msg# %s   Circuit %s change:  %s', counter, circuit.name, results)
@@ -1337,7 +1337,7 @@ function decode(data, counter, packetType) {
 
                 decoded = true;
                 break;
-            }
+        }
 
         case 17: // Get Schedules
             { //byte:      0  1  2  3  4 5 6 7 8  9 10 11  12 13 14
@@ -1449,6 +1449,7 @@ function decode(data, counter, packetType) {
 
                     //copy the currentChlorinatorStatus to temp object
                     //var chlorinatorStatus = JSON.parse(JSON.stringify(currentChlorinatorStatus));;
+                    //we are not using the parse(stringify) method here because the constructor contains a mapping function
                     var chlorinatorStatus = new chlorinatorObj;
                     chlorinatorStatus.outputSpaPercent = (data[6] - 1) / 2; //41 would equal 20%, for example
                     chlorinatorStatus.outputPercent = data[7];
@@ -1929,14 +1930,14 @@ else if (packetType == 'pump')
             }
     }
     if (logPumpMessages)
-        logger.silly('\n Analyzing pump packets for pump ', pumpNum, ': \n currentPumpStatus: ', JSON.stringify(currentPumpStatus[pumpStatus.pump]), '\n pumpStatus: ', JSON.stringify(pumpStatus), '\n equal?: ', JSON.stringify(currentPumpStatus[pumpNum]).equals(JSON.stringify(pumpStatus)))
+        logger.silly('\n Analyzing pump packets for pump ', pumpNum, ': \n currentPumpStatus: ', JSON.stringify(currentPumpStatus[pumpStatus.pump]), '\n pumpStatus: ', JSON.stringify(pumpStatus), '\n equal?: ', JSON.stringify(currentPumpStatus[pumpNum]) === (JSON.stringify(pumpStatus)))
 
     if ((currentPumpStatus[pumpNum].rpm === 'rpmnotset')) {
         //we don't have status yet, but something changed
         currentPumpStatus[pumpStatus.pump] = JSON.parse(JSON.stringify(pumpStatus));
         emit('pump')
     } else {
-        if (JSON.stringify(currentPumpStatus[pumpNum]) == (JSON.stringify(pumpStatus))) {
+        if (JSON.stringify(currentPumpStatus[pumpNum]) === (JSON.stringify(pumpStatus))) {
             if (logPumpMessages)
                 logger.debug('Msg# %s   Pump %s status has not changed: %s  \n', counter, pumpStatus.pump, data)
         } else {
@@ -1967,7 +1968,7 @@ else if (packetType == 'pump')
                 delete tempcurrentPumpStatus.time
                 delete tempPumpStatus.remotecontrol
                 delete tempcurrentPumpStatus.remotecontrol
-                if (tempPumpStatus === tempcurrentPumpStatus) {
+                if (JSON.stringify(tempPumpStatus) === JSON.stringify(tempcurrentPumpStatus)) {
                     //only time or remotecontrol has changed, so don't emit
                     needToEmit = 0
                 } else {
@@ -2124,7 +2125,7 @@ else if (packetType == 'chlorinator') {
                 }
         }
 
-        if (currentChlorinatorStatus.equals(chlorinatorStatus)) {
+        if (JSON.stringify(currentChlorinatorStatus) === JSON.stringify(chlorinatorStatus)) {
             if (logChlorinator)
                 logger.debug('Msg# %s   Chlorinator status has not changed: ', counter, JSON.stringify(data))
         } else {
@@ -2817,12 +2818,14 @@ function changeHeatMode(equip, heatmode, src) {
         var updateHeatMode = (currentHeat.spaHeatMode << 2) | heatmode;
         var updateHeat = [165, preambleByte, 16, appAddress, 136, 4, currentHeat.poolSetPoint, currentHeat.spaSetPoint, updateHeatMode, 0]
         queuePacket(updateHeat);
+        //TODO: replace heatmode INT with string
         logger.info('User request to update pool heat mode to %s', heatmode)
     } else {
         //spaSetPoint
         var updateHeatMode = (parseInt(heatmode) << 2) | currentHeat.poolHeatMode;
         var updateHeat = [165, preambleByte, 16, appAddress, 136, 4, currentHeat.poolSetPoint, currentHeat.spaSetPoint, updateHeatMode, 0]
         queuePacket(updateHeat);
+        //TODO: replace heatmode INT with string
         logger.info('User request to update spa heat mode to %s', heatmode)
     }
 }
@@ -2992,6 +2995,7 @@ app.get('/spaheat/mode/:spaheatmode', function(req, res) {
     var updateHeatMode = (parseInt(req.params.spaheatmode) << 2) | currentHeat.poolHeatMode;
     var updateHeat = [165, preambleByte, 16, appAddress, 136, 4, currentHeat.poolSetPoint, currentHeat.spaSetPoint, updateHeatMode, 0]
     queuePacket(updateHeat);
+    //TODO: replace heatmode INT with string
     logger.info('User request to update spa heat mode to %s', req.params.spaheatmode, updateHeat)
     var response = 'Request to set spa heat mode to ' + heatModeStr[req.params.spaheatmode] + ' sent to controller'
     res.send(response)
@@ -3011,7 +3015,8 @@ app.get('/poolheat/mode/:poolheatmode', function(req, res) {
     var updateHeatMode = (currentHeat.spaHeatMode << 2) | req.params.poolheatmode;
     var updateHeat = [165, preambleByte, 16, appAddress, 136, 4, currentHeat.poolSetPoint, currentHeat.spaSetPoint, updateHeatMode, 0]
     queuePacket(updateHeat);
-    logger.info('User request to update pool set point to %s', req.params.poolheatmode, updateHeat)
+    //TODO: replace heatmode INT with string
+    logger.info('User request to update pool heat mode to %s', req.params.poolheatmode, updateHeat)
     var response = 'Request to set pool heat mode to ' + heatModeStr[req.params.poolheatmode] + ' sent to controller'
     res.send(response)
 })
@@ -3159,15 +3164,21 @@ io.on('connection', function(socket, error) {
             logger.info('User request to set pump %s to %s', equip, program);
             if (program == 'off') {
                 setPrg = [6, 1, 4];
+
                 if (equip == 1) {
                     currentPumpStatus[1].duration = 0;
                     pump1Timer.clearTimeout();
                     pump1TimerDelay.clearTimeout();
+                    //set program to 0
+                    currentPumpStatus[1].currentprogram = 0;
                 } else {
                     currentPumpStatus[2].duration = 0;
                     pump2Timer.clearTimeout();
                     pump2TimerDelay.clearTimeout();
+                    //set program to 0
+                    currentPumpStatus[2].currentprogram = 0;
                 }
+                emit('pump');
             } else // pump set to on
             {
                 setPrg = [6, 1, 10];

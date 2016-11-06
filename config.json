@@ -15,13 +15,14 @@
         "expressTransport": "http"
     },
     "Network": {
-        "netConnect": 0,
+        "netConnect": 1,
         "netHost": "raspberrypi",
         "netPort": 9801
     },
     "Log": {
         "logType": "info",
         "logPumpMessages": 0,
+        "logChlorinator": 0,
         "logDuplicateMessages": 0,
         "logConsoleNotDecoded": 0,
         "logConfigMessages": 0,
