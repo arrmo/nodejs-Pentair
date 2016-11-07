@@ -976,7 +976,7 @@ function decode(data, counter, packetType) {
             case 2: //Controller Status
                 {
                     //quick gut test to see if we have a duplicate packet
-                    if (JSON.stringify(data) != JSON.stringify(currentStatusBytes)) {
+                    if (JSON.stringify(data) !== JSON.stringify(currentStatusBytes)) {
                         //--------Following code (re)-assigns all the incoming data to the status object
                         var status = {};
 
@@ -1113,7 +1113,7 @@ function decode(data, counter, packetType) {
                 //Send request/response for pump status
                 {
                     var pumpNum;
-                    if (data[packetFields.FROM] == 96 || data[packetFields.DEST] == 96) {
+                    if (data[packetFields.FROM] === 96 || data[packetFields.DEST] === 96) {
                         pumpNum = 1
                     } else {
                         pumpNum = 2
@@ -1132,7 +1132,7 @@ function decode(data, counter, packetType) {
                     //}
 
 
-                    if (data[packetFields.FROM] == 16) //Request of status from Main
+                    if (data[packetFields.FROM] === 16) //Request of status from Main
                     {
                         if (logPumpMessages) {
                             logger.verbose('Msg# %s   Main asking pump %s for status: %s', counter, ctrlString[data[packetFields.DEST]], JSON.stringify(data));
@@ -1141,7 +1141,7 @@ function decode(data, counter, packetType) {
                     {
 
 
-                        //TODO: make this code the same (one function?) as coming from the controller
+                        //TODO: make this code the same (one function?) as coming from the pump/controller
 
                         pumpStatus.pump = pumpNum;
                         var pumpname = (data[packetFields.FROM]).toString(); //returns 96 (pump1) or 97 (pump2)
@@ -1166,32 +1166,51 @@ function decode(data, counter, packetType) {
                         if (pumpNum == 1 || pumpNum == 2) {
 
                             //TODO - I don't think the following works...
-                            if (JSON.stringify(currentPumpStatus[status.pump]) === JSON.stringify(status)) {
+                            if (JSON.stringify(currentPumpStatus[pumpStatus.pump]) === JSON.stringify(pumpStatus)) {
 
                                 if (logPumpMessages)
-                                    logger.debug('Msg# %s   Pump %s status has not changed: ', counter, status.pump, data)
+                                    logger.debug('Msg# %s   Pump %s status has not changed: ', counter, pumpStatus.pump, data)
                             } else {
-                                var moreThanFive = 0
-                                if (logPumpMessages) {
+                                var needToEmit = 0
+                                if (pumpStatus.watts !== currentPumpStatus[pumpNum].watts) {
                                     if ((Math.abs((pumpStatus.watts - currentPumpStatus[pumpNum].watts) / pumpStatus.watts)) > .05) {
                                         //logger.error('pumpnum.watts:', JSON.stringify(currentPumpStatus), currentPumpStatus[pumpNum].watts)
-                                        logger.info('Msg# %s   Pump %s watts changed >5%: %s --> %s \n', counter, pumpStatus.pump, currentPumpStatus[pumpNum].watts, pumpStatus.watts)
-                                        moreThanFive = 1;
+                                        if (logPumpMessages) logger.info('Msg# %s   Pump %s watts changed >5%: %s --> %s \n', counter, pumpStatus.pump, currentPumpStatus[pumpNum].watts, pumpStatus.watts)
+                                        needToEmit = 1;
                                     }
                                     //logger.error('2 what\'s different: \n %s \n %s', JSON.stringify(pumpStatus), JSON.stringify(currentPumpStatus))
                                     if (logPumpMessages)
-                                        logger.verbose('Msg# %s   Pump %s status changed: %s \n', counter, pumpStatus.pump, currentPumpStatus[pumpNum].whatsDifferent(pumpStatus));
+                                        if (logPumpMessages) logger.verbose('Msg# %s   Pump %s status changed: %s \n', counter, pumpStatus.pump, currentPumpStatus[pumpNum].whatsDifferent(pumpStatus));
+                                } else {
+                                    //NOTE: Need to ignore TIME & remotecontrol so the packets aren't emitted every minute if there are no other changes.
+                                    var tempPumpStatus = JSON.parse(JSON.stringify(pumpStatus))
+                                    var tempcurrentPumpStatus = JSON.parse(JSON.stringify(currentPumpStatus[pumpNum]))
+
+                                    delete tempPumpStatus.time
+                                    delete tempcurrentPumpStatus.time
+                                    delete tempPumpStatus.remotecontrol
+                                    delete tempcurrentPumpStatus.remotecontrol
+                                    if (JSON.stringify(tempPumpStatus) === JSON.stringify(tempcurrentPumpStatus)) {
+                                        //only time or remotecontrol has changed, so don't emit
+                                        needToEmit = 0
+                                    } else {
+                                        needToEmit = 1
+                                    }
+                                    //We will still output any differences in verbose, including time
+                                    var pumpWhatsDifferent = currentPumpStatus[pumpNum].whatsDifferent(pumpStatus)
+                                    if (pumpWhatsDifferent != "Nothing!") {
+                                        if (logPumpMessages) logger.verbose('Msg# %s   Pump %s status changed: %s \n', counter, pumpStatus.pump, pumpWhatsDifferent);
+                                    }
                                 }
 
                                 //if we don't have a previous value for .watts than it should be the first time we are here and let's emit the pump status
                                 if ((currentPumpStatus[pumpNum].watts).toLowerCase.indexOf('notset') >= 0) {
-                                    emit('pump');
+                                    needToEmit = 1
                                 }
                                 currentPumpStatus[pumpNum] = pumpStatus;
-                                if (moreThanFive) {
+                                if (needToEmit) {
                                     emit('pump');
                                 }
-
                             }
                         }
                     }
@@ -1962,16 +1981,14 @@ function decode(data, counter, packetType) {
                     //  If the difference is less then (absolute) 5% and the watts is not the same as it previously was, then notify the user.
                     //  Separate check just for watts.  If not watts, this check isn't applicable.
                 if (pumpStatus.watts !== currentPumpStatus[pumpNum].watts) {
-                    if (logPumpMessages) {
-                        if ((Math.abs((pumpStatus.watts - currentPumpStatus[pumpNum].watts) / pumpStatus.watts)) > .05) {
-                            //logger.error('pumpnum.watts:', JSON.stringify(currentPumpStatus), currentPumpStatus[pumpNum].watts)
-                            logger.info('Msg# %s   Pump %s watts changed >5%: %s --> %s \n', counter, pumpStatus.pump, currentPumpStatus[pumpNum].watts, pumpStatus.watts)
-                            needToEmit = 1;
-                        }
-                        //logger.error('2 what\'s different: \n %s \n %s', JSON.stringify(pumpStatus), JSON.stringify(currentPumpStatus))
-
-                        logger.verbose('Msg# %s   Pump %s status changed: %s \n', counter, pumpStatus.pump, currentPumpStatus[pumpNum].whatsDifferent(pumpStatus));
+                    if ((Math.abs((pumpStatus.watts - currentPumpStatus[pumpNum].watts) / pumpStatus.watts)) > .05) {
+                        //logger.error('pumpnum.watts:', JSON.stringify(currentPumpStatus), currentPumpStatus[pumpNum].watts)
+                        if (logPumpMessages) logger.info('Msg# %s   Pump %s watts changed >5%: %s --> %s \n', counter, pumpStatus.pump, currentPumpStatus[pumpNum].watts, pumpStatus.watts)
+                        needToEmit = 1;
                     }
+                    //logger.error('2 what\'s different: \n %s \n %s', JSON.stringify(pumpStatus), JSON.stringify(currentPumpStatus))
+
+                    if (logPumpMessages) logger.verbose('Msg# %s   Pump %s status changed: %s \n', counter, pumpStatus.pump, currentPumpStatus[pumpNum].whatsDifferent(pumpStatus));
                 }
                 //something besides watts changed
                 else {
@@ -1992,7 +2009,7 @@ function decode(data, counter, packetType) {
                     //We will still output any differences in verbose, including time
                     var pumpWhatsDifferent = currentPumpStatus[pumpNum].whatsDifferent(pumpStatus)
                     if (pumpWhatsDifferent != "Nothing!") {
-                        logger.verbose('Msg# %s   Pump %s status changed: %s \n', counter, pumpStatus.pump, pumpWhatsDifferent);
+                        if (logPumpMessages) logger.verbose('Msg# %s   Pump %s status changed: %s \n', counter, pumpStatus.pump, pumpWhatsDifferent);
                     }
                 }
                 //if we have 'notset' as part of the variable, then it's the first time we are here.
@@ -2762,6 +2779,7 @@ function chlorinatorStatusCheck() {
 
 
 function emit(outputType) {
+    logger.warn('EMIT: %s', outputType)
     if (outputType == 'circuit' || outputType == 'all') {
         io.sockets.emit('circuit',
             currentCircuitArrObj
@@ -3183,14 +3201,14 @@ app.get('/sendthispacket/:packet', function(req, res) {
     if (packet[0] == 16 && packet[1] == ctrl.CHLORINATOR) {
         logger.silly('packet (chlorinator) detected: ', packet)
     } else {
-        if (packet[0] == 96 || packet[0] == 97 || packet[1] == 96 || packet[1] == 97)
-        //If a message to the controller, use the preamble that we have recorded
-        {
-            preamblePacket = [165, preambleByte]; //255,0,255 will be added later
-        } else
+        if (packet[0] === 96 || packet[0] === 97 || packet[1] === 96 || packet[1] === 97)
         //if a message to the pumps, use 165,0
         {
-            preamblePacket = [165, 0]
+            preamblePacket = [165, 0]; //255,0,255 will be added later
+        } else
+        //If a message to the controller, use the preamble that we have recorded
+        {
+            preamblePacket = [165, preambleByte]
         }
         Array.prototype.push.apply(preamblePacket, packet);
         packet = preamblePacket.slice(0);
