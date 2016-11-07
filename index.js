@@ -412,6 +412,8 @@ var netHost; //host for the SOCAT communications
 var expressDir; //set this to the default directory for the web interface (either "/bootstrap" or "/public")
 var expressPort; //port for the Express App Server
 var expressTransport; //http, https, or both
+var expressAuth; // Authentication (username, password) to access web interface (0=no auth, 1=auth)
+var expressAuthFile; // Authentication file (created using htpasswd, stores username and password)
 //-------  END NETWORK SETUP -----------
 
 //-------  LOG SETUP -----------
@@ -439,6 +441,8 @@ numberOfPumps = configFile.Equipment.numberOfPumps;
 appAddress = configFile.Equipment.appAddress;
 expressDir = configFile.Misc.expressDir;
 expressPort = configFile.Misc.expressPort;
+expressAuth = configFile.Misc.expressAuth;
+expressAuthFile = configFile.Misc.expressAuthFile;
 netConnect = configFile.Network.netConnect;
 netPort = configFile.Network.netPort;
 netHost = configFile.Network.netHost;
@@ -468,14 +472,21 @@ logPumpTimers = configFile.Log.logPumpTimers;
 // Setup express server
 var express = require('express');
 var app = express();
+// And Enable Authentication (if configured)
+if (expressAuth === 1) {
+    var auth = require('http-auth');
+    var basic = auth.basic({
+        file: __dirname + expressAuthFile
+    });
+    app.use(auth.connect(basic));
+}
+// Create Server, socket.io
 var server = require('http').createServer(app);
 var io = require('socket.io')(server);
 var port = process.env.PORT || 3000;
 server.listen(port, function() {
     logger.verbose('Express Server listening at port %d', port);
 });
-
-
 
 
 
@@ -633,6 +644,8 @@ settingsStr += '\n //-------  MISC SETUP -----------';
 settingsStr += '\n var expressDir = ' + expressDir;
 settingsStr += '\n var expressPort = ' + expressPort;
 settingsStr += '\n var expressTransport = ' + expressTransport;
+settingsStr += '\n var expressAuth = ' + expressAuth;
+settingsStr += '\n var expressAuthFile = ' + expressAuthFile;
 settingsStr += '\n //-------  END MISC SETUP -----------';
 settingsStr += '\n ';
 settingsStr += '\n //-------  NETWORK SETUP -----------';
