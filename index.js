@@ -7,7 +7,7 @@ console.log('\033[2J'); //clear the console
 var dateFormat = require('dateformat');
 var Dequeue = require('dequeue')
 
-var version = '1.0.1 API alpha 2'
+var version = '1.0.3'
 
 const events = require('events')
 
