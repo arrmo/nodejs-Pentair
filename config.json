@@ -1,8 +1,8 @@
 {
     "Equipment": {
         "intellicom": 0,
-        "intellitouch": 0,
-        "pumpOnly": 1,
+        "intellitouch": 1,
+        "pumpOnly": 0,
         "numberOfPumps": 2,
         "chlorinator": 1,
         "ISYController": 0,
@@ -10,7 +10,7 @@
 
     },
     "Misc": {
-        "expressDir": "/public",
+        "expressDir": "/bootstrap",
         "expressPort": 3000,
         "expressTransport": "http"
     },
