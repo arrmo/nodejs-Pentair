@@ -2666,7 +2666,7 @@ function pumpStatusCheck(pump1, pump2) {
 
 function pump1SafePumpMode() {
     if (logPumpTimers) logger.silly('pump1SafePumpMode: Running pump 1 on setTimer expiration')
-    currentPumpStatus[1].duration--;
+    currentPumpStatus[1].duration = (currentPumpStatus[1].duration - 0.5);
     if (currentPumpStatus[1].duration > 0) {
         //set pump to remote control
         var remoteControlPacket = [165, 0, 96, appAddress, 4, 1, 255];
@@ -2722,12 +2722,12 @@ function pump2SafePumpMode() {
 }
 
 function pump1SafePumpModeDelay() {
-    if (logPumpTimers) logger.silly('pumpStatusCheck: Setting 50s delay to run pump1SafePumpMode')
-    pump1Timer.setTimeout(pump1SafePumpMode, '', '50s')
+    if (logPumpTimers) logger.silly('pumpStatusCheck: Setting 20s delay to run pump1SafePumpMode')
+    pump1Timer.setTimeout(pump1SafePumpMode, '', '20s')
 }
 
 function pump2SafePumpModeDelay() {
-    pump2Timer.setTimeout(pump2SafePumpMode, '', '50s')
+    pump2Timer.setTimeout(pump2SafePumpMode, '', '20s')
 }
 
 function chlorinatorStatusCheck() {
@@ -2973,11 +2973,11 @@ function pumpCommand(equip, program, value, duration) {
         if (_equip == 1) {
             currentPumpStatus[1].duration = _duration;
             //run the timer update 50s into the 1st minute
-            pump1Timer.setTimeout(pump1SafePumpMode, '', '50s')
+            pump1Timer.setTimeout(pump1SafePumpMode, '', '30s')
         } else {
             currentPumpStatus[2].duration = _duration;
             //run the timer update 50s into the 1st minute
-            pump2Timer.setTimeout(pump2SafePumpMode, '', '50s')
+            pump2Timer.setTimeout(pump2SafePumpMode, '', '30s')
         }
 
 
