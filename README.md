@@ -1,4 +1,4 @@
-# nodejs-Pentiar - Version 1.0.0
+# nodejs-Pentiar - Version 1.0.3
 
 [![Join the chat at https://gitter.im/pentair_pool/Lobby](https://badges.gitter.im/pentair_pool/Lobby.svg)](https://gitter.im/pentair_pool/Lobby?utm_source=badge&utm_medium=badge&utm_campaign=pr-badge&utm_content=badge)
 
