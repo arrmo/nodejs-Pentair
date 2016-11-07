@@ -32,6 +32,7 @@
     "request": "^2.75.0",
     "serialport": "^4.0.1",
     "socket.io": "^1.4.8",
+    "timepicker": "^1.11.6",
     "winston": "^2.2.0"
   },
   "devDependencies": {
