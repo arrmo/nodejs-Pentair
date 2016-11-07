@@ -4,10 +4,12 @@
 function configPanels(jsonPanel) {
 	//Enable / Disable panels as configured (in json file)
 	for (var currPanel in jsonPanel) {
-		if (jsonPanel[currPanel]["state"] === "visible")		
-			$('#' + currPanel).show();
-		else
+		if (jsonPanel[currPanel]["state"] === "hidden")		
 			$('#' + currPanel).hide();
+		else if (jsonPanel[currPanel]["state"] === "collapse")
+			$('#' + 'collapse' + currPanel.capitalizeFirstLetter()).collapse();
+		else
+			$('#' + currPanel).show();
 		// Debug Panel -> Update Debug Log Button
 		if (currPanel == "debug") {
 			if (jsonPanel[currPanel]["state"] === "visible")
@@ -243,6 +245,11 @@ $(function () {
 			}
 		}
 	});
+
+	// Button Handling: Debug Log => Clear!
+	$('#debugClear').click(function () {
+		$('#txtDebug').html('<b>DEBUG LOG ... <br />');
+	})
 	
 	// Socket Events (Emit)
 	function setHeatSetPoint(equip, change) {
