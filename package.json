@@ -25,6 +25,7 @@
     "dateformat": "^1.0.12",
     "dequeue": "^1.0.5",
     "express": "^4.14.0",
+    "http-auth": "^3.0.1",
     "jquery-ui-dist": "^1.12.1",
     "nanotimer": "^0.3.14",
     "net": "latest",

@@ -12,7 +12,9 @@
     "Misc": {
         "expressDir": "/bootstrap",
         "expressPort": 3000,
-        "expressTransport": "http"
+        "expressTransport": "https",
+	"expressAuth": 0,
+	"expressAuthFile": "/users.htpasswd"
     },
     "Network": {
         "netConnect": 0,
