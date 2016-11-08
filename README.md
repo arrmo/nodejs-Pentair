@@ -1,4 +1,4 @@
-# nodejs-Pentiar - Version 1.0.0
+# nodejs-Pentiar - Version 1.0.3
 
 [![Join the chat at https://gitter.im/pentair_pool/Lobby](https://badges.gitter.im/pentair_pool/Lobby.svg)](https://gitter.im/pentair_pool/Lobby?utm_source=badge&utm_medium=badge&utm_campaign=pr-badge&utm_content=badge)
 
@@ -184,6 +184,7 @@ See below for ISY configuration.
 #### appAddress
 The address on the serial bus that this app will use.
 The pumps don't seem to care what number you use, but Intellitouch won't respond unless this address is one of 32, 33, 34.
+<<<<<<< HEAD
 
 
 ### Misc
@@ -215,6 +216,39 @@ For SOCAT functionality
 #### logDuplicateMessages
 1 = show messages that are repeated on the bus in the logs, 0 = hide
 
+=======
+
+
+### Misc
+
+#### expressDir
+set to `/bootstrap` for the fancy UI or `/public` for a basic
+
+
+### Network
+For SOCAT functionality
+        "netConnect": 1,
+        "netHost": "raspberrypi",
+        "netPort": "9801"
+
+
+### Log
+
+#### logType
+| --- | --- |
+| Error | Only output error messages |
+| Warn | Output the above, plus warnings |
+| **Info** | Output the above, plus information about circuit/status changes |
+| Debug | Output the above, plus debugging information |
+| Silly | Output the above, plus code-level troubleshooting messages |
+
+#### logPumpMessages
+1 = show messages from the pump in the logs, 0 = hide
+
+#### logDuplicateMessages
+1 = show messages that are repeated on the bus in the logs, 0 = hide
+
+>>>>>>> 448575d63070dee3ee84c0757b0a4f792b4b46d0
 #### logConsoleNotDecoded
 1 = log any messages that have not been [documented](https://github.com/tagyoureit/nodejs-Pentair/wiki)
 
@@ -258,7 +292,7 @@ od -x < /dev/ttyUSB0
 
 Of course, you'll need to change the address of your RS-485 adapter if it isn't the same as mine (here and in the code).
 
-*   You'll know you have the wires write when the output of this command looks like (you should see multiple repititions of ffa5ff):
+*   You'll know you have the wires right when the output of this command looks like (you should see multiple repetitions of ffa5ff):
 ```
 0002240 0000 0000 0000 0000 0000 ff00 ffff ffff
 0002260 **ffff 00ff a5ff** 0f0a 0210 161d 000c 0040

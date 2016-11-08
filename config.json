@@ -22,15 +22,17 @@
         "netPort": 9801
     },
     "Log": {
-        "logType": "info",
+        "logType": "debug",
         "logPumpMessages": 0,
+        "logChlorinator": 0,
         "logDuplicateMessages": 0,
         "logConsoleNotDecoded": 0,
         "logConfigMessages": 0,
         "logMessageDecoding": 0,
         "logChlorinator": 0,
         "logPacketWrites": 0,
-        "logPumpTimers": 0
+        "logPumpTimers": 0,
+        "logApi": 1
     },
     "ISY": {
         "username": "blank",
