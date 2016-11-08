@@ -298,6 +298,10 @@ $(function () {
 			$('#currTime').html(data.time);
 			$('#airTemp').html(data.airTemp);
 			$('#solarTemp').html(data.solarTemp);
+			if (data.solarTemp == 0)
+				$('#solarTemp').closest('tr').hide();
+			else
+				$('#solarTemp').closest('tr').show();
 			$('#runMode').html(data.runmode);
 			$('#stateHeater').html(data.HEATER_ACTIVE);
 			$('#poolCurrentTemp').html(data.poolTemp);
