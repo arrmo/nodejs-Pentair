@@ -13,11 +13,11 @@
         "expressDir": "/bootstrap",
         "expressPort": 3000,
         "expressTransport": "https",
-	"expressAuth": 0,
-	"expressAuthFile": "/users.htpasswd"
+	"expressAuth": 1,
+	"expressAuthFile": "/data/users.htpasswd"
     },
     "Network": {
-        "netConnect": 0,
+        "netConnect": 1,
         "netHost": "raspberrypi",
         "netPort": 9801
     },

@@ -441,6 +441,7 @@ numberOfPumps = configFile.Equipment.numberOfPumps;
 appAddress = configFile.Equipment.appAddress;
 expressDir = configFile.Misc.expressDir;
 expressPort = configFile.Misc.expressPort;
+expressTransport = configFile.Misc.expressTransport;
 expressAuth = configFile.Misc.expressAuth;
 expressAuthFile = configFile.Misc.expressAuthFile;
 netConnect = configFile.Network.netConnect;
@@ -480,8 +481,18 @@ if (expressAuth === 1) {
     });
     app.use(auth.connect(basic));
 }
-// Create Server, socket.io
-var server = require('http').createServer(app);
+// Create Server (and set https options if https is selected)
+if (expressTransport === 'https') {
+    var opt_https = {
+        key: fs.readFileSync(__dirname + '/data/server.key'),
+        cert: fs.readFileSync(__dirname + '/data/server.crt'),
+        requestCert: false,
+        rejectUnauthorized: false
+    };
+    var server = require('https').createServer(opt_https, app);
+} else
+    var server = require('http').createServer(app);
+// Set up socket.io
 var io = require('socket.io')(server);
 var port = process.env.PORT || 3000;
 server.listen(port, function() {
@@ -2889,25 +2900,6 @@ function changeHeatSetPoint(equip, change, src) {
 }
 
 //<----  START SERVER CODE
-
-
-/*HTTPS???
-// Setup basic express server
-var express = require('express');
-var app = express();
-var http = require('http')
-var https = require('https')
-var port = process.env.PORT || expressPort;
-http.createServer(app).listen(port)
-//, function() {
-//    logger.verbose('Express Server listening at port %d', port);
-//}).listen(port);
-/*https.createServer(app, function() {
-    logger.verbose('Express Server listening at port %d', port);
-}).listen(443);
-var io = require('socket.io')(http);
-*/
-
 
 
 // Routing
