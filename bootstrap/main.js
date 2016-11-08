@@ -12,10 +12,10 @@ function configPanels(jsonPanel) {
 			$('#' + currPanel).show();
 		// Debug Panel -> Update Debug Log Button
 		if (currPanel == "debug") {
-			if (jsonPanel[currPanel]["state"] === "visible")
-				setStatusButton($('#debugEnable'), 'Debug Log: On');
-			else
+			if (jsonPanel[currPanel]["state"] === "hidden")
 				setStatusButton($('#debugEnable'), 'Debug Log: Off');
+			else
+				setStatusButton($('#debugEnable'), 'Debug Log: On');
 		}
 	}
 
