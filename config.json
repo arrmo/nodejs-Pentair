@@ -4,7 +4,7 @@
         "intellitouch": 1,
         "pumpOnly": 0,
         "numberOfPumps": 2,
-        "chlorinator": 1,
+        "chlorinator": 0,
         "ISYController": 0,
         "appAddress": 33
 
@@ -12,9 +12,9 @@
     "Misc": {
         "expressDir": "/bootstrap",
         "expressPort": 3000,
-        "expressTransport": "https",
-	"expressAuth": 1,
-	"expressAuthFile": "/data/users.htpasswd"
+        "expressTransport": "http",
+        "expressAuth": 0,
+        "expressAuthFile": "/data/users.htpasswd"
     },
     "Network": {
         "netConnect": 1,
@@ -22,7 +22,8 @@
         "netPort": 9801
     },
     "Log": {
-        "logType": "debug",
+        "logType": "info",
+        "extLogLevel": "info",
         "logPumpMessages": 0,
         "logChlorinator": 0,
         "logDuplicateMessages": 0,
@@ -32,13 +33,13 @@
         "logChlorinator": 0,
         "logPacketWrites": 0,
         "logPumpTimers": 0,
-        "logApi": 1
+        "logApi": 0
     },
     "ISY": {
         "username": "blank",
         "password": "blank",
         "ipaddr": "127.0.0.1",
-        "port":12345,
+        "port": 12345,
         "Variables": {
             "currentPumpStatus[1].watts": 25,
             "currentPumpStatus[1].rpm": 24,

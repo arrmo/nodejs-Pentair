@@ -419,6 +419,7 @@ var expressAuthFile; // Authentication file (created using htpasswd, stores user
 //-------  LOG SETUP -----------
 //Change the following log message levels as needed
 var logType; // one of { error: 0, warn: 1, info: 2, verbose: 3, debug: 4, silly: 5 }
+var extLogLevel; //for the external UI/API: { error: 0, warn: 1, info: 2, verbose: 3, debug: 4, silly: 5 }
 var logPumpMessages; //variable if we want to output pump messages or not
 var logDuplicateMessages; //variable if we want to output duplicate broadcast messages
 var logConsoleNotDecoded; //variable to hide any unknown messages
@@ -448,6 +449,7 @@ netConnect = configFile.Network.netConnect;
 netPort = configFile.Network.netPort;
 netHost = configFile.Network.netHost;
 logType = configFile.Log.logType;
+extLogLevel = configFile.Log.extLogLevel;
 logPumpMessages = configFile.Log.logPumpMessages;
 logDuplicateMessages = configFile.Log.logDuplicateMessages;
 logConsoleNotDecoded = configFile.Log.logConsoleNotDecoded;
@@ -525,7 +527,7 @@ var logger = new(winston.Logger)({
 });
 var winsocketOptions = {
     server: server,
-    level: 'info',
+    level: extLogLevel,
     SocketIO: io,
 
     customFormatter: function(level, message, meta) {
@@ -669,6 +671,7 @@ settingsStr += '\n //-------  END NETWORK SETUP -----------';
 settingsStr += '\n ';
 settingsStr += '\n //-------  LOG SETUP -----------';
 settingsStr += '\n var logType = ' + logType;
+settingsStr += '\n var extLogLevel = ' + extLogLevel;
 settingsStr += '\n var logPumpMessages = ' + logPumpMessages;
 settingsStr += '\n var logDuplicateMessages = ' + logDuplicateMessages;
 settingsStr += '\n var logConsoleNotDecoded = ' + logConsoleNotDecoded;
@@ -2790,7 +2793,7 @@ function chlorinatorStatusCheck() {
 
 
 function emit(outputType) {
-    logger.warn('EMIT: %s', outputType)
+    //logger.warn('EMIT: %s', outputType)
     if (outputType == 'circuit' || outputType == 'all') {
         io.sockets.emit('circuit',
             currentCircuitArrObj
