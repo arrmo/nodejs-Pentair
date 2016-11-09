@@ -85,7 +85,7 @@ function fmtEggTimerTime(strInpStr) {
 }
 
 function setStatusButton(btnID, btnState) {
-	if (btnState.toUpperCase().includes('ON')) {
+	if (btnState.toUpperCase().indexOf('ON') >= 0) {
 		btnID.removeClass('btn-primary');
 		btnID.addClass('btn-success');
 	} else {
@@ -117,12 +117,12 @@ function buildEggTime(currSchedule) {
 function buildSchDays(currSchedule) {
 	schName = 'schDays' + currSchedule.ID;
 	strRow = '<tr class="borderless toppad" name="' + schName + '" id="' + schName + '" class="botpad"><td colspan="4" align="left">';
-	var arrDays = Array(7).fill(false);
+	var arrDays = [false, false, false, false, false, false, false];
 	splitDays = currSchedule.DAYS.split(" ");
-	for (var currDay of splitDays) {
+	splitDays.forEach(function(currDay, indx) {
 		if (currDay !== "")
 			arrDays[dayOfWeekAsInteger(currDay)] = true;
-	}
+	});
 	strHTML = '';
 	for (var iterDay in arrDays) {
 		strCurrDay = dayOfWeekAsString(iterDay);
@@ -139,7 +139,10 @@ function buildSchDays(currSchedule) {
 function formatLog(strMessage) {
 	// Colorize Message, in HTML format
 	var strSplit = strMessage.split(' ');
-	var strColor = logColors[strSplit[1].toLowerCase()];
+	if (typeof(logColors) !== "undefined")
+		var strColor = logColors[strSplit[1].toLowerCase()];
+	else
+		strColor = "lightgrey";
 	if (strColor) {
 		strSplit[1] = strSplit[1].fontcolor(strColor).bold();
 	}
@@ -204,7 +207,7 @@ $(function () {
 	// Button Handling: Pool / Spa, Heater Mode
 	$('#poolHeatMode, #spaHeatMode').on('click', 'button', function () {
 		var currButtonPressed = $(this).attr('id');
-		if (currButtonPressed.includes('HeatMode')) {
+		if (currButtonPressed.indexOf('HeatMode') >= 0) {
 			var strHeatMode = currButtonPressed.slice(0, currButtonPressed.indexOf('HeatMode')) + 'HeatMode';
 			var currHeatMode = $('#' + strHeatMode).data(strHeatMode);
 			var newHeatMode = (currHeatMode + 4 + $(this).data('heatModeDirn')) % 4;
@@ -319,7 +322,7 @@ $(function () {
 	}
 
 	function showCircuit(data) {
-		for (var currCircuit of data) {
+		data.forEach(function(currCircuit, indx) {
 			if (currCircuit.hasOwnProperty('name')) {
 				if (currCircuit.name != "NOT USED") {
 					if (document.getElementById(currCircuit.name)) {
@@ -335,12 +338,12 @@ $(function () {
 					}
 				}
 			}
-		}
+		});
 	}
 
 	function showPump(data) {
 		// Build Pump table / panel
-		for (var currPump of data) {
+		data.forEach(function(currPump, indx) {
 			if (currPump == null) {
 				//console.log("Pump: Dataset empty.")
 			} else {
@@ -380,7 +383,7 @@ $(function () {
 					}
 				}
 			}
-		}
+		});
 	}
 	
 	function showSchedule(data) {
@@ -388,7 +391,7 @@ $(function () {
 		$('#schedules tr').not('tr:first').remove();
 		$('#eggtimers tr').not('tr:first').remove();
 		// And (Re)Build Schedule and EggTimer tables / panels
-		for (var currSchedule of data) {
+		data.forEach(function(currSchedule, indx) {
 			if (currSchedule == null) {
 				//console.log("Schedule: Dataset empty.")
 			} else {
@@ -406,6 +409,6 @@ $(function () {
 					}					
 				}
 			}
-		}
+		});
 	}
 });
