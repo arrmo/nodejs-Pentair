@@ -1,3 +1,5 @@
+/* global Storage */
+
 //Configure Bootstrap Panels, in 2 steps ...
 //   1) Enable / Disable panels as configured (in json file)
 //   2) Load Panel Sequence from Storage (as saved from last update)
@@ -11,7 +13,7 @@ function configPanels(jsonPanel) {
 		else
 			$('#' + currPanel).show();
 		// Debug Panel -> Update Debug Log Button
-		if (currPanel == "debug") {
+		if (currPanel === "debug") {
 			if (jsonPanel[currPanel]["state"] === "hidden")
 				setStatusButton($('#debugEnable'), 'Debug Log: Off');
 			else
@@ -27,12 +29,12 @@ function configPanels(jsonPanel) {
 			var panelList = $('#draggablePanelList');
 			var panelListItems = panelList.children();
 			// And, only reorder if no missing / extra items => or items added, removed ... so "reset" to index.html
-			if (panelIndices.length == panelListItems.length) {
+			if (panelIndices.length === panelListItems.length) {
 				panelListItems.detach();
 				$.each(panelIndices, function() {
 					var currPanel = this.toString();
 					var result = $.grep(panelListItems, function(e){ 
-						return e.id == currPanel;
+						return e.id === currPanel;
 					});
 					panelList.append(result);
 				});
@@ -154,11 +156,11 @@ function formatLog(strMessage) {
 
 String.prototype.capitalizeFirstLetter = function() {
 	return this.charAt(0).toUpperCase() + this.toLowerCase().slice(1);
-}
+};
 
 String.prototype.toTitleCase = function() {
 	return this.replace(/\w\S*/g, function(txt){return txt.charAt(0).toUpperCase() + txt.substr(1).toLowerCase();});
-}
+};
 
 // From http://api.jquery.com/jquery/#jQuery3
 // JQuery(callback), Description: Binds a function to be executed when the DOM has finished loading
@@ -197,12 +199,12 @@ $(function () {
 	// Button Handling: Pool, Spa => On/Off
 	$('#poolState, #spaState').on('click', 'button', function () {
 		setEquipmentStatus($(this).data($(this).attr('id')));
-	})
+	});
 	
 	// Button Handling: Pool / Spa, Temperature SetPoint
 	$('#poolSetpoint, #spaSetpoint').on('click', 'button', function () {
 		setHeatSetPoint($(this).data('equip'), $(this).data('adjust'));
-	})
+	});
 
 	// Button Handling: Pool / Spa, Heater Mode
 	$('#poolHeatMode, #spaHeatMode').on('click', 'button', function () {
@@ -211,25 +213,25 @@ $(function () {
 			var strHeatMode = currButtonPressed.slice(0, currButtonPressed.indexOf('HeatMode')) + 'HeatMode';
 			var currHeatMode = $('#' + strHeatMode).data(strHeatMode);
 			var newHeatMode = (currHeatMode + 4 + $(this).data('heatModeDirn')) % 4;
-			setHeatMode($('#' + strHeatMode).data('equip'), newHeatMode)
+			setHeatMode($('#' + strHeatMode).data('equip'), newHeatMode);
 		}
-	})
+	});
 
 	// Button Handling: Features => On/Off
 	$('#features').on('click', 'button', function () {
 		setEquipmentStatus($(this).data($(this).attr('id')));
-	})
+	});
 	
 	// Button Handling: Debug Log => On/Off
 	$('#debugEnable').click(function () {
-		if ($('#debug').is(":visible") == true) {
+		if ($('#debug').is(":visible") === true) {
 			$('#debug').hide();
 			setStatusButton($('#debugEnable'), 'Debug Log: Off');
 		} else {
 			$('#debug').show();
 			setStatusButton($('#debugEnable'), 'Debug Log: On');
 		}
-	})
+	});
 	
 	// Debug Log, KeyPress => Select All (for copy and paste, select log window, press SHFT-A)
 	// Reference, from https://www.sanwebe.com/2014/04/select-all-text-in-element-on-click => Remove "older ie".
@@ -238,7 +240,7 @@ $(function () {
 			var sel, range;
 			var el = $(this)[0];
 			sel = window.getSelection();
-			if(sel.toString() == ''){ //no text selection
+			if(sel.toString() === ''){ //no text selection
 				window.setTimeout(function(){
 					range = document.createRange(); //range object
 					range.selectNodeContents(el); //sets Range
@@ -252,22 +254,22 @@ $(function () {
 	// Button Handling: Debug Log => Clear!
 	$('#debugClear').click(function () {
 		$('#txtDebug').html('<b>DEBUG LOG ... <br />');
-	})
+	});
 	
 	// Socket Events (Emit)
 	function setHeatSetPoint(equip, change) {
-		socket.emit('setHeatSetPoint', equip, change)
+		socket.emit('setHeatSetPoint', equip, change);
 	}
 
 	function setHeatMode(equip, change) {
-		socket.emit('setHeatMode', equip, change)
+		socket.emit('setHeatMode', equip, change);
 	}
 
 	function setEquipmentStatus(equipment) {
-		if (equipment != undefined)
-			socket.emit('toggleCircuit', equipment)
+		if (equipment !== undefined)
+			socket.emit('toggleCircuit', equipment);
 		else
-			formatLog('ERROR: Client, equipment = undefined')
+			formatLog('ERROR: Client, equipment = undefined');
 	};
 
 	// Socket Events (Receive)
@@ -281,27 +283,27 @@ $(function () {
 
 	socket.on('pump', function (data) {
 		showPump(data);
-	})
+	});
 
 	socket.on('heat', function (data) {
 		showHeat(data);
-	})
+	});
 
 	socket.on('schedule', function (data) {
 		showSchedule(data);
-	})
+	});
 	
 	socket.on('outputLog', function (data) {
 		formatLog(data);
-	})	
+	});	
 
 	// Show Information (from received socket.io)
 	function showConfig(data) {
-		if (data != null) {
+		if (data !== null) {
 			$('#currTime').html(data.time);
 			$('#airTemp').html(data.airTemp);
 			$('#solarTemp').html(data.solarTemp);
-			if (data.solarTemp == 0)
+			if (data.solarTemp === 0)
 				$('#solarTemp').closest('tr').hide();
 			else
 				$('#solarTemp').closest('tr').show();
@@ -314,27 +316,27 @@ $(function () {
 
 	function showHeat(data) {
 		$('#poolHeatSetPoint').html(data.poolSetPoint);
-		$('#poolHeatMode').data('poolHeatMode', data.poolHeatMode)
+		$('#poolHeatMode').data('poolHeatMode', data.poolHeatMode);
 		$('#poolHeatModeStr').html(data.poolHeatModeStr);
-		$('#spaHeatSetPoint').html(data.spaSetPoint)
-		$('#spaHeatMode').data('spaHeatMode', data.spaHeatMode)
+		$('#spaHeatSetPoint').html(data.spaSetPoint);
+		$('#spaHeatMode').data('spaHeatMode', data.spaHeatMode);
 		$('#spaHeatModeStr').html(data.spaHeatModeStr);
 	}
 
 	function showCircuit(data) {
 		data.forEach(function(currCircuit, indx) {
 			if (currCircuit.hasOwnProperty('name')) {
-				if (currCircuit.name != "NOT USED") {
+				if (currCircuit.name !== "NOT USED") {
 					if (document.getElementById(currCircuit.name)) {
 						setStatusButton($('#' + currCircuit.name), currCircuit.status);
-						$('#' + currCircuit.name).data(currCircuit.name, currCircuit.number)															
+						$('#' + currCircuit.name).data(currCircuit.name, currCircuit.number);															
 					} else if (document.getElementById(currCircuit.numberStr)) {
 						setStatusButton($('#' + currCircuit.numberStr), currCircuit.status);
-						$('#' + currCircuit.numberStr).data(currCircuit.numberStr, currCircuit.number)															
+						$('#' + currCircuit.numberStr).data(currCircuit.numberStr, currCircuit.number);
 					} else if (($hideAUX === false) || (currCircuit.name.indexOf("AUX") === -1)) {
 						$('#features tr:last').after('<tr><td>' + currCircuit.name.toLowerCase().toTitleCase() + '</td><td><button class="btn btn-primary btn-xs" name="' + currCircuit.numberStr + '" id="' + currCircuit.numberStr + '">---</button></td></tr>');
 						setStatusButton($('#' + currCircuit.numberStr), currCircuit.status);
-						$('#' + currCircuit.numberStr).data(currCircuit.numberStr, currCircuit.number)															
+						$('#' + currCircuit.numberStr).data(currCircuit.numberStr, currCircuit.number);
 					}
 				}
 			}
@@ -344,7 +346,7 @@ $(function () {
 	function showPump(data) {
 		// Build Pump table / panel
 		data.forEach(function(currPump, indx) {
-			if (currPump == null) {
+			if (currPump === null) {
 				//console.log("Pump: Dataset empty.")
 			} else {
 				if (currPump !== "blank") {
@@ -367,9 +369,9 @@ $(function () {
 								// Find Target Row
 								var rowTarget = $('#pumps tr:contains("' + currParamSet["title"] + '")');
 								// And finally, append or replace data
-								if (colAppend == true) {
+								if (colAppend === true) {
 									// Build Cell, Append
-									strCell = '<' + currParamSet["type"] + '>' + currPump[currPumpParam] + '</' + currParamSet["type"] + '>'
+									strCell = '<' + currParamSet["type"] + '>' + currPump[currPumpParam] + '</' + currParamSet["type"] + '>';
 									rowTarget.append(strCell);
 								} else {
 									// Replace Data, target Row, Column
@@ -392,7 +394,7 @@ $(function () {
 		$('#eggtimers tr').not('tr:first').remove();
 		// And (Re)Build Schedule and EggTimer tables / panels
 		data.forEach(function(currSchedule, indx) {
-			if (currSchedule == null) {
+			if (currSchedule === null) {
 				//console.log("Schedule: Dataset empty.")
 			} else {
 				if (currSchedule !== "blank") {
