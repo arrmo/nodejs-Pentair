@@ -75,6 +75,8 @@ function fmtScheduleTime(strInpStr) {
 	else
 		strAMPM = 'pm';
 	strHours = (parseInt(splitInpStr[0]) % 12).toFixed(0);
+	if (strHours === "0")
+		strHours = "12";
 	strMins = ('0' + parseInt(splitInpStr[1])).slice(-2);
 	return strHours + ':' + strMins + ' ' + strAMPM;
 }
