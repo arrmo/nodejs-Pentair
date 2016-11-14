@@ -2111,7 +2111,7 @@ function decode(data, counter, packetType) {
                 case 18: //Response to 17 (set generate %)
                     {
                         chlorinatorStatus.saltPPM = data[4] * 50;
-                        switch (data[3]) {
+                        switch (data[5]) {
                             case 0: //ok
                                 {
                                     chlorinatorStatus.status = "Ok";
