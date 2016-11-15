@@ -1,6 +1,6 @@
 {
   "name": "nodejs-pentair",
-  "version": "1.0.4",
+  "version": "1.0.3",
   "description": "NodeJS program to read and write to the Pentair serial bus.",
   "main": "index.js",
   "scripts": {
@@ -22,6 +22,7 @@
   "homepage": "https://github.com/tagyoureit/nodejs-Pentair#readme",
   "dependencies": {
     "bootstrap": "^3.3.7",
+    "bottlejs": "^1.5.0",
     "dateformat": "^1.0.12",
     "dequeue": "^1.0.5",
     "express": "^4.14.0",
