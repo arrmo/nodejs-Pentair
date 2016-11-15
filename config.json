@@ -17,12 +17,14 @@
         "expressAuthFile": "/data/users.htpasswd"
     },
     "Network": {
-        "netConnect": 1,
-        "netHost": "raspberrypi",
+        "netConnect": 0,
+        "netHost": "raspberrypi.local",
         "netPort": 9801
+
+
     },
     "Log": {
-        "logType": "info",
+        "logType": "verbose",
         "extLogLevel": "info",
         "logPumpMessages": 0,
         "logChlorinator": 0,
