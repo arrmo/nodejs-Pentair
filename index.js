@@ -10,7 +10,7 @@ var Bottle = require('bottlejs')
 var bottle = Bottle.pop('pentair-Bottle');
 
 
-bottle.constant('appVersion', '1.0.4 API_WORK alpha 2')
+bottle.constant('appVersion', '2.0 alpha 1')
 bottle.constant('logModuleLoading', 1)
 
 bottle.factory('constants', require('./etc/constants.js'))

@@ -29,7 +29,7 @@
 
     },
     "Log": {
-        "logType": "silly",
+        "logType": "verbose",
         "extLogLevel": "info",
         "logPumpMessages": 0,
         "logChlorinator": 0,
