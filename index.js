@@ -7,7 +7,7 @@ console.log('\033[2J'); //clear the console
 var dateFormat = require('dateformat');
 var Dequeue = require('dequeue')
 
-var version = '1.0.3'
+var version = '1.0.4'
 
 const events = require('events')
 
@@ -2111,7 +2111,7 @@ function decode(data, counter, packetType) {
                 case 18: //Response to 17 (set generate %)
                     {
                         chlorinatorStatus.saltPPM = data[4] * 50;
-                        switch (data[3]) {
+                        switch (data[5]) {
                             case 0: //ok
                                 {
                                     chlorinatorStatus.status = "Ok";
@@ -2177,7 +2177,7 @@ function decode(data, counter, packetType) {
             } else {
                 if (logChlorinator)
                     logger.verbose('Msg# %s   Chlorinator status changed: ', counter, currentChlorinatorStatus.whatsDifferent(chlorinatorStatus));
-                currentChlorinatorStatus = chlorinatorStatus;
+                currentChlorinatorStatus = JSON.parse(JSON.stringify(chlorinatorStatus));
                 emit('chlorinator');
             }
         } else //need to set decoded to true or it will show up as NOT DECODED in the log.  Essentially, we are dropping it if we have an intellitouch.
