@@ -10,11 +10,16 @@ var Bottle = require('bottlejs')
 var bottle = Bottle.pop('pentair-Bottle');
 
 
-bottle.constant('appVersion', '2.0 alpha 1')
+bottle.constant('appVersion', '2.0 alpha 2')
 bottle.constant('logModuleLoading', 1)
 
 bottle.factory('constants', require('./etc/constants.js'))
 bottle.factory('logger', require('./lib/logger/winston-helper.js'))
+
+//bottle.factory('dequeue', require('dequeue'))
+
+bottle.factory('packetBuffer', require('./lib/comms/inbound/packet-buffer.js'))
+
 
 /*bottle.middleware('logger', function(logger, next) {
     // this middleware will only affect the Beer service.
