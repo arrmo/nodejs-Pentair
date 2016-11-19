@@ -10,7 +10,7 @@ var Bottle = require('bottlejs')
 var bottle = Bottle.pop('pentair-Bottle');
 
 
-bottle.constant('appVersion', '2.0 alpha 2')
+bottle.constant('appVersion', '2.0 alpha 3')
 bottle.constant('logModuleLoading', 1)
 
 bottle.factory('constants', require('./etc/constants.js'))
@@ -60,31 +60,20 @@ var dateFormat = require('dateformat');
 const events = require('events')
 
 
-//var bufferArr = []; //variable to process buffer.  interimBufferArr will be copied here when ready to process
-//var interimBufferArr = []; //variable to hold all serialport.open data; incomind data is appended to this with each read
-var _currentStatus = {}; // persistent object to hold pool equipment status.
 
-bottle.service('currentStatus', function() {
-  return _currentStatus
-})
-
-var _currentStatusBytes = []; //persistent variable to hold full bytes of pool status
-bottle.service('currentStatusBytes', function() {
-  return _currentStatusBytes
-
-})
-
+bottle.factory('status', require('./lib/equipment/status.js'))
+bottle.factory('temperatures', require('./lib/equipment/temperatures.js'))
+bottle.factory('time', require('./lib/equipment/time.js'))
+bottle.factory('UOM', require('./lib/equipment/UOM.js'))
+bottle.factory('valves', require('./lib/equipment/valves.js'))
+bottle.factory('customNames', require('./lib/equipment/customNames.js'))
 bottle.constant('apiSearch', require('./lib/api/api-search.js'))
 
 //var currentWhatsDifferent; //persistent variable to hold what's different
 //var currentPumpStatus; //persistent variable to hold pump information
 //var currentHeat; //persistent variable to heald heat set points
 
-var _currentSchedule = ["blank"]; //schedules
-bottle.service('currentSchedule', function() {
-  return _currentSchedule
-
-})
+bottle.factory('schedule', require('./lib/equipment/schedule.js'))
 
 var _msgCounter = {msgCounter:0}
 bottle.service('msgCounter', function() {
@@ -124,7 +113,6 @@ bottle.factory('circuit', require('./lib/equipment/circuit.js'))
 //currentCircuitArrObj =  bottle.container.heat
 
 bottle.factory('heat', require('./lib/equipment/heat.js'))
-currentHeat = bottle.container.heat.currentHeat
 
 
 //var Heat = require('./lib/heat.js')

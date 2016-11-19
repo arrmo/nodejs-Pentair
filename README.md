@@ -248,7 +248,7 @@ For SOCAT functionality
 #### logDuplicateMessages
 1 = show messages that are repeated on the bus in the logs, 0 = hide
 
->>>>>>> 448575d63070dee3ee84c0757b0a4f792b4b46d0
+
 #### logConsoleNotDecoded
 1 = log any messages that have not been [documented](https://github.com/tagyoureit/nodejs-Pentair/wiki)
 
@@ -389,17 +389,20 @@ Or want to help get involved with the project and debug in an app like [Netbeans
 @arrmo was super slick in getting this to run.
 
 There are two options:
+
 1. Run socat each time to enable the pipe
 1. Setup a daemon to automatically start socat
 
 ### The "run it each time" method
 Run these commands on the remote machine
+
 1. `sudo apt-get install socat` to install socat
 1. `/usr/bin/socat TCP-LISTEN:9801,fork,reuseaddr FILE:/dev/ttyUSB0,b9600,raw`
 1. Setup the app parameters (below)
 
 ### The "run under a daemon" method
 Run these commands on the remote machine
+
 1.  `sudo apt-get install socat` to install socat
 1.  `sudo apt-get install daemon` to install daemon
 1.  Copy the `poolTTY` file (in /scripts directory) to your remote machine directory `/etc/init.d`
