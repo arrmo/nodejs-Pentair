@@ -10,127 +10,131 @@ var Bottle = require('bottlejs')
 var bottle = Bottle.pop('pentair-Bottle');
 
 
-bottle.constant('appVersion', '2.0 alpha 3')
+bottle.constant('appVersion', '2.0 alpha 4')
 bottle.constant('logModuleLoading', 1)
 
-bottle.factory('constants', require('./etc/constants.js'))
-bottle.factory('logger', require('./lib/logger/winston-helper.js'))
 
-//bottle.factory('dequeue', require('dequeue'))
+//API
+bottle.constant('apiSearch', require('./lib/api/api-search.js'))
 
-bottle.factory('packetBuffer', require('./lib/comms/inbound/packet-buffer.js'))
-
-
-/*bottle.middleware('logger', function(logger, next) {
-    // this middleware will only affect the Beer service.
-    console.log('logger', logger);
-    next();
-});*/
-
-
+//ETC
 bottle.constant('settings', require('./etc/settings.js'))
-s = bottle.container.settings
+bottle.factory('constants', require('./etc/constants.js'))
 
-logger = bottle.container.logger  //alias/assign bottle.container.logger to logger
+
+
+//COMMS
 bottle.factory('server', require('./lib/comms/server.js'))
-bottle.container.server.app //app won't initialize unless we call it
+bottle.factory('io', require('./lib/comms/socketio-helper.js'))
+bottle.factory('whichPacket', require('./lib/comms/which-packet.js'))
+bottle.factory('sp', require('./lib/comms/sp-helper.js'))
 
-var _checkForChange = [0, 0, 0]
-bottle.service('checkForChange', function() {
-  return {
-    _checkForChange
-  }
-}); //[custom names, circuit names, schedules] 0 if we have not logged the initial array; 1 if we will only log changes
-
-
-//var Dequeue = require('dequeue')
-//bottle.factory('bufferArrayOfArrays', function() { return new Dequeue()});
+//COMMS/INBOUND
+bottle.factory('receiveBuffer', require('./lib/comms/inbound/receive-buffer.js'))
+bottle.factory('decodeHelper', require('./lib/comms/inbound/decode-helper.js'))
+bottle.factory('packetBuffer', require('./lib/comms/inbound/packet-buffer.js'))
 bottle.factory('processController', require('./lib/comms/inbound/process-controller.js'))
 bottle.factory('processPump', require('./lib/comms/inbound/process-pump.js'))
 bottle.factory('processChlorinator', require('./lib/comms/inbound/process-chlorinator.js'))
+
+//COMMS/INBOUND/CONTROLLER
+bottle.factory('controller_2', require('./lib/comms/inbound/controller/2.js'))
+bottle.factory('controller_7', require('./lib/comms/inbound/controller/7.js'))
+bottle.factory('controller_8', require('./lib/comms/inbound/controller/8.js'))
+bottle.factory('controller_10', require('./lib/comms/inbound/controller/10.js'))
+bottle.factory('controller_11', require('./lib/comms/inbound/controller/11.js'))
+bottle.factory('controller_17', require('./lib/comms/inbound/controller/17.js'))
+bottle.factory('controller_25', require('./lib/comms/inbound/controller/25.js'))
+bottle.factory('controller_134', require('./lib/comms/inbound/controller/134.js'))
+bottle.factory('controller_136', require('./lib/comms/inbound/controller/136.js'))
+bottle.factory('controller_153', require('./lib/comms/inbound/controller/153.js'))
+bottle.factory('controller_217', require('./lib/comms/inbound/controller/217.js'))
+bottle.factory('controller_252', require('./lib/comms/inbound/controller/252.js'))
+
+//COMMS/INBOUND/PUMP
+bottle.factory('pump_1', require('./lib/comms/inbound/pump/1.js'))
+bottle.factory('pump_2', require('./lib/comms/inbound/pump/2.js'))
+bottle.factory('pump_4', require('./lib/comms/inbound/pump/4.js'))
+bottle.factory('pump_5', require('./lib/comms/inbound/pump/5.js'))
+bottle.factory('pump_6', require('./lib/comms/inbound/pump/6.js'))
+bottle.factory('pump_7', require('./lib/comms/inbound/pump/7.js'))
+
+//COMMS/OUTBOUND
+bottle.factory('ISYHelper', require('./lib/comms/outbound/ISY.js'))
+bottle.factory('writePacket', require('./lib/comms/outbound/write-packet.js'))
+bottle.factory('queuePacket', require('./lib/comms/outbound/queue-packet.js'))
+
+//CONTROLLERS
+/*
 bottle.factory('pumpController', require('./lib/controllers/pump-controller.js'))
 bottle.service('chlorinatorController', require('./lib/controllers/chlorinator-controller.js'))
+*/
 
-bottle.factory('receiveBuffer', require('./lib/comms/inbound/receive-buffer.js'))
-bottle.factory('decodeHelper', require('./lib/comms/inbound/decode-helper.js'))
-
-
-var dateFormat = require('dateformat');
-
-const events = require('events')
-
-
-
-bottle.factory('status', require('./lib/equipment/status.js'))
+//EQUIPMENT
+bottle.factory('heat', require('./lib/equipment/heat.js'))
+bottle.factory('chlorinator', require('./lib/equipment/chlorinator.js'))
+bottle.factory('pump', require('./lib/equipment/pump.js'))
+bottle.factory('circuit', require('./lib/equipment/circuit.js'))
+//bottle.factory('status', require('./lib/equipment/status.js'))
 bottle.factory('temperatures', require('./lib/equipment/temperatures.js'))
 bottle.factory('time', require('./lib/equipment/time.js'))
 bottle.factory('UOM', require('./lib/equipment/UOM.js'))
 bottle.factory('valves', require('./lib/equipment/valves.js'))
 bottle.factory('customNames', require('./lib/equipment/customNames.js'))
-bottle.constant('apiSearch', require('./lib/api/api-search.js'))
-
-//var currentWhatsDifferent; //persistent variable to hold what's different
-//var currentPumpStatus; //persistent variable to hold pump information
-//var currentHeat; //persistent variable to heald heat set points
-
 bottle.factory('schedule', require('./lib/equipment/schedule.js'))
-
-var _msgCounter = {msgCounter:0}
-bottle.service('msgCounter', function() {
-    return _msgCounter
-})
-
-bottle.factory('writePacket', require('./lib/comms/outbound/write-packet.js'))
-bottle.factory('queuePacket', require('./lib/comms/outbound/queue-packet.js'))
-
-
-
-//bottle.constant = ('preambleByte', preambleByte)
 bottle.factory('intellitouch', require('./lib/equipment/intellitouch.js'))
 
-//TODO: GET THIS WORKING
-//var logger = require('./lib/winston-helper.js')
 
-logger.info('Intro: ', s.introMsg)
-logger.warn('Settings: ', s.settingsStr)
+//LOGGER
+//bottle.factory('winston', require('winston'))  how to call winston.Logger?
+bottle.factory('logger', require('./lib/logger/winston-helper.js'))
+bottle.factory('winstonToIO', require('./lib/logger/winstonToIO.js'))
+//bottle.constant('dateFormat', require('dateformat'))  //for log formatting
+//bottle.service('util', require('util'))
 
-//var io = require('./lib/io.js')
-bottle.factory('io', require('./lib/comms/socketio-helper.js'))
-bottle.container.io.io //call it to initialize the sockets
-bottle.factory('sp', require('./lib/comms/sp-helper.js'))
-sp = bottle.container.sp
+
+
+
+var s = bottle.container.settings
+
+var logger = bottle.container.logger //alias/assign bottle.container.logger to logger
+
+
+
+
+
+
+const events = require('events')
+
+
+
+
+
+
+
+
+
+
+function init() {
+    //Call the modules to initialize them
+    bottle.container.io.io
+    bottle.container.winstonToIO.init()
+    bottle.container.logger.info('Intro: ', s.introMsg)
+    bottle.container.logger.warn('Settings: ', s.settingsStr)
+    bottle.container.server.app
+    bottle.container.sp
+    if (bottle.container.settings.pumpOnly) {
+        bottle.container.pumpController.startPumpController
+    }
+    if (!bottle.container.settings.intellitouch && bottle.container.settings.chlorinator) {
+        bottle.container.chlorinatorController.startChlorinatorController
+    }
+}
+
+init()
 
 const loggerEmitter = new events.EventEmitter();
 //loggerEmitter.on('debug', )
-
-if (s.ISYController) {
-    //var ISYHelper = require('./lib/ISY.js')
-    bottle.factory('ISYHelper', require('./lib/outbound/ISY.js'))
-}
-
-bottle.factory('whichPacket', require('./lib/comms/which-packet.js'))
-bottle.factory('circuit', require('./lib/equipment/circuit.js'))
-//currentCircuitArrObj =  bottle.container.heat
-
-bottle.factory('heat', require('./lib/equipment/heat.js'))
-
-
-//var Heat = require('./lib/heat.js')
-//var currentHeat = new Heat();  === now Heat.currentHeat
-//var Chlrorinator = require('./lib/equipment/chlorinator.js')
-bottle.factory('chlorinator', require('./lib/equipment/chlorinator.js'))
-
-//var currentChlorinatorStatus === now Chlorinator.currentChlorinatorStatus
-//var Pump = require('./lib/equipment/pump.js')
-bottle.factory('pump', require('./lib/equipment/pump.js'))
-//var currentPumpStatus ==== now Pump.currentPumpStatus
-//var currentPumpStatusPacket === now Pump.currentPumpStatusPacket
-
-
-
-
-//RECEIVE - BUFFER call here.  Moved to sp-helper.on('data')
-
 
 
 
@@ -146,12 +150,7 @@ bottle.factory('pump', require('./lib/equipment/pump.js'))
 
 
 
-if (s.pumpOnly) {
-   bottle.container.pumpController.startPumpController
-}
-if (!s.intellitouch && s.chlorinator) {
-    bottle.container.chlorinatorController.startChlorinatorController
-}
+
 
 
 
@@ -295,7 +294,6 @@ function clone(obj) {
     }
     return copy;
 }
-
 
 
 
