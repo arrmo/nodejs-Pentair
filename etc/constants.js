@@ -335,8 +335,8 @@ module.exports = function(container) {
         16: 'Main',
         32: 'Remote',
         34: 'Wireless',
-        96: 'Pump1',
-        97: 'Pump2',
+        96: 'Pump 1',
+        97: 'Pump 2',
         appAddress: 'nodejs-Pentair Server'
     }
 
