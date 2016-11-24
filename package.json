@@ -5,7 +5,7 @@
   "main": "index.js",
   "scripts": {
     "start": "node index.js",
-    "test": "mocha index.test.js"
+    "test": "mocha ./specs/index.test.js --recursive ./specs  --reporter spec --require ./specs/helpers/chai.js"
   },
   "repository": {
     "type": "git",
@@ -39,6 +39,8 @@
   "devDependencies": {
     "chai": "^3.5.0",
     "istanbul": "^0.4.5",
-    "mocha": "^3.1.2"
+    "mocha": "^3.1.2",
+    "sinon": "^1.17.6",
+    "sinon-chai": "^2.8.0"
   }
 }

@@ -10,7 +10,7 @@ var Bottle = require('bottlejs')
 var bottle = Bottle.pop('pentair-Bottle');
 
 
-bottle.constant('appVersion', '2.0 beta 1')
+bottle.constant('appVersion', '2.0 beta 2')
 bottle.constant('logModuleLoading', 1)
 
 
@@ -80,7 +80,7 @@ bottle.factory('temperatures', require('./lib/equipment/temperatures.js'))
 bottle.factory('time', require('./lib/equipment/time.js'))
 bottle.factory('UOM', require('./lib/equipment/UOM.js'))
 bottle.factory('valves', require('./lib/equipment/valves.js'))
-bottle.factory('customNames', require('./lib/equipment/customNames.js'))
+bottle.factory('customNames', require('./lib/equipment/customnames.js'))
 bottle.factory('schedule', require('./lib/equipment/schedule.js'))
 bottle.factory('intellitouch', require('./lib/equipment/intellitouch.js'))
 
