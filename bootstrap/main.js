@@ -168,8 +168,14 @@ String.prototype.toTitleCase = function() {
 // JQuery(callback), Description: Binds a function to be executed when the DOM has finished loading
 $(function () {
 	// Initialize variables
+	var tmeLastUpd;
 	var $hideAUX = true;
 	var socket = io();
+	
+	// Callback Routine, every second - to update / record time since last message received
+	setInterval(function(){ 
+		lastUpdate(false)
+	}, 1000);
 
 	// Set up draggable options => allow to move panels around
 	var panelList = $('#draggablePanelList');
@@ -196,6 +202,8 @@ $(function () {
 		pumpParams = json.pumpParams;
 		// Log test colorization => no var in front, so global
 		logColors = json.logLevels;
+		// General JS Parameters (for this code)
+		generalParams = json.generalParams;
 	});
 
 	// Button Handling: Pool, Spa => On/Off
@@ -313,106 +321,145 @@ $(function () {
 			$('#stateHeater').html(data.HEATER_ACTIVE);
 			$('#poolCurrentTemp').html(data.poolTemp);
 			$('#spaCurrentTemp').html(data.spaTemp);
+			lastUpdate(true);
 		}
 	}
 
 	function showHeat(data) {
-		$('#poolHeatSetPoint').html(data.poolSetPoint);
-		$('#poolHeatMode').data('poolHeatMode', data.poolHeatMode);
-		$('#poolHeatModeStr').html(data.poolHeatModeStr);
-		$('#spaHeatSetPoint').html(data.spaSetPoint);
-		$('#spaHeatMode').data('spaHeatMode', data.spaHeatMode);
-		$('#spaHeatModeStr').html(data.spaHeatModeStr);
+		if (data !== null) {
+			$('#poolHeatSetPoint').html(data.poolSetPoint);
+			$('#poolHeatMode').data('poolHeatMode', data.poolHeatMode);
+			$('#poolHeatModeStr').html(data.poolHeatModeStr);
+			$('#spaHeatSetPoint').html(data.spaSetPoint);
+			$('#spaHeatMode').data('spaHeatMode', data.spaHeatMode);
+			$('#spaHeatModeStr').html(data.spaHeatModeStr);
+			lastUpdate(true);
+		}
 	}
 
 	function showCircuit(data) {
-		data.forEach(function(currCircuit, indx) {
-			if (currCircuit.hasOwnProperty('name')) {
-				if (currCircuit.name !== "NOT USED") {
-					if (document.getElementById(currCircuit.name)) {
-						setStatusButton($('#' + currCircuit.name), currCircuit.status);
-						$('#' + currCircuit.name).data(currCircuit.name, currCircuit.number);															
-					} else if (document.getElementById(currCircuit.numberStr)) {
-						setStatusButton($('#' + currCircuit.numberStr), currCircuit.status);
-						$('#' + currCircuit.numberStr).data(currCircuit.numberStr, currCircuit.number);
-					} else if (($hideAUX === false) || (currCircuit.name.indexOf("AUX") === -1)) {
-						$('#features tr:last').after('<tr><td>' + currCircuit.name.toLowerCase().toTitleCase() + '</td><td><button class="btn btn-primary btn-xs" name="' + currCircuit.numberStr + '" id="' + currCircuit.numberStr + '">---</button></td></tr>');
-						setStatusButton($('#' + currCircuit.numberStr), currCircuit.status);
-						$('#' + currCircuit.numberStr).data(currCircuit.numberStr, currCircuit.number);
+		if (data !== null) {
+			data.forEach(function(currCircuit, indx) {
+				if (currCircuit.hasOwnProperty('name')) {
+					if (currCircuit.name !== "NOT USED") {
+						if (document.getElementById(currCircuit.name)) {
+							setStatusButton($('#' + currCircuit.name), currCircuit.status);
+							$('#' + currCircuit.name).data(currCircuit.name, currCircuit.number);															
+						} else if (document.getElementById(currCircuit.numberStr)) {
+							setStatusButton($('#' + currCircuit.numberStr), currCircuit.status);
+							$('#' + currCircuit.numberStr).data(currCircuit.numberStr, currCircuit.number);
+						} else if (($hideAUX === false) || (currCircuit.name.indexOf("AUX") === -1)) {
+							$('#features tr:last').after('<tr><td>' + currCircuit.name.toLowerCase().toTitleCase() + '</td><td><button class="btn btn-primary btn-xs" name="' + currCircuit.numberStr + '" id="' + currCircuit.numberStr + '">---</button></td></tr>');
+							setStatusButton($('#' + currCircuit.numberStr), currCircuit.status);
+							$('#' + currCircuit.numberStr).data(currCircuit.numberStr, currCircuit.number);
+						}
 					}
 				}
-			}
-		});
+			});
+			lastUpdate(true);
+		}
 	}
 
 	function showPump(data) {
-		// Build Pump table / panel
-		data.forEach(function(currPump, indx) {
-			if (currPump === null) {
-				//console.log("Pump: Dataset empty.")
-			} else {
-				if (currPump !== "blank") {
-					// New Pump Data (Object) ... make sure pumpParams has been read / processed (i.e. is available)
-					if (typeof(pumpParams) !== "undefined") {
-						if (typeof(currPump["name"]) !== "undefined") {
-							// Determine if we need to add a column (new pump), or replace data - and find the target column if needed
-							var rowHeader = $('#pumps tr:first:contains(' + currPump["name"] + ')');
-							var colAppend = rowHeader.length ? false : true;
-							if (colAppend === false) {
-								var colTarget = -1;
-								$('th', rowHeader).each(function(index){
-									if ($(this).text() === currPump["name"])
-										colTarget = index;
-								});
-							}
-							// Cycle through Pump Parameters
-							for (var currPumpParam in pumpParams) {					
-								currParamSet = pumpParams[currPumpParam];
-								// Find Target Row
-								var rowTarget = $('#pumps tr:contains("' + currParamSet["title"] + '")');
-								// And finally, append or replace data
-								if (colAppend === true) {
-									// Build Cell, Append
-									strCell = '<' + currParamSet["type"] + '>' + currPump[currPumpParam] + '</' + currParamSet["type"] + '>';
-									rowTarget.append(strCell);
-								} else {
-									// Replace Data, target Row, Column
-									$('td', rowTarget).each(function(index){
-										if (index === colTarget)
-											$(this).html(currPump[currPumpParam]);
+		if (data !== null) {
+			// Build Pump table / panel
+			data.forEach(function(currPump, indx) {
+				if (currPump === null) {
+					//console.log("Pump: Dataset empty.")
+				} else {
+					if (currPump !== "blank") {
+						// New Pump Data (Object) ... make sure pumpParams has been read / processed (i.e. is available)
+						if (typeof(pumpParams) !== "undefined") {
+							if (typeof(currPump["name"]) !== "undefined") {
+								// Determine if we need to add a column (new pump), or replace data - and find the target column if needed
+								var rowHeader = $('#pumps tr:first:contains(' + currPump["name"] + ')');
+								var colAppend = rowHeader.length ? false : true;
+								if (colAppend === false) {
+									var colTarget = -1;
+									$('th', rowHeader).each(function(index){
+										if ($(this).text() === currPump["name"])
+											colTarget = index;
 									});
 								}
-							}					
+								// Cycle through Pump Parameters
+								for (var currPumpParam in pumpParams) {					
+									currParamSet = pumpParams[currPumpParam];
+									// Find Target Row
+									var rowTarget = $('#pumps tr:contains("' + currParamSet["title"] + '")');
+									// And finally, append or replace data
+									if (colAppend === true) {
+										// Build Cell, Append
+										strCell = '<' + currParamSet["type"] + '>' + currPump[currPumpParam] + '</' + currParamSet["type"] + '>';
+										rowTarget.append(strCell);
+									} else {
+										// Replace Data, target Row, Column
+										$('td', rowTarget).each(function(index){
+											if (index === colTarget)
+												$(this).html(currPump[currPumpParam]);
+										});
+									}
+								}					
+							}
 						}
 					}
 				}
-			}
-		});
+			});
+			lastUpdate(true);
+		}
 	}
 	
 	function showSchedule(data) {
-		// Schedule/EggTimer to be updated => Wipe, then (Re)Build Below
-		$('#schedules tr').not('tr:first').remove();
-		$('#eggtimers tr').not('tr:first').remove();
-		// And (Re)Build Schedule and EggTimer tables / panels
-		data.forEach(function(currSchedule, indx) {
-			if (currSchedule === null) {
-				//console.log("Schedule: Dataset empty.")
-			} else {
-				if (currSchedule !== "blank") {
-					if (currSchedule.MODE === "Schedule") {
-						// Schedule Event (if circuit used)
-						if (currSchedule.CIRCUIT !== 'NOT USED') {
-							$('#schedules tr:last').after(buildSchTime(currSchedule) + buildSchDays(currSchedule));
-						}
-					} else {
-						// EggTimer Event (if circuit used)
-						if (currSchedule.CIRCUIT !== 'NOT USED') {
-							$('#eggtimers tr:last').after(buildEggTime(currSchedule));
-						}
-					}					
+		if (data !== null) {
+			// Schedule/EggTimer to be updated => Wipe, then (Re)Build Below
+			$('#schedules tr').not('tr:first').remove();
+			$('#eggtimers tr').not('tr:first').remove();
+			// And (Re)Build Schedule and EggTimer tables / panels
+			data.forEach(function(currSchedule, indx) {
+				if (currSchedule === null) {
+					//console.log("Schedule: Dataset empty.")
+				} else {
+					if (currSchedule !== "blank") {
+						if (currSchedule.MODE === "Schedule") {
+							// Schedule Event (if circuit used)
+							if (currSchedule.CIRCUIT !== 'NOT USED') {
+								$('#schedules tr:last').after(buildSchTime(currSchedule) + buildSchDays(currSchedule));
+							}
+						} else {
+							// EggTimer Event (if circuit used)
+							if (currSchedule.CIRCUIT !== 'NOT USED') {
+								$('#eggtimers tr:last').after(buildEggTime(currSchedule));
+							}
+						}					
+					}
 				}
-			}
-		});
+			});
+			lastUpdate(true);
+		}
+	}
+	
+	function lastUpdate(reset) {
+		var tmeCurrent = Date.now();
+		if (typeof(tmeLastUpd) === "undefined")
+			tmeLastUpd = tmeCurrent;
+		tmeDelta = (tmeCurrent - tmeLastUpd)/1000;
+		domDelta = $('#tmrLastUpd')
+		domDelta[0].innerHTML = 'Last Update: ' + tmeDelta.toFixed(1) + ' sec ago';
+		if (typeof(generalParams) !== "undefined") {
+			if (tmeDelta <= generalParams.tmeSuccess) {
+				domDelta.removeClass('label-warning');
+				domDelta.removeClass('label-danger');
+				domDelta.addClass('label-success');
+			} else if (tmeDelta <= generalParams.tmeWarning) {
+				domDelta.removeClass('label-success');
+				domDelta.removeClass('label-danger');
+				domDelta.addClass('label-warning');
+			} else {
+				domDelta.removeClass('label-success');
+				domDelta.removeClass('label-warning');
+				domDelta.addClass('label-danger');			
+			}			
+		}
+		if (reset === true)
+			tmeLastUpd = tmeCurrent;		
 	}
 });
