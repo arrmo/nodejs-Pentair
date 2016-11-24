@@ -10,7 +10,7 @@ var Bottle = require('bottlejs')
 var bottle = Bottle.pop('pentair-Bottle');
 
 
-bottle.constant('appVersion', '2.0 alpha 5')
+bottle.constant('appVersion', '2.0 beta 1')
 bottle.constant('logModuleLoading', 1)
 
 
@@ -84,20 +84,11 @@ bottle.factory('customNames', require('./lib/equipment/customNames.js'))
 bottle.factory('schedule', require('./lib/equipment/schedule.js'))
 bottle.factory('intellitouch', require('./lib/equipment/intellitouch.js'))
 
-
 //LOGGER
-//bottle.factory('winston', require('winston'))  how to call winston.Logger?
 bottle.factory('logger', require('./lib/logger/winston-helper.js'))
 bottle.factory('winstonToIO', require('./lib/logger/winstonToIO.js'))
 //bottle.constant('dateFormat', require('dateformat'))  //for log formatting
 //bottle.service('util', require('util'))
-
-
-
-
-
-
-
 
 function init() {
     //Call the modules to initialize them
