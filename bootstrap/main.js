@@ -86,10 +86,12 @@ function fmtEggTimerTime(strInpStr) {
 
 function setStatusButton(btnID, btnState) {
     if (btnState !== undefined) {
-        if (btnState.toUpperCase().includes('ON')) {
+        if (btnState===1) {
+            btnState ='On'
             btnID.removeClass('btn-primary');
             btnID.addClass('btn-success');
         } else {
+            btnState='Off'
             btnID.removeClass('btn-success');
             btnID.addClass('btn-primary');
         }
