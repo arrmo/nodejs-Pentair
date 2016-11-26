@@ -1,7 +1,6 @@
-
-var fs = require('fs')
 var Bottle = require('bottlejs');
 var bottle = Bottle.pop('pentair-Bottle');
+var fs = bottle.container.fs
 
 if (bottle.container.logModuleLoading)
     console.log('Loading: settings.js')
@@ -67,6 +66,7 @@ numberOfPumps = exports.numberOfPumps  = configFile.Equipment.numberOfPumps;
 appAddress = exports.appAddress  = configFile.Equipment.appAddress;
 expressDir = exports.expressDir  = configFile.Misc.expressDir;
 expressPort = exports.expressPort  = configFile.Misc.expressPort;
+expressTransport = exports.expressTransport = configFile.Misc.expressTransport;
 expressAuth = exports.expressAuth  = configFile.Misc.expressAuth;
 expressAuthFile = exports.expressAuthFile  = configFile.Misc.expressAuthFile;
 netConnect = exports.netConnect  = configFile.Network.netConnect;

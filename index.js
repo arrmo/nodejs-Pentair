@@ -13,6 +13,9 @@ var bottle = Bottle.pop('pentair-Bottle');
 bottle.constant('appVersion', '2.0 beta 2')
 bottle.constant('logModuleLoading', 1)
 
+//Multiple
+bottle.service('nanoTimer', require('nanotimer'))
+bottle.service('fs', function() { return require('fs')})
 
 //API
 bottle.constant('apiSearch', require('./lib/api/api-search.js'))
@@ -22,14 +25,15 @@ bottle.constant('settings', require('./etc/settings.js'))
 bottle.factory('constants', require('./etc/constants.js'))
 
 
-
 //COMMS
+bottle.factory('auth', function(){return require('http-auth')})
 bottle.factory('server', require('./lib/comms/server.js'))
 bottle.factory('io', require('./lib/comms/socketio-helper.js'))
 bottle.factory('whichPacket', require('./lib/comms/which-packet.js'))
 bottle.factory('sp', require('./lib/comms/sp-helper.js'))
 
 //COMMS/INBOUND
+bottle.service('dequeue', require('dequeue'));
 bottle.factory('receiveBuffer', require('./lib/comms/inbound/receive-buffer.js'))
 bottle.factory('decodeHelper', require('./lib/comms/inbound/decode-helper.js'))
 bottle.factory('packetBuffer', require('./lib/comms/inbound/packet-buffer.js'))
@@ -85,10 +89,11 @@ bottle.factory('schedule', require('./lib/equipment/schedule.js'))
 bottle.factory('intellitouch', require('./lib/equipment/intellitouch.js'))
 
 //LOGGER
+bottle.factory('dateFormat', function() {return require('dateformat')})  //for log formatting
+bottle.factory('util', function() {return require('util')})
+bottle.factory('winston', function() {return require('winston')})
 bottle.factory('logger', require('./lib/logger/winston-helper.js'))
-bottle.factory('winstonToIO', require('./lib/logger/winstonToIO.js'))
-//bottle.constant('dateFormat', require('dateformat'))  //for log formatting
-//bottle.service('util', require('util'))
+bottle.service('winstonToIO', require('./lib/logger/winstonToIO.js'))
 
 function init() {
     //Call the modules to initialize them
