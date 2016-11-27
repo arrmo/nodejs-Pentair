@@ -4,8 +4,8 @@
 		"pool": { "state": "visible" },
 		"spa": { "state": "visible" },
 		"features": { "state": "visible" },
-		"pump": { "state": "visible" },
-		"schedule": { "state": "visible" },
+		"pump": { "state": "hidden" },
+		"schedule": { "state": "collapse" },
 		"eggtimer": { "state": "hidden" },
 		"debug": { "state": "hidden" }
 	},
@@ -39,5 +39,10 @@
 		"verbose": "cyan",
 		"debug": "blue",
 		"silly": "magenta"
+	},
+	
+	"generalParams" : {
+		"tmeSuccess": 90,
+		"tmeWarning": 180
 	}
 }
