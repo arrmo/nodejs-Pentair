@@ -4,12 +4,12 @@
 		"pool": { "state": "visible" },
 		"spa": { "state": "visible" },
 		"features": { "state": "visible" },
-		"pump": { "state": "hidden" },
-		"schedule": { "state": "collapse" },
-		"eggtimer": { "state": "hidden" },
+		"pump": { "state": "visible" },
+		"schedule": { "state": "visible" },
+		"eggtimer": { "state": "visible" },
 		"debug": { "state": "hidden" }
 	},
-	
+
 	"equipConfig" : {
 		"poolHeatMode": {"equip": "pool"},
 		"poolSetpointMinusOne": [{"equip": "pool" }, {"adjust": -1 }],
@@ -22,7 +22,7 @@
 		"spaHeatModeDown": {"heatModeDirn": -1},
 		"spaHeatModeUp": {"heatModeDirn": 1}
 	},
-	
+
 	"pumpParams" : {
 		"name": { "title": "Parameter", "type": "th" },
 		"watts": { "title": "Watts", "type": "td" },
@@ -31,7 +31,7 @@
 		"drivestate": { "title": "Drive State", "type": "td" },
 		"run": { "title": "Run Mode", "type": "td" }
 	},
-	
+
 	"logLevels" : {
 		"error": "red",
 		"warn": "yellow",
@@ -40,7 +40,7 @@
 		"debug": "blue",
 		"silly": "magenta"
 	},
-	
+
 	"generalParams" : {
 		"tmeSuccess": 90,
 		"tmeWarning": 180

@@ -26,8 +26,15 @@ bottle.factory('constants', require('./etc/constants.js'))
 
 
 //COMMS
+bottle.factory('express', function(){return require('express')})
+bottle.factory('http', function(){return require('http')})
+bottle.factory('https', function(){return require('https')})
 bottle.factory('auth', function(){return require('http-auth')})
 bottle.factory('server', require('./lib/comms/server.js'))
+
+bottle.factory('serialport', function(){return require('serialport')})
+bottle.factory('net', function(){return require('net')})
+bottle.factory('socket', function(){return require('socket.io')})
 bottle.factory('io', require('./lib/comms/socketio-helper.js'))
 bottle.factory('whichPacket', require('./lib/comms/which-packet.js'))
 bottle.factory('sp', require('./lib/comms/sp-helper.js'))
@@ -66,6 +73,7 @@ bottle.factory('pump_6', require('./lib/comms/inbound/pump/6.js'))
 //bottle.factory('pump_7', require('./lib/comms/inbound/pump/7.js'))
 
 //COMMS/OUTBOUND
+bottle.factory('request', function() {return require('request')})
 bottle.factory('ISYHelper', require('./lib/comms/outbound/ISY.js'))
 bottle.factory('writePacket', require('./lib/comms/outbound/write-packet.js'))
 bottle.factory('queuePacket', require('./lib/comms/outbound/queue-packet.js'))
