@@ -33,6 +33,7 @@
     "request": "^2.75.0",
     "serialport": "^4.0.1",
     "socket.io": "^1.4.8",
+    "socket.io-client": "^1.7.1",
     "timepicker": "^1.11.6",
     "winston": "^2.2.0"
   },

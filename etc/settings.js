@@ -56,6 +56,11 @@ var logPumpTimers; //variable to output timer debug messages for the pumps
 var configurationFile = 'config.json';
 
 var configFile = JSON.parse(fs.readFileSync(configurationFile));
+
+getConfig = exports.getConfig = function(){
+  return configFile
+}
+
 intellicom = exports.intellicom  = configFile.Equipment.intellicom;
 intellitouch = exports.intellitouch  = configFile.Equipment.intellitouch;
 pumpOnly = exports.pumpOnly  = configFile.Equipment.pumpOnly;
