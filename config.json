@@ -15,16 +15,15 @@
         "expressAuthFile": "/users.htpasswd"
     },
     "Network": {
+        "rs485Port": "/dev/ttyUSB0",
         "netConnect": 1,
         "netHost": "raspberrypi.local",
-        "netPort": 9801,
-        "rs485Port": "/dev/ttyUSB0"
+        "netPort": 9801
     },
     "Log": {
-        "logType": "info",
+        "logLevel": "info",
         "extLogLevel": "info",
         "logPumpMessages": 0,
-        "logChlorinator": 0,
         "logDuplicateMessages": 0,
         "logConsoleNotDecoded": 0,
         "logConfigMessages": 0,
@@ -36,7 +35,6 @@
     },
     "Integrations": {
         "socketISY": 0,
-        "alexaskills": 0,
         "outputToConsole": 0
     },
     "socketISY": {

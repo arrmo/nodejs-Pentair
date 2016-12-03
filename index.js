@@ -10,7 +10,7 @@ var Bottle = require('bottlejs')
 var bottle = Bottle.pop('pentair-Bottle');
 
 
-bottle.constant('appVersion', '2.0 beta 3')
+bottle.constant('appVersion', '2.0.0')
 bottle.constant('logModuleLoading', 0)
 
 //Multiple

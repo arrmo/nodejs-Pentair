@@ -42,7 +42,7 @@ module.exports = function(container) {
 
     //This init can be this simple.  It just lets us know the integration is running
     function init() {
-        //to log through all the logger channels (formatting, to the Bootstrap debug, etc, use "container.logger.")
+        //to log through all the logger channels (formatting, to the Bootstrap debug, etc, use "container.logger")
         //we are using our variable, level, to set the level of the logger here
         container.logger[level]('outputToConsole Loaded.')
     }

@@ -1,4 +1,4 @@
-# nodejs-Pentiar - Version 2.0 ALPHA 1
+# nodejs-Pentiar - Version 2.0
 
 [![Join the chat at https://gitter.im/pentair_pool/Lobby](https://badges.gitter.im/pentair_pool/Lobby.svg)](https://gitter.im/pentair_pool/Lobby?utm_source=badge&utm_medium=badge&utm_campaign=pr-badge&utm_content=badge)
 
@@ -71,6 +71,7 @@ for discussions, designs, and clarifications, we recommend you join our [Gitter 
  * Get system status: /status
  * Get schedules: /schedule
  * Get pump status: /pump
+ * Get all equipment as one JSON: /all
  * Set spa heat setpoint: /spaheat/setpoint/#
  * Set spa heat mode: /spaheat/mode/#  (0=off, 1=heater, 2=solar pref, 3=solar only)
  * Set pool heat setpoint: /poolheat/setpoint/#
@@ -97,7 +98,7 @@ for discussions, designs, and clarifications, we recommend you join our [Gitter 
 | To client | <code>heat</heat> | outputs an object with the heat information
 | To client | <code>schedule</heat> | outputs an object with the schedule information
 | To client | <code>chlorinator</heat> | outputs an object with the chlorinator information
-
+| To client | <code>all</heat> | outputs an object with all equipment in one JSON
 
 ## Config.JSON
 
@@ -107,28 +108,29 @@ See below for descriptions
 ```
 {
     "Equipment": {
-        "intellicom": 0,   
+        "intellicom": 0,
         "intellitouch": 1,
         "pumpOnly": 0,
-        "numberOfPumps": 2,
+        "numberOfPumps": 0,
         "chlorinator": 1,
-        "ISYController": 0,
         "appAddress": 33
-
     },
     "Misc": {
-          // "/bootstrap" for the nice UI, "/public" for a basic UI
         "expressDir": "/bootstrap",
-        "expressPort": 3000
+        "expressPort": 3000,
+        "expressTransport": "https",
+        "expressAuth": 0,
+        "expressAuthFile": "/users.htpasswd"
     },
     "Network": {
-          //netConnect enables remote debugging.  See other section
-        "netConnect": 0,
-        "netHost": "raspberrypi",
+        "rs485Port": "/dev/ttyUSB0",
+        "netConnect": 1,
+        "netHost": "raspberrypi.local",
         "netPort": 9801
     },
     "Log": {
-        "logType": "info",
+        "logLevel": "info",
+        "extLogLevel": "info",
         "logPumpMessages": 0,
         "logDuplicateMessages": 0,
         "logConsoleNotDecoded": 0,
@@ -136,25 +138,40 @@ See below for descriptions
         "logMessageDecoding": 0,
         "logChlorinator": 0,
         "logPacketWrites": 0,
-        "logPumpTimers": 0
+        "logPumpTimers": 0,
+        "logApi": 0
     },
-    "ISY": {
+    "Integrations": {
+        "socketISY": 0,
+        "alexaskills": 0,
+        "outputToConsole": 0
+    },
+    "socketISY": {
         "username": "blank",
         "password": "blank",
         "ipaddr": "127.0.0.1",
-        "port":12345,
+        "port": 12345,
         "Variables": {
-            "currentPumpStatus[1].watts": 25,
-            "currentPumpStatus[1].rpm": 24,
-            "currentPumpStatus[1].currentprogram": 13,
-            "currentPumpStatus[1].program1rpm": 10,
-            "currentPumpStatus[1].program2rpm": 11,
-            "currentPumpStatus[1].program3rpm": 12,
-            "currentPumpStatus[1].program4rpm": 13,
-            "currentPumpStatus[1].power": 14,
-            "currentPumpStatus[1].timer": 15,
-            "currentChlorinatorStatus.saltPPM": 16
+            "chlorinator": {
+                "saltPPM": 16
+            },
+            "pump": {
+                "1": {
+                    "watts": 25,
+                    "rpm": 24,
+                    "currentprogram": 13,
+                    "program1rpm": 10,
+                    "program2rpm": 11,
+                    "program3rpm": 12,
+                    "program4rpm": 13,
+                    "power": 14,
+                    "timer": 15
+                }
+            }
         }
+    },
+    "outputToConsole": {
+      "level": "warn"
     }
 }
 
@@ -177,14 +194,9 @@ Only one of these should be 1 (true).  The other two should be 0 (false).
 1 = there is a chlorinator in your equipment, 0 = no chlorinator
 (This variable is only applicable with `pumpOnly=1`)
 
-#### ISY Controller
-1 (true), 0 (false)
-See below for ISY configuration.
-
 #### appAddress
 The address on the serial bus that this app will use.
 The pumps don't seem to care what number you use, but Intellitouch won't respond unless this address is one of 32, 33, 34.
-<<<<<<< HEAD
 
 
 ### Misc
@@ -192,17 +204,33 @@ The pumps don't seem to care what number you use, but Intellitouch won't respond
 #### expressDir
 set to `/bootstrap` for the fancy UI or `/public` for a basic
 
+#### expressPort
+set to the value that you want the web pages to be served to.  3000 = http://localhost:3000
+
+#### expressTransport
+`http` for unencrypted traffic.  `https` for encryption.  
+
+#### expressAuth & expressAuthFile
+`expressAuth = 0` for no username/password.  `expressAuth = 1` for username/password.
+`expressAuthFile=/users.htpasswd`  If you have expressAuth=1 then create the file users.htpasswd in the root of the application.  Use a tool such as http://www.htaccesstools.com/htpasswd-generator/ and paste your user(s) into this file.  You will now be prompted for authentication.
 
 ### Network
+
+#### rs485Port
+If you are running the code on the same machine as your local rs485 adapter, set the address of the adapter here.
+
+### Connect to native rs485 traffic for connectivity/debugging
 For SOCAT functionality
         "netConnect": 1,
         "netHost": "raspberrypi",
         "netPort": "9801"
 
-
 ### Log
 
-#### logType
+#### logLevel & extLogLevel
+`logLevel` is the console output level
+`extLogLevel` is the bootstrap UI output level in the debug panel
+
 | --- | --- |
 | Error | Only output error messages |
 | Warn | Output the above, plus warnings |
@@ -213,47 +241,18 @@ For SOCAT functionality
 #### logPumpMessages
 1 = show messages from the pump in the logs, 0 = hide
 
-#### logDuplicateMessages
-1 = show messages that are repeated on the bus in the logs, 0 = hide
-
-=======
-
-
-### Misc
-
-#### expressDir
-set to `/bootstrap` for the fancy UI or `/public` for a basic
-
-
-### Network
-For SOCAT functionality
-        "netConnect": 1,
-        "netHost": "raspberrypi",
-        "netPort": "9801"
-
-
-### Log
-
-#### logType
-| --- | --- |
-| Error | Only output error messages |
-| Warn | Output the above, plus warnings |
-| **Info** | Output the above, plus information about circuit/status changes |
-| Debug | Output the above, plus debugging information |
-| Silly | Output the above, plus code-level troubleshooting messages |
-
-#### logPumpMessages
-1 = show messages from the pump in the logs, 0 = hide
 
 #### logDuplicateMessages
 1 = show messages that are repeated on the bus in the logs, 0 = hide
-
 
 #### logConsoleNotDecoded
 1 = log any messages that have not been [documented](https://github.com/tagyoureit/nodejs-Pentair/wiki)
 
 #### logConfigMessages
 1 = log messages that relate to the configuration of the pool (from controllers), 0 = hide
+
+#### logMessageDecoding
+1 = log the internal decoding of packets
 
 #### logChlorinator
 1 = log messages directly from the chlorinator, 0 = hide
@@ -265,13 +264,21 @@ For SOCAT functionality
 #### logPumpTimers
 1 = log debug messages about pump timers, 0 = hide
 
-### ISY
+### Integrations
+See below for Integration instructions
+
+### socketISY
+This is an Integration (see below) that comes with the app.
 If you use ISY, put in your system information.
+
+#### Configuration
+Set the username/password/ip address/port.
 
 #### Variables
 Any number of ISY variables can go here.  
-Format should be "currentPumpStatus[pump number].xyz": port #
-xyz is one of: number, time, run, mode, drivestate, watts, rpm, ppc, err, timer, duration, currentprogram, program1rpm, program2rpm, program3rpm, program4rpm, remotecontrol, power
+Format should be `"equipment": {"parameter": port#}`
+For pumps, where there can be multiple of the same parameter, use `"pump": {"pumpNumber": {"parameter": port#}}`
+To see all of the potential equipment, call `http://localhost:3000/all`
 
 <a name="module_nodejs-Pentair--RS485"></a>
 
@@ -284,7 +291,7 @@ The inexpensive [JBTek](https://www.amazon.com/gp/product/B00NKAJGZM/ref=oh_aui_
 
 2.  Connect the DATA+ and DATA-.
 
-3.  To see if you are getting the proper communications from the bus, before you even try to run this program, run from your *nix command line
+3.  To see if you are getting the proper communications from the bus, before you even try to run this program, run from your unix command line
 
 ```
 od -x < /dev/ttyUSB0
@@ -293,6 +300,7 @@ od -x < /dev/ttyUSB0
 Of course, you'll need to change the address of your RS-485 adapter if it isn't the same as mine (here and in the code).
 
 *   You'll know you have the wires right when the output of this command looks like (you should see multiple repetitions of ffa5ff):
+
 ```
 0002240 0000 0000 0000 0000 0000 ff00 ffff ffff
 0002260 **ffff 00ff a5ff** 0f0a 0210 161d 000c 0040
@@ -310,76 +318,99 @@ Of course, you'll need to change the address of your RS-485 adapter if it isn't 
 0001540 dfe1 c5fb f3d3 7fff ffff ffff ffff fff9
 ```
 
-
+***
 
 ## Sample Output
 
-Set the <code>["logType": "info"](#module_nodejs-Pentair--config)</code> variable to your liking.
+Set the <code>["logLevel": "info"](#module_nodejs-Pentair--config)</code> variable to your liking.
 
 
 The RS-485 bus is VERY active!  It sends a lot of broadcasts, and instructions/acknowledgements.  Many commands are known, but feel free to help debug more if you are up for the challenge!  See the wiki for what we know.  Below are a sample of the message
 
 Request for a status change:
 ```
-22:14:20.171 INFO Msg# 739   Wireless asking Main to change pool heat mode to Solar Only (@ 88 degrees) & spa heat mode to Solar Only (at 100 degrees): [16,34,136,4,88,100,15,0,2,56]
+08:47:51.368 INFO User request to toggle PATH LIGHTS to On
 
 ```
 
 When the app starts, it will show the circuits that it discovers.  For my pool, the circuits are:
 ```
-22:07:59.241 INFO Msg# 51  Initial circuits status discovered:
-SPA : off
-JETS : off
-AIR BLOWER : off
-CLEANER : off
-WtrFall 1.5 : off
-POOL : on
-SPA LIGHT : off
-POOL LIGHT : off
-PATH LIGHTS : off
-SPILLWAY : off
-WtrFall 1 : off
-WtrFall 2 : off
-WtrFall 3 : off
-Pool Low2 : on
-NOT USED : off
-NOT USED : off
-NOT USED : off
-AUX EXTRA : off
+08:45:46.948 INFO
+  Custom Circuit Names retrieved from configuration:
+	["WtrFall 1","WtrFall 1.5","WtrFall 2","WtrFall 3","Pool Low2","USERNAME-06","USERNAME-07","USERNAME-08","USERNAME-09","USERNAME-10"]
+
+08:45:50.989 INFO
+  Circuit Array Discovered from configuration:
+Circuit 1: SPA Function: Spa Status: 0 Freeze Protection: Off
+Circuit 2: JETS Function: Generic Status: 0 Freeze Protection: Off
+Circuit 3: AIR BLOWER Function: Generic Status: 0 Freeze Protection: Off
+Circuit 4: CLEANER Function: Master Cleaner Status: 0 Freeze Protection: Off
+Circuit 5: WtrFall 1.5 Function: Generic Status: 0 Freeze Protection: Off
+Circuit 6: POOL Function: Pool Status: 0 Freeze Protection: Off
+Circuit 7: SPA LIGHT Function: Light Status: 0 Freeze Protection: Off
+Circuit 8: POOL LIGHT Function: Light Status: 0 Freeze Protection: Off
+Circuit 9: PATH LIGHTS Function: Light Status: 0 Freeze Protection: Off
+Circuit 10: NOT USED Function: Generic Status: 0 Freeze Protection: Off
+Circuit 11: SPILLWAY Function: Spillway Status: 0 Freeze Protection: Off
+Circuit 12: WtrFall 1 Function: Generic Status: 0 Freeze Protection: Off
+Circuit 13: WtrFall 2 Function: Generic Status: 0 Freeze Protection: Off
+Circuit 14: WtrFall 3 Function: Generic Status: 0 Freeze Protection: Off
+Circuit 15: Pool Low2 Function: Generic Status: 1 Freeze Protection: Off
+Circuit 16: NOT USED Function: Spillway Status: 0 Freeze Protection: Off
+Circuit 17: NOT USED Function: Spillway Status: 0 Freeze Protection: Off
+Circuit 18: NOT USED Function: Spillway Status: 0 Freeze Protection: Off
+Circuit 19: NOT USED Function: Generic Status: 0 Freeze Protection: Off
+Circuit 20: AUX EXTRA Function: Generic Status: 0 Freeze Protection: Off
+
+08:45:54.136 INFO Msg# 69  Schedules discovered:
+ID: 1  CIRCUIT:(6)POOL  MODE:Schedule START_TIME:9:25 END_TIME:15:55 DAYS:Sunday Monday Tuesday Wednesday Thursday Friday Saturday
+ID: 2  CIRCUIT:(13)WtrFall 2  MODE:Schedule START_TIME:14:57 END_TIME:15:8 DAYS:Sunday Tuesday Thursday Saturday
+ID: 3  CIRCUIT:(4)CLEANER  MODE:Schedule START_TIME:10:15 END_TIME:11:0 DAYS:Sunday Monday Tuesday Wednesday Thursday Friday Saturday
+ID: 4  CIRCUIT:(6)POOL  MODE:Egg Timer DURATION:7:15
+ID: 5  CIRCUIT:(4)CLEANER  MODE:Egg Timer DURATION:4:0
+ID: 6  CIRCUIT:(15)Pool Low2  MODE:Schedule START_TIME:21:10 END_TIME:23:55 DAYS:Sunday Monday Tuesday Wednesday Thursday Friday Saturday
+ID: 7  CIRCUIT:(15)Pool Low2  MODE:Schedule START_TIME:0:5 END_TIME:9:20 DAYS:Sunday Monday Tuesday Wednesday Thursday Friday Saturday
+ID: 8  CIRCUIT:(7)SPA LIGHT  MODE:Egg Timer DURATION:2:0
+ID: 9  CIRCUIT:(2)JETS  MODE:Egg Timer DURATION:3:45
+ID:10  CIRCUIT:(9)PATH LIGHTS  MODE:Egg Timer DURATION:4:15
+ID:11  CIRCUIT:(11)SPILLWAY  MODE:Schedule START_TIME:13:0 END_TIME:13:11 DAYS:Sunday Monday Tuesday Wednesday Thursday Friday Saturday
+ID:12  CIRCUIT:(5)WtrFall 1.5  MODE:Schedule START_TIME:13:20 END_TIME:13:40 DAYS:Sunday Tuesday Thursday
+
+
 ```
 
-To dispaly the messages below, change the logging level to VERBOSE.
+To display the messages below, change the logging level to VERBOSE.
 ```
-Msg# 25   What's Different?:  uom: ° Celsius --> ° Farenheit
-                          S       L                                                           W               A   S
-                          O       E           M   M   M                                       T               I   O
-                      D   U       N   H       O   O   O                   U                   R   T           R   L                                       C   C
-                      E   R       G   O   M   D   D   D                   O                   T   M           T   T                                       H   H
-                      S   C       T   U   I   E   E   E                   M                   M   P           M   M                                       K   K
-                      T   E       H   R   N   1   2   3                                       P   2           P   P                                       H   L
-Orig:                15, 16,  2, 29,  8, 57,  0, 64,  0,  0,  0,  0,  0,  4,  3,  0, 64,  4, 26, 26, 32,  0, 18, 18,  0,  0,  3,  0,  0,170,223,  0, 13,  3,202
- New:                15, 16,  2, 29,  8, 57,  0, 64,  0,  0,  0,  0,  0,  0,  3,  0, 64,  4, 26, 26, 32,  0, 18, 18,  0,  0,  3,  0,  0,170,186,  0, 13,  3,161
-Diff:                                                                     *                                                                   *            
+08:47:51.606 VERBOSE Msg# 266:
+
+                                  S       L                                           V           H   P   S   H       A   S           H
+                                  O       E           M   M   M                       A           T   OO  P   T       I   O           E
+                              D   U       N   H       O   O   O                   U   L           R   L   A   R       R   L           A                           C   C
+                              E   R   C   G   O   M   D   D   D                   O   V           M   T   T   _       T   T           T                           H   H
+                              S   C   M   T   U   I   E   E   E                   M   E           D   M   M   O       M   M           M                           K   K
+                              T   E   D   H   R   N   1   2   3                       S           E   P   P   N       P   P           D                           H   L
+Orig:               165, 16, 15, 16,  2, 29,  8, 57,  0, 64,  0,  0,  0,  0,  0,  0,  3,  0, 64,  4, 61, 61, 32,  0, 49, 45,  0,  0,  4,  0,  0,137,192,  0, 13,  4,13
+ New:               165, 16, 15, 16,  2, 29,  8, 57,  0, 65,  0,  0,  0,  0,  0,  0,  3,  0, 64,  4, 61, 61, 32,  0, 49, 45,  0,  0,  4,  0,  0,137,192,  0, 13,  4,14
+Diff:                                                     *                                                                                                        
+
+08:47:51.609 DEBUG No change in time.
+08:47:51.624 VERBOSE Msg# 266   Circuit PATH LIGHTS change:  Status: Off --> On
 ```
 
 An example of pump communication.  To show these, change logPumpMessages from 0 to 1.
 
 ```
---> PUMP  Pump1
- Pump Status:  {"pump":"Pump1","power":1,"watts":170,"rpm":1250}
- Full Payload:  [16,96,7,15,10,0,0,0,170,4,226,0,0,0,0,0,1,22,14,2,234]
-<-- PUMP  Pump1
-```
-
-
-An example of an unknown payload:  
-```
-Unknown chatter:  [97,16,4,1,255,2,26]
+08:50:10.805 VERBOSE Msg# 79   Main --> Pump 1: Pump power to on: [165,0,96,16,6,1,10,1,38]
 ```
 
 =======
 
 <a name="module_nodejs-Pentair--socat"></a>
+
+## Integrations
+You can now (pretty) easily add your own code to interface with any other home automation (or other) systems.  See https://github.com/tagyoureit/nodejs-Pentair/wiki/Integrations-in-2.0
+
+The "outputToConsole" is a very simple module that echos out additional messages.  The ISY sample is a bit more complex and keeps track of the state of variables.
 
 ## Socat
 
@@ -483,11 +514,15 @@ In the <code>["network"](#module_nodejs-Pentair--config)</code> section, set `ne
  * Outgoing packets are now sent based on a timer (previously number of incoming packets)
  * Added ISY support (@bluemantwo was super-helpful here, too!)
 
+2.0.0 -
+ * https, Authentication
+ * Completely refactored code.  Integrated BottleJS (https://github.com/young-steveo/bottlejs) for dependency injection and service locator funcctions
+ * Integrations to loosely couple add-ons
 
-# Known Issues
+# Wish list
 1.  Still many messages to debug
-2.  Still many messages to debug
-3.  Still many messages to debug
+2.  Alexa, Siri integration coming soon!  
+3.  Integration directly with Screenlogic (IP based).  Awesome job @ceisenach.  https://github.com/ceisenach/screenlogic_over_ip
 
 
 # Protocol

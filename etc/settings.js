@@ -42,7 +42,7 @@ var expressAuthFile; // Authentication file (created using htpasswd, stores user
 
 //-------  LOG SETUP -----------
 //Change the following log message levels as needed
-var logType; // one of { error: 0, warn: 1, info: 2, verbose: 3, debug: 4, silly: 5 }
+var logLevel; // one of { error: 0, warn: 1, info: 2, verbose: 3, debug: 4, silly: 5 }
 var logPumpMessages; //variable if we want to output pump messages or not
 var logDuplicateMessages; //variable if we want to output duplicate broadcast messages
 var logConsoleNotDecoded; //variable to hide any unknown messages
@@ -78,7 +78,7 @@ netConnect = exports.netConnect  = configFile.Network.netConnect;
 rs485Port = exports.rs485Port  = configFile.Network.rs485Port;
 netPort = exports.netPort  = configFile.Network.netPort;
 netHost = exports.netHost  = configFile.Network.netHost;
-logType = exports.logType = configFile.Log.logType;
+logLevel = exports.logLevel = configFile.Log.logLevel;
 extLogLevel = exports.extLogLevel = configFile.Log.extLogLevel;
 logPumpMessages = exports.logPumpMessages  = configFile.Log.logPumpMessages;
 logDuplicateMessages = exports.logDuplicateMessages  = configFile.Log.logDuplicateMessages;
@@ -134,7 +134,7 @@ settingsStr += '\n var netPort = ' + netPort;
 settingsStr += '\n //-------  END NETWORK SETUP -----------';
 settingsStr += '\n ';
 settingsStr += '\n //-------  LOG SETUP -----------';
-settingsStr += '\n var logType = ' + logType;
+settingsStr += '\n var logLevel = ' + logLevel;
 settingsStr += '\n var extLogLevel = ' + extLogLevel;
 settingsStr += '\n var logPumpMessages = ' + logPumpMessages;
 settingsStr += '\n var logDuplicateMessages = ' + logDuplicateMessages;
