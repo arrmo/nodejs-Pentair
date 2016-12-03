@@ -10,6 +10,7 @@ nodejs-Pentair is an application to communicate and control your Pentair compati
  Want a web interface for your system?
  Want to turn your pumps on remotely?
  Want to have your home automation system talk to your pool?
+ Want to control your pumps or chlorinator without a pool controller?
 
  Controllers:  Intellitouch, EasyTouch, Intermatic, SunTouch, IntellicomII
  Pumps: Intelliflow, older models
@@ -99,6 +100,8 @@ for discussions, designs, and clarifications, we recommend you join our [Gitter 
 | To client | <code>schedule</heat> | outputs an object with the schedule information
 | To client | <code>chlorinator</heat> | outputs an object with the chlorinator information
 | To client | <code>all</heat> | outputs an object with all equipment in one JSON
+
+***
 
 ## Config.JSON
 
@@ -407,10 +410,14 @@ An example of pump communication.  To show these, change logPumpMessages from 0 
 
 <a name="module_nodejs-Pentair--socat"></a>
 
+***
+
 ## Integrations
 You can now (pretty) easily add your own code to interface with any other home automation (or other) systems.  See https://github.com/tagyoureit/nodejs-Pentair/wiki/Integrations-in-2.0
 
 The "outputToConsole" is a very simple module that echos out additional messages.  The ISY sample is a bit more complex and keeps track of the state of variables.
+
+***
 
 ## Socat
 
@@ -447,6 +454,23 @@ From your local machine, you should be able to telnet to port 9801 and see incom
 
 #### nodejs-Pentair app configuration
 In the <code>["network"](#module_nodejs-Pentair--config)</code> section, set `netConnet=1`.  `netHost` is your remote machine.  `netPort` should be 9801 if you followed these instructions.
+
+***
+
+## Standalone mode
+
+### Pump Standalone
+To use the pumps in standalone mode, set the following in `config.json`:
+`"pumpOnly":1`
+`"numberOfPumps":#` #=1 or 2
+`"expressDir":"/public"`
+Start the app and navigate to http://localhost:3000/pump.html.  Addition of the pump control to `/bootstrap` is in progress
+
+### Chlorinator Standalone
+To use the chlorinator in standalone mode, set the following in `config.json`:
+`"chlorinator":1`
+(Intellitouch, Intellicom should be set to 0)
+Start the app to set the chlorinator level, call http://localhost:3000/chlorinator/LEVEL.  Level should be 0-101.  0 = off, 1-100=%, 101=Super Chlorinate (or Boost).  Addition of the chlorinator to the `/bootstrap` UI is in progress.
 
 ***
 
