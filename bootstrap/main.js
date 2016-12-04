@@ -334,7 +334,6 @@ $(function() {
 	// Show Information (from received socket.io)
 	function showConfig(data) {
 		if (data !== null) {
-			$('#runMode').html(data.runmode);
 			$('#stateHeater').html(data.HEATER_ACTIVE);
 		}
 	}
