@@ -29,7 +29,8 @@ function configPanels(jsonPanel) {
 			var panelList = $('#draggablePanelList');
 			var panelListItems = panelList.children();
 			// And, only reorder if no missing / extra items => or items added, removed ... so "reset" to index.html
-			if (panelIndices.length === panelListItems.length) {
+			var sizeStorage = panelIndices.filter(function(value) { return value !== null }).length;
+			if (sizeStorage === panelListItems.length) {
 				panelListItems.detach();
 				$.each(panelIndices, function() {
 					var currPanel = this.toString();
@@ -285,72 +286,6 @@ $(function() {
 
 	// Socket Events (Receive)
 	socket.on('circuit', function(data) {
-		showCircuit(data);
-		lastUpdate(true);
-	});
-
-	socket.on('config', function(data) {
-		showConfig(data);
-		lastUpdate(true);
-	});
-
-	socket.on('pump', function(data) {
-		showPump(data);
-		lastUpdate(true);
-	});
-
-	socket.on('heat', function(data) {
-		showHeat(data);
-		lastUpdate(true);
-	});
-
-	socket.on('schedule', function(data) {
-		showSchedule(data);
-		lastUpdate(true);
-	});
-
-	socket.on('outputLog', function(data) {
-		formatLog(data);
-		lastUpdate(true);
-	});
-
-	socket.on('time', function(data) {
-		$('#currTime').html(data.controllerTime);
-		lastUpdate(true);
-	});
-
-	socket.on('temp', function(data) {
-		$('#airTemp').html(data.airTemp);
-		$('#solarTemp').html(data.solarTemp);
-		if (data.solarTemp === 0)
-			$('#solarTemp').closest('tr').hide();
-		else
-			$('#solarTemp').closest('tr').show();
-		$('#poolCurrentTemp').html(data.poolTemp);
-		$('#spaCurrentTemp').html(data.spaTemp);
-		lastUpdate(true);
-	});
-
-	// Show Information (from received socket.io)
-	function showConfig(data) {
-		if (data !== null) {
-			$('#runMode').html(data.runmode);
-			$('#stateHeater').html(data.HEATER_ACTIVE);
-		}
-	}
-
-	function showHeat(data) {
-		if (data !== null) {
-			$('#poolHeatSetPoint').html(data.poolSetPoint);
-			$('#poolHeatMode').data('poolHeatMode', data.poolHeatMode);
-			$('#poolHeatModeStr').html(data.poolHeatModeStr);
-			$('#spaHeatSetPoint').html(data.spaSetPoint);
-			$('#spaHeatMode').data('spaHeatMode', data.spaHeatMode);
-			$('#spaHeatModeStr').html(data.spaHeatModeStr);
-		}
-	}
-
-	function showCircuit(data) {
 		if (data !== null) {
 			data.forEach(function(currCircuit, indx) {
 				if (currCircuit.hasOwnProperty('name')) {
@@ -370,9 +305,17 @@ $(function() {
 				}
 			});
 		}
-	}
+		lastUpdate(true);
+	});
 
-	function showPump(data) {
+	socket.on('config', function(data) {
+		if (data !== null) {
+			$('#stateHeater').html(data.HEATER_ACTIVE);
+		}
+		lastUpdate(true);
+	});
+
+	socket.on('pump', function(data) {
 		if (data !== null) {
 			// Build Pump table / panel
 			data.forEach(function(currPump, indx) {
@@ -417,9 +360,26 @@ $(function() {
 				}
 			});
 		}
-	}
+		lastUpdate(true);
+	});
 
-	function showSchedule(data) {
+	socket.on('heat', function(data) {
+		if (data !== null) {
+			$('#poolHeatSetPoint').html(data.poolSetPoint);
+			$('#poolHeatMode').data('poolHeatMode', data.poolHeatMode);
+			$('#poolHeatModeStr').html(data.poolHeatModeStr);
+			$('#spaHeatSetPoint').html(data.spaSetPoint);
+			$('#spaHeatMode').data('spaHeatMode', data.spaHeatMode);
+			$('#spaHeatModeStr').html(data.spaHeatModeStr);
+		}
+		lastUpdate(true);
+	});
+
+	socket.on('chlorinator', function(data) {
+		lastUpdate(true);
+	});
+
+	socket.on('schedule', function(data) {
 		if (data !== null) {
 			// Schedule/EggTimer to be updated => Wipe, then (Re)Build Below
 			$('#schedules tr').not('tr:first').remove();
@@ -445,8 +405,31 @@ $(function() {
 				}
 			});
 		}
-	}
-	
+		lastUpdate(true);
+	});
+
+	socket.on('outputLog', function(data) {
+		formatLog(data);
+		lastUpdate(true);
+	});
+
+	socket.on('time', function(data) {
+		$('#currTime').html(data.controllerTime);
+		lastUpdate(true);
+	});
+
+	socket.on('temp', function(data) {
+		$('#airTemp').html(data.airTemp);
+		$('#solarTemp').html(data.solarTemp);
+		if (data.solarTemp === 0)
+			$('#solarTemp').closest('tr').hide();
+		else
+			$('#solarTemp').closest('tr').show();
+		$('#poolCurrentTemp').html(data.poolTemp);
+		$('#spaCurrentTemp').html(data.spaTemp);
+		lastUpdate(true);
+	});
+
 	function lastUpdate(reset) {
 		var tmeCurrent = Date.now();
 		if (typeof(tmeLastUpd) === "undefined")
@@ -472,4 +455,21 @@ $(function() {
 		if (reset === true)
 			tmeLastUpd = tmeCurrent;		
 	}
+	
+	// Test Chlorinator Functionality ...
+	var data = {"saltPPM":2900,"outputPoolPercent":7,"outputSpaPercent":-1,"superChlorinate":0,"version":0,"name":"Intellichlor--40","status":"Unknown - Status code: 128"};
+	if (data !== null) {
+		if ((data.outputPoolPercent > 0) || (data.outputSpaPercent > 0)) 
+			setStatusButton($('#CHLORINATOR'), 1);
+		else
+			setStatusButton($('#CHLORINATOR'), 0);			
+		$('#chlorinatorName').html(data.name);
+		$('#chlorinatorSalt').html(data.saltPPM + ' ppm');
+		$('#chlorinatorPoolPercent').html(data.outputPoolPercent + '%');
+		//$('#chlorinatorSpaPercent').html(data.outputSpaPercent + '%');
+		if (data.superChlorinate === 1)
+			$('#chlorinatorSuperChlorinate').html('True');
+		else
+			$('#chlorinatorSuperChlorinate').html('False');
+	}	
 });
