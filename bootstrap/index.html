@@ -70,7 +70,7 @@
 				<table class="table table-hover">
 					<thead>
 						<tr>
-							<th>Circuit</th>
+							<th>Parameter</th>
 							<th>Status</th>
 						</tr>
 					</thead>
@@ -115,7 +115,7 @@
 				<table class="table table-hover">
 					<thead>
 						<tr>
-							<th>Circuit</th>
+							<th>Parameter</th>
 							<th>Status</th>
 						</tr>
 					</thead>
@@ -145,6 +145,51 @@
 								<button class="btn btn-default btn-xs" style="width: 70px;"><span id="spaHeatModeStr">Off</span></button>
 								<button id="spaHeatModeUp" class="btn btn-primary btn-xs"><span style="font-weight:bold; font-size:12px;">&#x21E7;</span></button>
 							</td>
+						</tr>
+					</tbody>
+				</table>
+			</div>
+		</div>
+	</div>
+	<div id="chlorinator" class="col-md-3 pnlChlorinator">
+	  <div class="panel panel-primary">
+			<div class="panel-heading">Chlorinator Details
+				<a class="accordion-toggle" data-toggle="collapse" href="#collapseChlorinator"></a>
+			</div>
+			<div id="collapseChlorinator" class="panel-body panel-collapse collapse in">
+				<table class="table table-hover">
+					<thead>
+						<tr>
+							<th>Parameter</th>
+							<th>Status</th>
+						</tr>
+					</thead>
+					<tbody>
+						<tr id="chlorinatorState">
+							<td>Chlorinator State</td>
+							<td>
+								<button id="CHLORINATOR" class="btn btn-primary btn-xs">---</button>
+							</td>
+						</tr>
+						<tr>
+							<td>Name</td>
+							<td id="chlorinatorName">---</td>
+						</tr>
+						<tr>
+							<td>Salt</td>
+							<td id="chlorinatorSalt">---</td>
+						</tr>
+						<tr>
+							<td>Pool</td>
+							<td id="chlorinatorPoolPercent">---</td>
+						</tr>
+						<tr>
+							<td>Spa</td>
+							<td id="chlorinatorSpaPercent">---</td>
+						</tr>
+						<tr>
+							<td>SuperChlorinate</td>
+							<td id="chlorinatorSuperChlorinate">---</td>
 						</tr>
 					</tbody>
 				</table>

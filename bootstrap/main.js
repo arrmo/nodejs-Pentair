@@ -29,7 +29,8 @@ function configPanels(jsonPanel) {
 			var panelList = $('#draggablePanelList');
 			var panelListItems = panelList.children();
 			// And, only reorder if no missing / extra items => or items added, removed ... so "reset" to index.html
-			if (panelIndices.length === panelListItems.length) {
+			var sizeStorage = panelIndices.filter(function(value) { return value !== null }).length;
+			if (sizeStorage === panelListItems.length) {
 				panelListItems.detach();
 				$.each(panelIndices, function() {
 					var currPanel = this.toString();
@@ -304,6 +305,10 @@ $(function() {
 		lastUpdate(true);
 	});
 
+	socket.on('chlorinator', function(data) {
+		lastUpdate(true);
+	});
+
 	socket.on('schedule', function(data) {
 		showSchedule(data);
 		lastUpdate(true);
@@ -471,4 +476,21 @@ $(function() {
 		if (reset === true)
 			tmeLastUpd = tmeCurrent;		
 	}
+	
+	// Test Chlorinator Functionality ...
+	var data = {"saltPPM":2900,"outputPoolPercent":7,"outputSpaPercent":-1,"superChlorinate":0,"version":0,"name":"Intellichlor--40","status":"Unknown - Status code: 128"};
+	if (data !== null) {
+		if ((data.outputPoolPercent > 0) || (data.outputSpaPercent > 0)) 
+			setStatusButton($('#CHLORINATOR'), 1);
+		else
+			setStatusButton($('#CHLORINATOR'), 0);			
+		$('#chlorinatorName').html(data.name);
+		$('#chlorinatorSalt').html(data.saltPPM + ' ppm');
+		$('#chlorinatorPoolPercent').html(data.outputPoolPercent + '%');
+		//$('#chlorinatorSpaPercent').html(data.outputSpaPercent + '%');
+		if (data.superChlorinate === 1)
+			$('#chlorinatorSuperChlorinate').html('True');
+		else
+			$('#chlorinatorSuperChlorinate').html('False');
+	}	
 });
