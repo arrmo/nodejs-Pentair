@@ -1,11 +1,11 @@
 {
   "name": "nodejs-pentair",
-  "version": "1.0.3",
+  "version": "2.0.0",
   "description": "NodeJS program to read and write to the Pentair serial bus.",
   "main": "index.js",
   "scripts": {
     "start": "node index.js",
-    "test": "mocha && mocha test --require blanket --reporter doc > coverage.html"
+    "test": "mocha ./specs/index.test.js --recursive ./specs  --reporter spec --require ./specs/helpers/chai.js"
   },
   "repository": {
     "type": "git",
@@ -22,6 +22,7 @@
   "homepage": "https://github.com/tagyoureit/nodejs-Pentair#readme",
   "dependencies": {
     "bootstrap": "^3.3.7",
+    "bottlejs": "^1.5.0",
     "dateformat": "^1.0.12",
     "dequeue": "^1.0.5",
     "express": "^4.14.0",
@@ -32,12 +33,14 @@
     "request": "^2.75.0",
     "serialport": "^4.0.1",
     "socket.io": "^1.4.8",
-    "timepicker": "^1.11.6",
+    "socket.io-client": "^1.7.1",
     "winston": "^2.2.0"
   },
   "devDependencies": {
     "chai": "^3.5.0",
     "istanbul": "^0.4.5",
-    "mocha": "^3.1.2"
+    "mocha": "^3.1.2",
+    "sinon": "^1.17.6",
+    "sinon-chai": "^2.8.0"
   }
 }

@@ -3,29 +3,27 @@
         "intellicom": 0,
         "intellitouch": 1,
         "pumpOnly": 0,
-        "numberOfPumps": 2,
-        "chlorinator": 0,
-        "ISYController": 0,
+        "numberOfPumps": 0,
+        "chlorinator": 1,
         "appAddress": 33
-
     },
     "Misc": {
         "expressDir": "/bootstrap",
         "expressPort": 3000,
-        "expressTransport": "http",
+        "expressTransport": "https",
         "expressAuth": 0,
-        "expressAuthFile": "/data/users.htpasswd"
+        "expressAuthFile": "/users.htpasswd"
     },
     "Network": {
+        "rs485Port": "/dev/ttyUSB0",
         "netConnect": 1,
-        "netHost": "raspberrypi",
+        "netHost": "raspberrypi.local",
         "netPort": 9801
     },
     "Log": {
-        "logType": "info",
+        "logLevel": "info",
         "extLogLevel": "info",
         "logPumpMessages": 0,
-        "logChlorinator": 0,
         "logDuplicateMessages": 0,
         "logConsoleNotDecoded": 0,
         "logConfigMessages": 0,
@@ -35,22 +33,35 @@
         "logPumpTimers": 0,
         "logApi": 0
     },
-    "ISY": {
+    "Integrations": {
+        "socketISY": 0,
+        "outputToConsole": 0
+    },
+    "socketISY": {
         "username": "blank",
         "password": "blank",
         "ipaddr": "127.0.0.1",
         "port": 12345,
         "Variables": {
-            "currentPumpStatus[1].watts": 25,
-            "currentPumpStatus[1].rpm": 24,
-            "currentPumpStatus[1].currentprogram": 13,
-            "currentPumpStatus[1].program1rpm": 10,
-            "currentPumpStatus[1].program2rpm": 11,
-            "currentPumpStatus[1].program3rpm": 12,
-            "currentPumpStatus[1].program4rpm": 13,
-            "currentPumpStatus[1].power": 14,
-            "currentPumpStatus[1].timer": 15,
-            "currentChlorinatorStatus.saltPPM": 16
+            "chlorinator": {
+                "saltPPM": 16
+            },
+            "pump": {
+                "1": {
+                    "watts": 25,
+                    "rpm": 24,
+                    "currentprogram": 13,
+                    "program1rpm": 10,
+                    "program2rpm": 11,
+                    "program3rpm": 12,
+                    "program4rpm": 13,
+                    "power": 14,
+                    "timer": 15
+                }
+            }
         }
+    },
+    "outputToConsole": {
+      "level": "warn"
     }
 }

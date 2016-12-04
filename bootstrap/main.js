@@ -6,7 +6,7 @@
 function configPanels(jsonPanel) {
 	//Enable / Disable panels as configured (in json file)
 	for (var currPanel in jsonPanel) {
-		if (jsonPanel[currPanel]["state"] === "hidden")		
+		if (jsonPanel[currPanel]["state"] === "hidden")
 			$('#' + currPanel).hide();
 		else if (jsonPanel[currPanel]["state"] === "collapse")
 			$('#' + 'collapse' + currPanel.capitalizeFirstLetter()).collapse();
@@ -15,9 +15,9 @@ function configPanels(jsonPanel) {
 		// Debug Panel -> Update Debug Log Button
 		if (currPanel === "debug") {
 			if (jsonPanel[currPanel]["state"] === "hidden")
-				setStatusButton($('#debugEnable'), 'Debug Log: Off');
+				setStatusButton($('#debugEnable'), 0);
 			else
-				setStatusButton($('#debugEnable'), 'Debug Log: On');
+				setStatusButton($('#debugEnable'), 1);
 		}
 	}
 
@@ -42,30 +42,30 @@ function configPanels(jsonPanel) {
 		}
 	} else {
 		$('#txtDebug').append('Sorry, your browser does not support Web Storage.' + '<br>');
-	}	
+	}
 };
 
-//Routine to recursively parse Equipment Configuration, setting associated data for DOM elements 
+//Routine to recursively parse Equipment Configuration, setting associated data for DOM elements
 function dataAssociate(strControl, varJSON) {
 	for (var currProperty in varJSON) {
 		if (typeof varJSON[currProperty] !== "object") {
 			$('#' + strControl).data(currProperty, varJSON[currProperty]);
 		} else {
 			if (Array.isArray(varJSON)) {
-				dataAssociate(strControl, varJSON[currProperty]);								
+				dataAssociate(strControl, varJSON[currProperty]);
 			} else {
-				dataAssociate(currProperty, varJSON[currProperty]);				
+				dataAssociate(currProperty, varJSON[currProperty]);
 			}
 		}
 	}
 }
 
 function dayOfWeekAsInteger(strDay) {
-  return ["Sunday","Monday","Tuesday","Wednesday","Thursday","Friday","Saturday"].indexOf(strDay.capitalizeFirstLetter(strDay));
+	return ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"].indexOf(strDay.capitalizeFirstLetter(strDay));
 }
 
 function dayOfWeekAsString(indDay) {
-  return ["Sun","Mon","Tue","Wed","Thu","Fri","Sat"][indDay];
+	return ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"][indDay];
 }
 
 function fmtScheduleTime(strInpStr) {
@@ -89,22 +89,23 @@ function fmtEggTimerTime(strInpStr) {
 }
 
 function setStatusButton(btnID, btnState) {
-	if (btnState.toUpperCase().indexOf('ON') >= 0) {
+	if (btnState === 1) {
+		btnID.html('On');
 		btnID.removeClass('btn-primary');
 		btnID.addClass('btn-success');
 	} else {
+		btnID.html('Off');
 		btnID.removeClass('btn-success');
 		btnID.addClass('btn-primary');
 	}
-	btnID.html(btnState.capitalizeFirstLetter());
 }
 
 function buildSchTime(currSchedule) {
 	schName = 'schTime' + currSchedule.ID;
 	strRow = '<tr name="' + schName + '" id="' + schName + '" class="botpad">';
-	strHTML = '<td>' + currSchedule.ID + '</td>' + 
+	strHTML = '<td>' + currSchedule.ID + '</td>' +
 		'<td>' + currSchedule.CIRCUIT.capitalizeFirstLetter() + '</td>' +
-		'<td>' + fmtScheduleTime(currSchedule.START_TIME) + '</td>' + 
+		'<td>' + fmtScheduleTime(currSchedule.START_TIME) + '</td>' +
 		'<td>' + fmtScheduleTime(currSchedule.END_TIME) + '</td></tr>';
 	return strRow + strHTML;
 }
@@ -112,7 +113,7 @@ function buildSchTime(currSchedule) {
 function buildEggTime(currSchedule) {
 	schName = 'schEgg' + currSchedule.ID;
 	strRow = '<tr name="' + schName + '" id="' + schName + '">';
-	strHTML = '<td>' + currSchedule.ID + '</td>' + 
+	strHTML = '<td>' + currSchedule.ID + '</td>' +
 		'<td>' + currSchedule.CIRCUIT.capitalizeFirstLetter() + '</td>' +
 		'<td>' + fmtEggTimerTime(currSchedule.DURATION) + '</td></tr>';
 	return strRow + strHTML;
@@ -133,7 +134,7 @@ function buildSchDays(currSchedule) {
 		if (arrDays[iterDay] === true) {
 			strHTML += '<button class="btn btn-success btn-xs" id="' + strCurrDay + '">';
 		} else {
-			strHTML += '<button class="btn btn-default btn-xs" id="' + strCurrDay + '">';	
+			strHTML += '<button class="btn btn-default btn-xs" id="' + strCurrDay + '">';
 		}
 		strHTML += strCurrDay + '</button>';
 	}
@@ -166,12 +167,12 @@ String.prototype.toTitleCase = function() {
 
 // From http://api.jquery.com/jquery/#jQuery3
 // JQuery(callback), Description: Binds a function to be executed when the DOM has finished loading
-$(function () {
+$(function() {
 	// Initialize variables
 	var tmeLastUpd;
 	var $hideAUX = true;
 	var socket = io();
-	
+
 	// Callback Routine, every second - to update / record time since last message received
 	setInterval(function(){ 
 		lastUpdate(false)
@@ -182,21 +183,21 @@ $(function () {
 	panelList.sortable({
 		// Only make the .panel-heading child elements support dragging.
 		// Omit this to make then entire <li>...</li> draggable.
-		handle: '.panel-heading', 
+		handle: '.panel-heading',
 		update: function() {
 			var panelIndices = [];
 			panelList.children().each(function() {
 				panelIndices[$(this).index()] = $(this).attr('id');
-			});	
+			});
 			localStorage.setItem('panelIndices', JSON.stringify(panelIndices));
 		}
-	});	
+	});
 
 	// Load configuration (from json), process once data ready
 	$.getJSON('configClient.json', function(json) {
 		// Configure panels (visible / hidden, sequence)
 		configPanels(json.panelState);
-		// Call routine to recursively parse Equipment Configuration, setting associated data for DOM elements 
+		// Call routine to recursively parse Equipment Configuration, setting associated data for DOM elements
 		dataAssociate("base", json.equipConfig);
 		// Log Pump Parameters (rows to output) => no var in front, so global
 		pumpParams = json.pumpParams;
@@ -207,19 +208,19 @@ $(function () {
 	});
 
 	// Button Handling: Pool, Spa => On/Off
-	$('#poolState, #spaState').on('click', 'button', function () {
+	$('#poolState, #spaState').on('click', 'button', function() {
 		setEquipmentStatus($(this).data($(this).attr('id')));
 	});
-	
+
 	// Button Handling: Pool / Spa, Temperature SetPoint
-	$('#poolSetpoint, #spaSetpoint').on('click', 'button', function () {
+	$('#poolSetpoint, #spaSetpoint').on('click', 'button', function() {
 		setHeatSetPoint($(this).data('equip'), $(this).data('adjust'));
 	});
 
 	// Button Handling: Pool / Spa, Heater Mode
-	$('#poolHeatMode, #spaHeatMode').on('click', 'button', function () {
+	$('#poolHeatMode, #spaHeatMode').on('click', 'button', function() {
 		var currButtonPressed = $(this).attr('id');
-		if (currButtonPressed.indexOf('HeatMode') >= 0) {
+		if (currButtonPressed.includes('HeatMode')) {
 			var strHeatMode = currButtonPressed.slice(0, currButtonPressed.indexOf('HeatMode')) + 'HeatMode';
 			var currHeatMode = $('#' + strHeatMode).data(strHeatMode);
 			var newHeatMode = (currHeatMode + 4 + $(this).data('heatModeDirn')) % 4;
@@ -228,21 +229,21 @@ $(function () {
 	});
 
 	// Button Handling: Features => On/Off
-	$('#features').on('click', 'button', function () {
+	$('#features').on('click', 'button', function() {
 		setEquipmentStatus($(this).data($(this).attr('id')));
 	});
-	
+
 	// Button Handling: Debug Log => On/Off
 	$('#debugEnable').click(function () {
 		if ($('#debug').is(":visible") === true) {
 			$('#debug').hide();
-			setStatusButton($('#debugEnable'), 'Debug Log: Off');
+			setStatusButton($('#debugEnable'), 0);
 		} else {
 			$('#debug').show();
-			setStatusButton($('#debugEnable'), 'Debug Log: On');
+			setStatusButton($('#debugEnable'), 1);
 		}
 	});
-	
+
 	// Debug Log, KeyPress => Select All (for copy and paste, select log window, press SHFT-A)
 	// Reference, from https://www.sanwebe.com/2014/04/select-all-text-in-element-on-click => Remove "older ie".
 	$('#txtDebug').keypress(function(event) {
@@ -250,22 +251,22 @@ $(function () {
 			var sel, range;
 			var el = $(this)[0];
 			sel = window.getSelection();
-			if(sel.toString() === ''){ //no text selection
-				window.setTimeout(function(){
+			if (sel.toString() === '') { //no text selection
+				window.setTimeout(function() {
 					range = document.createRange(); //range object
 					range.selectNodeContents(el); //sets Range
 					sel.removeAllRanges(); //remove all ranges from selection
-					sel.addRange(range);//add Range to a Selection.
-				},1);
+					sel.addRange(range); //add Range to a Selection.
+				}, 1);
 			}
 		}
 	});
 
 	// Button Handling: Debug Log => Clear!
-	$('#debugClear').click(function () {
+	$('#debugClear').click(function() {
 		$('#txtDebug').html('<b>DEBUG LOG ... <br />');
 	});
-	
+
 	// Socket Events (Emit)
 	function setHeatSetPoint(equip, change) {
 		socket.emit('setHeatSetPoint', equip, change);
@@ -283,45 +284,58 @@ $(function () {
 	};
 
 	// Socket Events (Receive)
-	socket.on('circuit', function (data) {
+	socket.on('circuit', function(data) {
 		showCircuit(data);
+		lastUpdate(true);
 	});
 
-	socket.on('config', function (data) {
+	socket.on('config', function(data) {
 		showConfig(data);
+		lastUpdate(true);
 	});
 
-	socket.on('pump', function (data) {
+	socket.on('pump', function(data) {
 		showPump(data);
+		lastUpdate(true);
 	});
 
-	socket.on('heat', function (data) {
+	socket.on('heat', function(data) {
 		showHeat(data);
+		lastUpdate(true);
 	});
 
-	socket.on('schedule', function (data) {
+	socket.on('schedule', function(data) {
 		showSchedule(data);
+		lastUpdate(true);
 	});
-	
-	socket.on('outputLog', function (data) {
+
+	socket.on('outputLog', function(data) {
 		formatLog(data);
-	});	
+		lastUpdate(true);
+	});
+
+	socket.on('time', function(data) {
+		$('#currTime').html(data.controllerTime);
+		lastUpdate(true);
+	});
+
+	socket.on('temp', function(data) {
+		$('#airTemp').html(data.airTemp);
+		$('#solarTemp').html(data.solarTemp);
+		if (data.solarTemp === 0)
+			$('#solarTemp').closest('tr').hide();
+		else
+			$('#solarTemp').closest('tr').show();
+		$('#poolCurrentTemp').html(data.poolTemp);
+		$('#spaCurrentTemp').html(data.spaTemp);
+		lastUpdate(true);
+	});
 
 	// Show Information (from received socket.io)
 	function showConfig(data) {
 		if (data !== null) {
-			$('#currTime').html(data.time);
-			$('#airTemp').html(data.airTemp);
-			$('#solarTemp').html(data.solarTemp);
-			if (data.solarTemp === 0)
-				$('#solarTemp').closest('tr').hide();
-			else
-				$('#solarTemp').closest('tr').show();
 			$('#runMode').html(data.runmode);
 			$('#stateHeater').html(data.HEATER_ACTIVE);
-			$('#poolCurrentTemp').html(data.poolTemp);
-			$('#spaCurrentTemp').html(data.spaTemp);
-			lastUpdate(true);
 		}
 	}
 
@@ -333,7 +347,6 @@ $(function () {
 			$('#spaHeatSetPoint').html(data.spaSetPoint);
 			$('#spaHeatMode').data('spaHeatMode', data.spaHeatMode);
 			$('#spaHeatModeStr').html(data.spaHeatModeStr);
-			lastUpdate(true);
 		}
 	}
 
@@ -344,7 +357,7 @@ $(function () {
 					if (currCircuit.name !== "NOT USED") {
 						if (document.getElementById(currCircuit.name)) {
 							setStatusButton($('#' + currCircuit.name), currCircuit.status);
-							$('#' + currCircuit.name).data(currCircuit.name, currCircuit.number);															
+							$('#' + currCircuit.name).data(currCircuit.name, currCircuit.number);
 						} else if (document.getElementById(currCircuit.numberStr)) {
 							setStatusButton($('#' + currCircuit.numberStr), currCircuit.status);
 							$('#' + currCircuit.numberStr).data(currCircuit.numberStr, currCircuit.number);
@@ -356,7 +369,6 @@ $(function () {
 					}
 				}
 			});
-			lastUpdate(true);
 		}
 	}
 
@@ -376,13 +388,13 @@ $(function () {
 								var colAppend = rowHeader.length ? false : true;
 								if (colAppend === false) {
 									var colTarget = -1;
-									$('th', rowHeader).each(function(index){
+									$('th', rowHeader).each(function(index) {
 										if ($(this).text() === currPump["name"])
 											colTarget = index;
 									});
 								}
 								// Cycle through Pump Parameters
-								for (var currPumpParam in pumpParams) {					
+								for (var currPumpParam in pumpParams) {
 									currParamSet = pumpParams[currPumpParam];
 									// Find Target Row
 									var rowTarget = $('#pumps tr:contains("' + currParamSet["title"] + '")');
@@ -393,21 +405,20 @@ $(function () {
 										rowTarget.append(strCell);
 									} else {
 										// Replace Data, target Row, Column
-										$('td', rowTarget).each(function(index){
+										$('td', rowTarget).each(function(index) {
 											if (index === colTarget)
 												$(this).html(currPump[currPumpParam]);
 										});
 									}
-								}					
+								}
 							}
 						}
 					}
 				}
 			});
-			lastUpdate(true);
 		}
 	}
-	
+
 	function showSchedule(data) {
 		if (data !== null) {
 			// Schedule/EggTimer to be updated => Wipe, then (Re)Build Below
@@ -429,11 +440,10 @@ $(function () {
 							if (currSchedule.CIRCUIT !== 'NOT USED') {
 								$('#eggtimers tr:last').after(buildEggTime(currSchedule));
 							}
-						}					
+						}
 					}
 				}
 			});
-			lastUpdate(true);
 		}
 	}
 	
