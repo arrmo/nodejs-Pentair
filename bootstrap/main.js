@@ -268,6 +268,18 @@ $(function() {
 		$('#txtDebug').html('<b>DEBUG LOG ... <br />');
 	});
 
+	// Button Handling: Modal, Save Settings for Chlorinator ... and second function, so keypress (Enter Key) fires input
+	$('#SaveChanges').click(function() {
+		$('#modalChlorinator').modal('hide');
+		var chlorSetting = parseFloat($('#modalChlorInput')[0].value);
+		if ((chlorSetting >= 0) && (chlorSetting <= 101))
+			socket.emit('setchlorinator', chlorSetting);
+	});
+	$('#modalChlorinator').keypress(function(key){
+		if(key.which == 13)
+			$('#SaveChanges').click();
+	})
+
 	// Socket Events (Emit)
 	function setHeatSetPoint(equip, change) {
 		socket.emit('setHeatSetPoint', equip, change);
