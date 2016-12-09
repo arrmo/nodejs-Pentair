@@ -20,6 +20,41 @@
         "netHost": "raspberrypi.local",
         "netPort": 9801
     },
+    "FriendlyNames": [{
+        "blank": ""
+    }, {
+        "circuit1": ""
+    }, {
+        "circuit2": ""
+    }, {
+        "circuit3": ""
+    }, {
+        "circuit4": ""
+    }, {
+        "circuit5": ""
+    }, {
+        "circuit6": ""
+    }, {
+        "circuit7": ""
+    }, {
+        "circuit8": ""
+    }, {
+        "circuit9": ""
+    }, {
+        "circuit10": ""
+    }, {
+        "circuit11": ""
+    }, {
+        "circuit12": ""
+    }, {
+        "circuit13": ""
+    }, {
+        "circuit14": ""
+    }, {
+        "circuit15": ""
+    }, {
+        "circuit16": ""
+    }],
     "Log": {
         "logLevel": "info",
         "extLogLevel": "info",

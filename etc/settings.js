@@ -13,7 +13,6 @@ var intellitouch; //set this to 1 if you have the IntelliTouch, otherwise 0.
 var pumpOnly; //set this to 1 if you ONLY have pump(s), otherwise 0.
 
 //1 or 0
-var ISYController; //1 if you have an ISY, otherwise 0
 var chlorinator; //set this to 1 if you have a chlorinator, otherwise 0.
 
 //only relevant if pumpOnly=1
@@ -64,8 +63,6 @@ getConfig = exports.getConfig = function(){
 intellicom = exports.intellicom  = configFile.Equipment.intellicom;
 intellitouch = exports.intellitouch  = configFile.Equipment.intellitouch;
 pumpOnly = exports.pumpOnly  = configFile.Equipment.pumpOnly;
-ISYController = exports.ISYController  = configFile.Equipment.ISYController;
-ISYConfig = exports.ISYConfig = configFile.ISY;
 chlorinator = exports.chlorinator  = configFile.Equipment.chlorinator;
 numberOfPumps = exports.numberOfPumps  = configFile.Equipment.numberOfPumps;
 appAddress = exports.appAddress  = configFile.Equipment.appAddress;
@@ -78,6 +75,7 @@ netConnect = exports.netConnect  = configFile.Network.netConnect;
 rs485Port = exports.rs485Port  = configFile.Network.rs485Port;
 netPort = exports.netPort  = configFile.Network.netPort;
 netHost = exports.netHost  = configFile.Network.netHost;
+friendlyNames = exports.friendlyNamesArr = configFile.FriendlyNames
 logLevel = exports.logLevel = configFile.Log.logLevel;
 extLogLevel = exports.extLogLevel = configFile.Log.extLogLevel;
 logPumpMessages = exports.logPumpMessages  = configFile.Log.logPumpMessages;
@@ -89,6 +87,7 @@ logChlorinator = exports.logChlorinator  = configFile.Log.logChlorinator;
 logPacketWrites = exports.logPacketWrites  = configFile.Log.logPacketWrites;
 logPumpTimers = exports.logPumpTimers  = configFile.Log.logPumpTimers;
 logApi = exports.logApi  = configFile.Log.logApi;
+
 
 
 var introMsg  = '\n*******************************';
@@ -113,7 +112,6 @@ settingsStr += '\n var intellitouch = ' + intellitouch;
 settingsStr += '\n var chlorinator = ' + chlorinator;
 settingsStr += '\n var pumpOnly = ' + pumpOnly;
 settingsStr += '\n var numberOfPumps = ' + numberOfPumps;
-settingsStr += '\n var ISYController = ' + ISYController;
 settingsStr += '\n var appAddress = ' + appAddress;
 settingsStr += '\n //-------  END EQUIPMENT SETUP -----------';
 settingsStr += '\n ';

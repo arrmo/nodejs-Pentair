@@ -1,5 +1,6 @@
+#ADD bootstrap config
 
-# nodejs-Pentiar - Version 2.0
+# nodejs-Pentiar - Version 2.0.4
 
 
 [![Join the chat at https://gitter.im/pentair_pool/Lobby](https://badges.gitter.im/pentair_pool/Lobby.svg)](https://gitter.im/pentair_pool/Lobby?utm_source=badge&utm_medium=badge&utm_campaign=pr-badge&utm_content=badge)
@@ -133,6 +134,41 @@ See below for descriptions
         "netHost": "raspberrypi.local",
         "netPort": 9801
     },
+    "FriendlyNames": [{
+        "blank": ""
+    }, {
+        "circuit1": ""
+    }, {
+        "circuit2": ""
+    }, {
+        "circuit3": ""
+    }, {
+        "circuit4": ""
+    }, {
+        "circuit5": ""
+    }, {
+        "circuit6": ""
+    }, {
+        "circuit7": ""
+    }, {
+        "circuit8": ""
+    }, {
+        "circuit9": ""
+    }, {
+        "circuit10": ""
+    }, {
+        "circuit11": ""
+    }, {
+        "circuit12": ""
+    }, {
+        "circuit13": ""
+    }, {
+        "circuit14": ""
+    }, {
+        "circuit15": ""
+    }, {
+        "circuit16": ""
+    }],
     "Log": {
         "logLevel": "info",
         "extLogLevel": "info",
@@ -229,6 +265,11 @@ For SOCAT functionality
         "netConnect": 1,
         "netHost": "raspberrypi",
         "netPort": "9801"
+
+### FriendlyNames
+If you want to expand the names of your circuits beyond the 11 (lame!) character limit, add them here.  These will filter through to the UI (in progress), but more importantly if you need to name your circuit "WTRFALL 1.5" in the Pentair controller but want to refer to it as "waterfall medium" through Siri/Alexa (hint, hint) this is the place to do it.
+
+For more detail, the app will first determine if it is using one of the ~200 built-in names, then it will check if it using a Pentair custom name, and finally, it will check to see if you want to assign it a friendly name from this config file.
 
 ### Log
 
@@ -473,6 +514,17 @@ To use the chlorinator in standalone mode, set the following in `config.json`:
 `"chlorinator":1`
 (Intellitouch, Intellicom should be set to 0)
 Start the app to set the chlorinator level, call http://localhost:3000/chlorinator/LEVEL.  Level should be 0-101.  0 = off, 1-100=%, 101=Super Chlorinate (or Boost).  Addition of the chlorinator to the `/bootstrap` UI is in progress.
+
+***
+
+## Bootstrap UI
+
+You can configure the Bootstrap UI.  Edit the file `/bootstrap/configClient.json`.  Feel free to adjust which panels are available, depending on your actual equipment.  Values are:
+
+1. `visible` - This panel will be shown and expanded
+1. `collapse` - This panel will be shown and collapsed
+1. `hidden` - This panel will not be shown
+
 
 ***
 
