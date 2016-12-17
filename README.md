@@ -1,5 +1,3 @@
-#ADD bootstrap config
-
 # nodejs-Pentiar - Version 2.0.4
 
 
