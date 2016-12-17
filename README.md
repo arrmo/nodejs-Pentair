@@ -31,6 +31,7 @@ npm install nodejs-Pentair
 ```
 
 If you don't know anything about NodeJS, these directions might be helpful.
+
 1. Install Nodejs. (https://nodejs.org/en/download/)
 1. Update NPM (https://docs.npmjs.com/getting-started/installing-node).
 1. Download the latest [code release](https://github.com/tagyoureit/nodejs-Pentair/releases)
@@ -275,6 +276,7 @@ For more detail, the app will first determine if it is using one of the ~200 bui
 `logLevel` is the console output level
 `extLogLevel` is the bootstrap UI output level in the debug panel
 
+| Level | Description |
 | --- | --- |
 | Error | Only output error messages |
 | Warn | Output the above, plus warnings |
