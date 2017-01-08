@@ -388,6 +388,21 @@ $(function() {
 	});
 
 	socket.on('chlorinator', function(data) {
+		//var data = {"saltPPM":2900,"outputPoolPercent":7,"outputSpaPercent":-1,"superChlorinate":0,"version":0,"name":"Intellichlor--40","status":"Unknown - Status code: 128"};
+		if (data !== null) {
+			if ((data.outputPoolPercent > 0) || (data.outputSpaPercent > 0)) 
+				setStatusButton($('#CHLORINATOR'), 1);
+			else
+				setStatusButton($('#CHLORINATOR'), 0);			
+			$('#chlorinatorName').html(data.name);
+			$('#chlorinatorSalt').html(data.saltPPM + ' ppm');
+			$('#chlorinatorPoolPercent').html(data.outputPoolPercent + '%');
+			//$('#chlorinatorSpaPercent').html(data.outputSpaPercent + '%');
+			if (data.superChlorinate === 1)
+				$('#chlorinatorSuperChlorinate').html('True');
+			else
+				$('#chlorinatorSuperChlorinate').html('False');
+		}	
 		lastUpdate(true);
 	});
 
@@ -467,21 +482,4 @@ $(function() {
 		if (reset === true)
 			tmeLastUpd = tmeCurrent;		
 	}
-	
-	// Test Chlorinator Functionality ...
-	var data = {"saltPPM":2900,"outputPoolPercent":7,"outputSpaPercent":-1,"superChlorinate":0,"version":0,"name":"Intellichlor--40","status":"Unknown - Status code: 128"};
-	if (data !== null) {
-		if ((data.outputPoolPercent > 0) || (data.outputSpaPercent > 0)) 
-			setStatusButton($('#CHLORINATOR'), 1);
-		else
-			setStatusButton($('#CHLORINATOR'), 0);			
-		$('#chlorinatorName').html(data.name);
-		$('#chlorinatorSalt').html(data.saltPPM + ' ppm');
-		$('#chlorinatorPoolPercent').html(data.outputPoolPercent + '%');
-		//$('#chlorinatorSpaPercent').html(data.outputSpaPercent + '%');
-		if (data.superChlorinate === 1)
-			$('#chlorinatorSuperChlorinate').html('True');
-		else
-			$('#chlorinatorSuperChlorinate').html('False');
-	}	
 });
