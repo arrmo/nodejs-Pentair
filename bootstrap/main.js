@@ -300,16 +300,16 @@ $(function() {
 	socket.on('circuit', function(data) {
 		if (data !== null) {
 			data.forEach(function(currCircuit, indx) {
-				if (currCircuit.hasOwnProperty('name')) {
-					if (currCircuit.name !== "NOT USED") {
-						if (document.getElementById(currCircuit.name)) {
-							setStatusButton($('#' + currCircuit.name), currCircuit.status);
-							$('#' + currCircuit.name).data(currCircuit.name, currCircuit.number);
+				if (currCircuit.hasOwnProperty('friendlyName')) {
+					if (currCircuit.friendlyName !== "NOT USED") {
+						if (document.getElementById(currCircuit.friendlyName)) {
+							setStatusButton($('#' + currCircuit.friendlyName), currCircuit.status);
+							$('#' + currCircuit.friendlyName).data(currCircuit.friendlyName, currCircuit.number);
 						} else if (document.getElementById(currCircuit.numberStr)) {
 							setStatusButton($('#' + currCircuit.numberStr), currCircuit.status);
 							$('#' + currCircuit.numberStr).data(currCircuit.numberStr, currCircuit.number);
-						} else if (($hideAUX === false) || (currCircuit.name.indexOf("AUX") === -1)) {
-							$('#features tr:last').after('<tr><td>' + currCircuit.name.toLowerCase().toTitleCase() + '</td><td><button class="btn btn-primary btn-xs" name="' + currCircuit.numberStr + '" id="' + currCircuit.numberStr + '">---</button></td></tr>');
+						} else if (($hideAUX === false) || (currCircuit.friendlyName.indexOf("AUX") === -1)) {
+							$('#features tr:last').after('<tr><td>' + currCircuit.friendlyName.toLowerCase().toTitleCase() + '</td><td><button class="btn btn-primary btn-xs" name="' + currCircuit.numberStr + '" id="' + currCircuit.numberStr + '">---</button></td></tr>');
 							setStatusButton($('#' + currCircuit.numberStr), currCircuit.status);
 							$('#' + currCircuit.numberStr).data(currCircuit.numberStr, currCircuit.number);
 						}
